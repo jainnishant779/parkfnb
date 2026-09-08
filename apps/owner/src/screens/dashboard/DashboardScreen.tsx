@@ -14,6 +14,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 
 // Components
 import { AppHeader } from '../../components/headers';
+import type { HeaderStat } from '../../components/headers';
 import {
   KpiCard,
   SectionCard,
@@ -32,7 +33,7 @@ import { spacing, borderRadius } from '../../theme/spacing';
 import { fontSize, fontWeight } from '../../theme/typography';
 import {
   formatCurrency,
-  formatTodayDate,
+  formatCurrencyCompact,
   formatOwnerGreeting,
   formatPercentage,
 } from '../../utils/formatters';
@@ -395,9 +396,11 @@ export default function DashboardScreen() {
     const activeBookingsCount = liveStats?.bookingStats?.activeBookings ?? 0;
     const occupancyRate       = Math.round(liveStats?.bookingStats?.occupancyRate ?? 0);
     const avgRating           = liveStats?.performance?.averageRating ?? 0;
+    const monthEarnings       = liveStats?.revenueStats?.monthlyRevenue ?? 0;
 
     return {
       todayEarnings:      liveTodayEarnings,
+      monthEarnings,
       weekEarnings:       liveWeekEarnings,
       activeBookingsCount,
       occupancyRate,
@@ -527,6 +530,47 @@ export default function DashboardScreen() {
     }
   }, [bookingsTab, computedData]);
 
+  // Header stat tiles. Every figure is live: listings and pending requests come
+  // from the bookings/listings fetches, active bookings and monthly revenue
+  // from GET /owners/:id/stats. Currency is compacted because the tile is a
+  // quarter of the screen width.
+  const headerStats = useMemo((): HeaderStat[] => [
+    {
+      icon: 'business-outline',
+      value: computedData.totalListings.toString(),
+      label: 'Listings',
+      color: 'primary',
+      onPress: handleViewAllListings,
+    },
+    {
+      icon: 'hourglass-outline',
+      value: computedData.requestsCount.toString(),
+      label: 'Requests',
+      color: 'warning',
+      onPress: handleViewBookingRequests,
+    },
+    {
+      icon: 'car-outline',
+      value: computedData.activeBookingsCount.toString(),
+      label: 'Active',
+      color: 'success',
+      onPress: handleViewAllBookings,
+    },
+    {
+      icon: 'wallet-outline',
+      value: formatCurrencyCompact(computedData.monthEarnings),
+      label: 'This Month',
+      color: 'primary',
+      onPress: () => navigation.navigate(ROUTES.TABS.EARNINGS as never),
+    },
+  ], [
+    computedData,
+    handleViewAllListings,
+    handleViewBookingRequests,
+    handleViewAllBookings,
+    navigation,
+  ]);
+
   const bookingsSegmentOptions = useMemo(() => [
     { key: 'requests' as BookingsTab, label: 'Requests', badge: computedData.requestsCount },
     { key: 'active'   as BookingsTab, label: 'Active' },
@@ -537,9 +581,11 @@ export default function DashboardScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       <AppHeader
-        variant="large"
-        title={formatOwnerGreeting(firstName)}
-        subtitle={formatTodayDate()}
+        variant="brand"
+        title={`${formatOwnerGreeting(firstName)} 👋`}
+        subtitle="Manage your parking. Grow your business."
+        brandTagline="Your Space. Our Technology. More Possibilities."
+        stats={headerStats}
         status={statusVariant}
         rightActions={[
           {
@@ -571,7 +617,8 @@ export default function DashboardScreen() {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
-        {/* KPI Cards */}
+        {/* KPI Cards. Active Bookings lives in the header stat row now, so this
+            carousel carries only the figures the header doesn't show. */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -591,13 +638,6 @@ export default function DashboardScreen() {
             label="This Week"
             color="primary"
             onPress={() => navigation.navigate(ROUTES.TABS.EARNINGS as never)}
-          />
-          <KpiCard
-            icon="car"
-            value={computedData.activeBookingsCount.toString()}
-            label="Active Bookings"
-            color="warning"
-            onPress={handleViewAllBookings}
           />
           <KpiCard
             icon="stats-chart"

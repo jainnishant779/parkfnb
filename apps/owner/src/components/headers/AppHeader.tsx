@@ -6,6 +6,7 @@ import {
   Platform,
   TextInput,
   Pressable,
+  Image,
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -13,6 +14,7 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
 import { spacing, borderRadius } from '../../theme/spacing';
 import { fontSize, fontWeight } from '../../theme/typography';
@@ -20,7 +22,16 @@ import HeaderAction, { HeaderIconName } from './HeaderAction';
 import StatusPill, { StatusPillVariant } from './StatusPill';
 
 // Types
-export type HeaderVariant = 'standard' | 'large' | 'search';
+export type HeaderVariant = 'standard' | 'large' | 'search' | 'brand';
+
+/** One stat tile in the `brand` variant's stat row. */
+export interface HeaderStat {
+  icon: string;
+  value: string;
+  label: string;
+  color: 'primary' | 'success' | 'warning' | 'danger';
+  onPress?: () => void;
+}
 
 export interface HeaderLeftAction {
   icon: 'back' | 'menu' | 'close';
@@ -50,6 +61,9 @@ export interface AppHeaderProps {
   elevated?: boolean;
   compact?: boolean;
   isScrolled?: boolean;
+  // Brand variant specific
+  brandTagline?: string;
+  stats?: HeaderStat[];
   // Search variant specific
   searchPlaceholder?: string;
   searchValue?: string;
@@ -59,6 +73,10 @@ export interface AppHeaderProps {
   // Test IDs
   testID?: string;
 }
+
+// The owner app's icon ships amber, but everything around it reads the teal
+// semantic tokens — the mark is the only amber in the header, by design.
+const BRAND_MARK = require('../../assets/logo-mark.png');
 
 // Height constants
 const HEADER_HEIGHT_STANDARD = 56;
@@ -120,6 +138,102 @@ const LargeTitleBlock = memo(function LargeTitleBlock({
   );
 });
 
+// BrandLockup sub-component - icon + wordmark + tagline, brand variant only
+interface BrandLockupProps {
+  tagline?: string;
+  theme: ReturnType<typeof getTheme>;
+}
+
+const BrandLockup = memo(function BrandLockup({
+  tagline,
+  theme,
+}: BrandLockupProps) {
+  return (
+    <View style={styles.brandLockup}>
+      <Image
+        source={BRAND_MARK}
+        style={styles.brandMark}
+        resizeMode="contain"
+        accessibilityIgnoresInvertColors
+      />
+      <View style={styles.brandWordmarkBlock}>
+        <Text
+          style={[styles.brandWordmark, { color: theme.text }]}
+          numberOfLines={1}
+          accessibilityRole="header"
+        >
+          PARKFNB
+        </Text>
+        <Text
+          style={[styles.brandSubmark, { color: theme.primary }]}
+          numberOfLines={1}
+        >
+          OWNER APP
+        </Text>
+        {tagline && (
+          <Text
+            style={[styles.brandTagline, { color: theme.textMuted }]}
+            numberOfLines={2}
+          >
+            {tagline}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+});
+
+// HeaderStatCard sub-component - one tile in the brand variant's stat row
+interface HeaderStatCardProps {
+  stat: HeaderStat;
+  theme: ReturnType<typeof getTheme>;
+  testID?: string;
+}
+
+const HeaderStatCard = memo(function HeaderStatCard({
+  stat,
+  theme,
+  testID,
+}: HeaderStatCardProps) {
+  const accent = theme[stat.color];
+  // Semantic light tints are named `<token>Light`; `danger` is the only
+  // colour whose pairing isn't derivable by suffixing the same key.
+  const accentBg =
+    stat.color === 'danger' ? theme.dangerLight : theme[`${stat.color}Light`];
+
+  return (
+    <Pressable
+      style={[
+        styles.statCard,
+        { backgroundColor: theme.surface, borderColor: theme.border },
+      ]}
+      onPress={stat.onPress}
+      disabled={!stat.onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${stat.label}: ${stat.value}`}
+      testID={testID}
+    >
+      <View style={[styles.statIcon, { backgroundColor: accentBg }]}>
+        <Ionicons name={stat.icon} size={13} color={accent} />
+      </View>
+      <Text
+        style={[styles.statValue, { color: theme.text }]}
+        numberOfLines={1}
+        allowFontScaling
+      >
+        {stat.value}
+      </Text>
+      <Text
+        style={[styles.statLabel, { color: theme.textMuted }]}
+        numberOfLines={2}
+        allowFontScaling
+      >
+        {stat.label}
+      </Text>
+    </Pressable>
+  );
+});
+
 // SearchField sub-component
 interface SearchFieldProps {
   placeholder?: string;
@@ -177,6 +291,8 @@ function AppHeader({
   elevated = false,
   compact = false,
   isScrolled = false,
+  brandTagline,
+  stats,
   searchPlaceholder,
   searchValue,
   onSearchChange,
@@ -192,6 +308,10 @@ function AppHeader({
   const headerHeight = useMemo(() => {
     let height: number;
     switch (variant) {
+      // `brand` stacks lockup + greeting + stat row, so its height is driven
+      // by content rather than a constant.
+      case 'brand':
+        return undefined;
       case 'large':
         height = HEADER_HEIGHT_LARGE;
         break;
@@ -302,6 +422,56 @@ function AppHeader({
     </View>
   );
 
+  // Render brand header content
+  const renderBrandContent = () => (
+    <View style={styles.brandContent}>
+      <View style={styles.brandTopRow}>
+        <BrandLockup tagline={brandTagline} theme={theme} />
+        {renderRightActions()}
+      </View>
+
+      <View style={styles.brandGreetingRow}>
+        <View style={styles.brandGreetingBlock}>
+          <Text
+            style={[styles.brandGreeting, { color: theme.text }]}
+            numberOfLines={1}
+            allowFontScaling
+            accessibilityRole="header"
+          >
+            {title}
+          </Text>
+          {subtitle && (
+            <Text
+              style={[styles.brandSubtitle, { color: theme.textSecondary }]}
+              numberOfLines={1}
+              allowFontScaling
+            >
+              {subtitle}
+            </Text>
+          )}
+        </View>
+        {status && (
+          <View style={styles.statusPillContainer}>
+            <StatusPill status={status} size="small" showIcon={false} />
+          </View>
+        )}
+      </View>
+
+      {stats && stats.length > 0 && (
+        <View style={styles.statRow}>
+          {stats.map((stat, index) => (
+            <HeaderStatCard
+              key={stat.label}
+              stat={stat}
+              theme={theme}
+              testID={testID ? `${testID}-stat-${index}` : undefined}
+            />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+
   // Render search header content
   const renderSearchContent = () => (
     <View style={styles.searchContent}>
@@ -321,6 +491,8 @@ function AppHeader({
   // Render content based on variant
   const renderContent = () => {
     switch (variant) {
+      case 'brand':
+        return renderBrandContent();
       case 'large':
         return renderLargeContent();
       case 'search':
@@ -351,6 +523,7 @@ function AppHeader({
         style={[
           styles.content,
           { height: headerHeight },
+          variant === 'brand' && styles.contentBrand,
           compact && styles.contentCompact,
         ]}
       >
@@ -369,6 +542,10 @@ const styles = StyleSheet.create({
   },
   contentCompact: {
     paddingVertical: spacing[1],
+  },
+  contentBrand: {
+    paddingTop: spacing[3],
+    paddingBottom: spacing[4],
   },
   shadow: {
     ...Platform.select({
@@ -448,6 +625,89 @@ const styles = StyleSheet.create({
   },
   statusPillContainer: {
     flexShrink: 0,
+  },
+
+  // Brand variant
+  brandContent: {
+    gap: spacing[4],
+  },
+  brandTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing[2],
+  },
+  brandLockup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[3],
+  },
+  brandMark: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.lg,
+  },
+  brandWordmarkBlock: {
+    flex: 1,
+  },
+  brandWordmark: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold as any,
+    letterSpacing: 1.5,
+  },
+  brandSubmark: {
+    fontSize: 10,
+    fontWeight: fontWeight.semibold as any,
+    letterSpacing: 2.4,
+    marginTop: 1,
+  },
+  brandTagline: {
+    fontSize: fontSize.xs,
+    marginTop: spacing[1],
+  },
+  brandGreetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  brandGreetingBlock: {
+    flex: 1,
+  },
+  brandGreeting: {
+    fontSize: fontSize['2xl'],
+    fontWeight: fontWeight.bold as any,
+  },
+  brandSubtitle: {
+    fontSize: fontSize.sm,
+    marginTop: 2,
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  statCard: {
+    flex: 1,
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[2],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  statIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing[1],
+  },
+  statValue: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold as any,
+  },
+  statLabel: {
+    fontSize: 11,
+    marginTop: 1,
   },
 
   // Search variant

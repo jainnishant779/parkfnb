@@ -7,6 +7,7 @@ export type {
   HeaderVariant,
   HeaderLeftAction,
   HeaderRightAction,
+  HeaderStat,
 } from './AppHeader';
 
 export { default as HeaderAction } from './HeaderAction';
