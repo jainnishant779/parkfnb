@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parkbnb Controller</title>
+<style>
+  :root { --bg:#0f1720; --card:#18232f; --line:#2b3a49; --ink:#e8eef5; --dim:#93a4b5;
+          --ok:#2ecc71; --warn:#f0b429; --bad:#e74c3c; --accent:#3b82f6; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 "Segoe UI",system-ui,sans-serif; }
+  .wrap { max-width:520px; margin:0 auto; padding:18px; }
+  h1 { font-size:20px; margin:0 0 2px; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px; }
+  label { display:block; font-size:12px; color:var(--dim); margin:8px 0 3px; }
+  input { width:100%; padding:9px 11px; background:#0d151d; border:1px solid var(--line);
+          border-radius:7px; color:var(--ink); font-size:14px; font-family:inherit; }
+  button { padding:11px 16px; border:0; border-radius:8px; font-size:14px; font-weight:600;
+           cursor:pointer; background:var(--accent); color:#fff; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.ghost { background:#243342; color:var(--ink); }
+  .row { display:flex; gap:9px; flex-wrap:wrap; }
+  .row > button { flex:1; min-width:96px; }
+  .pill { display:inline-block; padding:3px 11px; border-radius:999px; font-size:12px; font-weight:600; }
+  .big { font-size:32px; font-weight:700; letter-spacing:-.5px; }
+  .kv { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid var(--line); font-size:13px; }
+  .kv:last-child { border-bottom:0; }
+  .kv span:first-child { color:var(--dim); }
+  #log { background:#0a1119; border:1px solid var(--line); border-radius:8px; padding:10px;
+         height:190px; overflow:auto; font-family:Consolas,monospace; font-size:11.5px; white-space:pre-wrap; }
+  .gauge { height:9px; background:#0d151d; border-radius:99px; overflow:hidden; margin:10px 0 4px; }
+  .gauge > i { display:block; height:100%; background:var(--accent); transition:width .3s; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Parkbnb Controller</h1>
+  <div class="sub">MQTT test client &mdash; proves the cloud link before the mobile app exists.</div>
+
+  <div class="card">
+    <label>Broker host (HiveMQ Cloud)</label>
+    <input id="host" placeholder="xxxxxxxx.s1.eu.hivemq.cloud">
+    <div class="row" style="gap:9px">
+      <div style="flex:1"><label>Username</label><input id="user" placeholder="parkbnb-app"></div>
+      <div style="flex:1"><label>Password</label><input id="pass" type="password"></div>
+    </div>
+    <div class="row" style="gap:9px">
+      <div style="flex:1"><label>Device ID</label><input id="dev" value="pb-001"></div>
+      <div style="flex:1"><label>Command token</label><input id="token" type="password"></div>
+    </div>
+    <label>&nbsp;</label>
+    <div class="row">
+      <button id="connectBtn">Connect</button>
+      <button id="disconnectBtn" class="ghost" disabled>Disconnect</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span class="pill" id="statePill" style="background:#243342;color:var(--dim)">offline</span>
+      <span class="big" id="angleTxt">--&deg;</span>
+    </div>
+    <div class="gauge"><i id="gauge" style="width:0%"></i></div>
+    <div class="kv"><span>Target</span><span id="kTarget">--</span></div>
+    <div class="kv"><span>PWM</span><span id="kPwm">--</span></div>
+    <div class="kv"><span>Fault</span><span id="kFault">none</span></div>
+    <div class="kv"><span>WiFi RSSI</span><span id="kRssi">--</span></div>
+    <div class="kv"><span>Uptime</span><span id="kUp">--</span></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="bOpen"  disabled>Open (0&deg;)</button>
+      <button id="bClose" disabled>Secure (90&deg;)</button>
+    </div>
+    <div class="row" style="margin-top:9px">
+      <button id="bStop"  class="ghost" disabled>Stop</button>
+      <button id="bCal"   class="ghost" disabled>Set zero</button>
+      <button id="bClear" class="ghost" disabled>Clear fault</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Log</label>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let client = null, counter = Date.now() % 1000000;   // monotonic command counter
+
+const SAVE_KEYS = ['host','user','pass','dev','token'];
+SAVE_KEYS.forEach(k => { try { const v = localStorage.getItem('pb_'+k); if (v) $(k).value = v; } catch(e){} });
+
+function log(msg, cls) {
+  const t = new Date().toLocaleTimeString();
+  $('log').textContent += `[${t}] ${msg}\n`;
+  $('log').scrollTop = $('log').scrollHeight;
+}
+
+function setControls(on) {
+  ['bOpen','bClose','bStop','bCal','bClear'].forEach(id => $(id).disabled = !on);
+  $('connectBtn').disabled = on;
+  $('disconnectBtn').disabled = !on;
+}
+
+function connect() {
+  const host = $('host').value.trim();
+  if (!host) { log('Broker host is empty'); return; }
+  SAVE_KEYS.forEach(k => { try { localStorage.setItem('pb_'+k, $(k).value); } catch(e){} });
+
+  const url = `wss://${host}:8884/mqtt`;
+  log(`Connecting to ${url} ...`);
+
+  client = mqtt.connect(url, {
+    username: $('user').value,
+    password: $('pass').value,
+    clean: true,
+    reconnectPeriod: 4000,
+    connectTimeout: 10000,
+  });
+
+  const dev = $('dev').value.trim();
+
+  client.on('connect', () => {
+    log('Connected to broker');
+    setControls(true);
+    client.subscribe([`parkbnb/${dev}/state`, `parkbnb/${dev}/evt`, `parkbnb/${dev}/online`], { qos: 1 });
+    send('status');
+  });
+
+  client.on('message', (topic, buf) => {
+    let d; try { d = JSON.parse(buf.toString()); } catch(e) { return; }
+    if (topic.endsWith('/state'))       renderState(d);
+    else if (topic.endsWith('/evt'))    log(`EVENT ${d.evt}${d.detail ? ' - ' + d.detail : ''}`);
+    else if (topic.endsWith('/online')) log(`Device ${d.online ? 'ONLINE' : 'OFFLINE'}`);
+  });
+
+  client.on('error',   e => log('Error: ' + e.message));
+  client.on('close',   () => { log('Connection closed'); setControls(false); });
+  client.on('offline', () => log('Client offline'));
+}
+
+function renderState(d) {
+  const colours = { secure:'var(--ok)', open:'var(--warn)', moving:'var(--accent)',
+                    fault:'var(--bad)', between:'var(--dim)' };
+  const p = $('statePill');
+  p.textContent = d.state;
+  p.style.background = colours[d.state] || '#243342';
+  p.style.color = (d.state === 'between') ? 'var(--ink)' : '#08131c';
+
+  $('angleTxt').textContent = (d.angle ?? '--') + '°';
+  $('gauge').style.width = Math.max(0, Math.min(100, (d.angle / 90) * 100)) + '%';
+  $('kTarget').textContent = (d.target ?? '--') + '°';
+  $('kPwm').textContent    = d.pwm ?? '--';
+  $('kFault').textContent  = d.fault || 'none';
+  $('kRssi').textContent   = d.rssi ? d.rssi + ' dBm' : '--';
+  $('kUp').textContent     = d.uptime ? Math.floor(d.uptime / 60) + ' min' : '--';
+}
+
+function send(cmd, extra) {
+  if (!client || !client.connected) { log('Not connected'); return; }
+  const msg = Object.assign({ cmd, token: $('token').value, n: ++counter }, extra || {});
+  client.publish(`parkbnb/${$('dev').value.trim()}/cmd`, JSON.stringify(msg), { qos: 1 });
+  log(`SENT ${cmd}`);
+}
+
+$('connectBtn').onclick    = connect;
+$('disconnectBtn').onclick = () => { if (client) client.end(true); setControls(false); };
+$('bOpen').onclick  = () => send('open');
+$('bClose').onclick = () => send('close');
+$('bStop').onclick  = () => send('stop');
+$('bCal').onclick   = () => send('cal');
+$('bClear').onclick = () => send('clear');
+</script>
+</body>
+</html>

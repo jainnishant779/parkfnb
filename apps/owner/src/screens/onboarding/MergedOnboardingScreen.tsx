@@ -1,0 +1,1739 @@
+import React, { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  LayoutAnimation,
+  UIManager,
+  ActivityIndicator,
+  BackHandler,
+  PermissionsAndroid,
+  Linking,
+  Keyboard,
+  TextInput,
+  findNodeHandle,
+} from 'react-native';
+import Geolocation from 'react-native-geolocation-service';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+
+import FormTextInput from '../../components/inputs/FormTextInput';
+import FormPickerInput from '../../components/inputs/FormPickerInput';
+import { DateField } from '../../components/inputs/DateField';
+import ProgressHeader, { type ProgressStep } from '../../components/headers/ProgressHeader';
+import PincodeAddressBlock, {
+  EMPTY_PINCODE_ADDRESS,
+  type PincodeAddressValue,
+} from '../../components/inputs/PincodeAddressBlock';
+import LocationPickerMap, { type LatLng } from '../../components/map/LocationPickerMap';
+
+import { useAuth } from '../../context/AuthContext';
+import { ownerService } from '../../services/ownerService';
+import { listingService } from '../../services/listingService';
+import { reverseGeocode } from '../../services/reverseGeocodeService';
+import { AppAlert } from '../../components/common/AppAlert';
+import { ownerTypeLabels } from '../../constants/mockData';
+import { pickAndUploadImage, handleMediaUploadError, type PickSource } from '../../utils/mediaUpload';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+// 'address' is the unified section that holds the address inputs, the
+// map pin, and the address-proof checkbox/upload/alt-address. State
+// slices `address`, `location`, and `addressProof` remain separate
+// (different shapes) — only the visible UI section is merged.
+type SectionId =
+  | 'ownerType'
+  | 'personal'
+  | 'business'
+  | 'land'
+  | 'address'
+  | 'identity'
+  | 'bank';
+
+type DocumentType = 'national_id' | 'passport' | 'drivers_license';
+
+interface UploadedFile {
+  uri: string;
+  url?: string; // populated after upload
+}
+
+interface PersonalDetails {
+  legalName: string;
+  dateOfBirth: string; // YYYY-MM-DD
+  email: string;       // optional — empty allowed
+}
+
+interface BusinessDetails {
+  businessName: string;
+  roleDesignation: string;
+  registrationId: string;
+}
+
+interface LandDetails {
+  landLabel: string;
+  landmark: string;
+}
+
+interface IdentityProof {
+  documentType: DocumentType;
+  documentNumber: string;
+  frontImage: UploadedFile | null;
+  backImage: UploadedFile | null;
+  selfieImage: UploadedFile | null;
+}
+
+interface AddressProofData {
+  sameAsProfile: boolean;
+  altAddress: PincodeAddressValue;
+  proofDocument: UploadedFile | null;
+}
+
+interface BankDetails {
+  accountHolderName: string;
+  accountNumber: string;
+  ifscCode: string;
+  bankName: string;
+}
+
+interface State {
+  ownerType: string;
+  personal: PersonalDetails;
+  business: BusinessDetails;
+  land: LandDetails;
+  address: PincodeAddressValue;
+  location: LatLng;
+  identity: IdentityProof;
+  addressProof: AddressProofData;
+  bank: BankDetails;
+  expanded: SectionId | null;
+  errors: Record<string, string>;
+}
+
+const INITIAL: State = {
+  ownerType: '',
+  personal: { legalName: '', dateOfBirth: '', email: '' },
+  business: { businessName: '', roleDesignation: '', registrationId: '' },
+  land: { landLabel: '', landmark: '' },
+  address: { ...EMPTY_PINCODE_ADDRESS },
+  location: { lat: null, lng: null },
+  identity: {
+    documentType: 'national_id',
+    documentNumber: '',
+    frontImage: null,
+    backImage: null,
+    selfieImage: null,
+  },
+  addressProof: {
+    sameAsProfile: true,
+    altAddress: { ...EMPTY_PINCODE_ADDRESS },
+    proofDocument: null,
+  },
+  bank: { accountHolderName: '', accountNumber: '', ifscCode: '', bankName: '' },
+  expanded: 'ownerType',
+  errors: {},
+};
+
+type Action =
+  | { type: 'SET'; key: keyof State; value: any }
+  | { type: 'PATCH'; key: keyof State; value: any }
+  | { type: 'TOGGLE'; section: SectionId }
+  | { type: 'EXPAND'; section: SectionId }
+  | { type: 'SET_ERRORS'; errors: Record<string, string> }
+  | { type: 'HYDRATE'; data: Partial<State> };
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'SET':
+      return { ...state, [action.key]: action.value };
+    case 'PATCH':
+      return { ...state, [action.key]: { ...(state[action.key] as object), ...action.value } };
+    case 'TOGGLE':
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      return { ...state, expanded: state.expanded === action.section ? null : action.section };
+    case 'EXPAND':
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      return { ...state, expanded: action.section };
+    case 'SET_ERRORS':
+      return { ...state, errors: action.errors };
+    case 'HYDRATE':
+      return { ...state, ...action.data };
+    default:
+      return state;
+  }
+}
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const STORAGE_KEY = 'owners:onboardingDraft.v1';
+const AUTOSAVE_DELAY = 800;
+
+const OWNER_TYPE_OPTIONS = [
+  { value: 'individual', label: ownerTypeLabels.individual },
+  { value: 'residential_community', label: ownerTypeLabels.residential_community },
+  { value: 'commercial_property', label: ownerTypeLabels.commercial_property },
+  { value: 'industrial_facility', label: ownerTypeLabels.industrial_facility },
+  { value: 'empty_land', label: ownerTypeLabels.empty_land },
+];
+
+const DOCUMENT_TYPE_OPTIONS = [
+  { value: 'national_id', label: 'Aadhaar / National ID' },
+  { value: 'passport', label: 'Passport' },
+  { value: 'drivers_license', label: "Driver's License" },
+];
+
+const NEEDS_BUSINESS_NAME = new Set([
+  'commercial_property',
+  'industrial_facility',
+  'residential_community',
+  'business',
+  'property_manager',
+]);
+
+// Step pills shown in the ProgressHeader. The current step is the first
+// section whose required fields aren't fully filled — gives the user a
+// visible "you're here" indicator + a sense of how much is left.
+const PROGRESS_STEPS: ProgressStep[] = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'address', label: 'Address' },
+  { id: 'identity', label: 'Identity' },
+  { id: 'bank', label: 'Bank' },
+];
+
+// ============================================================================
+// COMPONENT
+// ============================================================================
+
+export default function MergedOnboardingScreen() {
+  const navigation = useNavigation<any>();
+  const { user, owner, signOut, updateUser, updateOwner, updateOnboardingStep } = useAuth();
+  const [state, dispatch] = useReducer(reducer, INITIAL);
+  const [submitting, setSubmitting] = React.useState(false);
+  // ProgressHeader's autosave indicator: 'saving' while the autosave
+  // timer is in flight, 'saved' once the AsyncStorage write resolves.
+  const [savedStatus, setSavedStatus] = React.useState<'saved' | 'saving'>('saved');
+  // Used by step-pill taps to scroll the matching section into view.
+  // Each section's <View> reports its Y offset via onLayout; we cache
+  // the latest offset per section in a ref (no re-render).
+  const scrollViewRef = useRef<ScrollView>(null);
+  const sectionOffsets = useRef<Partial<Record<SectionId, number>>>({});
+  // The `slice` here names a state-data slice (e.g., 'identity',
+  // 'addressProof') — not a UI SectionId. They differ now that the
+  // address-proof upload lives inside the merged 'address' UI section.
+  const [uploadModal, setUploadModal] = React.useState<{ slice: 'identity' | 'addressProof'; field: string } | null>(null);
+  // Tracks keyboard height so we can extend the ScrollView's bottom
+  // padding while the keyboard is open. Without this, the last input
+  // can't scroll above the keyboard because the content already ends
+  // there — there's no room left to scroll up. Appended at the end
+  // of the hook block so future hot-reloads don't shift earlier hook
+  // indices and trigger React's "hook order changed" guard.
+  const [keyboardHeight, setKeyboardHeight] = React.useState(0);
+
+  const effectiveOwnerType = state.ownerType || owner?.ownerType || '';
+  const showBusiness = NEEDS_BUSINESS_NAME.has(effectiveOwnerType);
+  const showLand = effectiveOwnerType === 'empty_land';
+  // Only prompt for owner type when the backend has no concrete value yet
+  // (or has the OTP-default of 'individual', which we treat as "not chosen").
+  const showOwnerTypeSection = !owner?.ownerType || owner.ownerType === 'individual';
+
+  // ---- Hydrate from auth context + draft ----
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      if (cancelled) return;
+      const seed: Partial<State> = {
+        ownerType: owner?.ownerType || 'individual',
+        personal: {
+          legalName: user?.legalName || '',
+          dateOfBirth: user?.dateOfBirth || '',
+          email: user?.email || '',
+        },
+        business: {
+          businessName: owner?.businessName || '',
+          roleDesignation: owner?.roleDesignation || '',
+          registrationId: owner?.registrationId || '',
+        },
+        land: { landLabel: owner?.landLabel || '', landmark: user?.landmark || '' },
+        address: {
+          pincode: user?.pincode || '',
+          state: user?.state || '',
+          city: user?.city || '',
+          addressLine1: user?.addressLine1 || '',
+          addressLine2: user?.addressLine2 || '',
+          country: user?.country || 'IN',
+        },
+        location: { lat: user?.locationLat ?? null, lng: user?.locationLng ?? null },
+      };
+      if (raw) {
+        try {
+          const draft = JSON.parse(raw) as Partial<State>;
+          // Deep-merge per slice so a stale draft missing newer fields
+          // (e.g., personal.email or address.country added after the
+          // draft was saved) falls back to the seed defaults instead
+          // of leaving those fields undefined — which would crash the
+          // first render that calls `.trim()` on them.
+          const merged: Partial<State> = {
+            ...seed,
+            ...draft,
+            personal: { ...(seed.personal as any), ...((draft.personal as any) || {}) },
+            business: { ...(seed.business as any), ...((draft.business as any) || {}) },
+            land: { ...(seed.land as any), ...((draft.land as any) || {}) },
+            address: { ...(seed.address as any), ...((draft.address as any) || {}) },
+            location: { ...(seed.location as any), ...((draft.location as any) || {}) },
+            identity: { ...INITIAL.identity, ...((draft.identity as any) || {}) },
+            addressProof: {
+              ...INITIAL.addressProof,
+              ...((draft.addressProof as any) || {}),
+              altAddress: {
+                ...INITIAL.addressProof.altAddress,
+                ...(((draft.addressProof as any)?.altAddress) || {}),
+              },
+            },
+            bank: { ...INITIAL.bank, ...((draft.bank as any) || {}) },
+          };
+          dispatch({ type: 'HYDRATE', data: merged });
+          return;
+        } catch {
+          /* fall through to seed-only */
+        }
+      }
+      dispatch({ type: 'HYDRATE', data: seed });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ---- Autosave ----
+  // Persist only the form data — UI state (expanded section, errors) is
+  // intentionally excluded so reopening doesn't flash stale validation
+  // errors or jump the user to a section they had already finished.
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFirstSave = useRef(true);
+  useEffect(() => {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    // Skip the "saving" flicker on the very first render (state hydration)
+    // — there's nothing the user did to trigger it.
+    if (isFirstSave.current) {
+      isFirstSave.current = false;
+      return;
+    }
+    setSavedStatus('saving');
+    autosaveTimer.current = setTimeout(async () => {
+      try {
+        const { expanded: _e, errors: _r, ...persistable } = state;
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
+      } catch {
+        /* storage write failed — silent */
+      } finally {
+        setSavedStatus('saved');
+      }
+    }, AUTOSAVE_DELAY);
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+  }, [state]);
+
+  // ---- Keyboard-aware scroll ----
+  // Two pieces working together:
+  //   1. Track the keyboard height (`keyboardHeight`) and add it to the
+  //      ScrollView's bottom padding. Without this the last few inputs
+  //      can't scroll above the keyboard — the content simply doesn't
+  //      extend that far.
+  //   2. When the keyboard opens, scroll the focused input into view
+  //      via UIManager.measureLayout against the ScrollView's handle
+  //      (the modern non-warning API).
+  // Both are best-effort and silently bail on any platform surprise.
+  useEffect(() => {
+    const subs: Array<{ remove: () => void }> = [];
+    const scrollFocusedIntoView = () => {
+      try {
+        // Prefer `currentlyFocusedInput` (modern RN, no deprecation
+        // warning). Fall back to `currentlyFocusedField` for older RN.
+        const State: any = (TextInput as any).State;
+        const focused =
+          State?.currentlyFocusedInput?.() ?? State?.currentlyFocusedField?.();
+        if (focused == null || !scrollViewRef.current) return;
+        const focusedHandle =
+          typeof focused === 'number' ? focused : findNodeHandle(focused);
+        if (focusedHandle == null) return;
+        const scrollHandle = findNodeHandle(scrollViewRef.current);
+        if (scrollHandle == null) return;
+        UIManager.measureLayout(
+          focusedHandle,
+          scrollHandle,
+          () => {},
+          (_x: number, y: number) => {
+            scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true });
+          },
+        );
+      } catch {
+        /* ignore */
+      }
+    };
+    const onShow = (e: any) => {
+      const h = e?.endCoordinates?.height ?? 0;
+      setKeyboardHeight(h);
+      // Wait one frame so the new bottom padding has applied before
+      // we measure + scroll — otherwise the scrollTo can be capped at
+      // the old maxScrollY and the last input still ends up clipped.
+      requestAnimationFrame(() => requestAnimationFrame(scrollFocusedIntoView));
+    };
+    const onHide = () => setKeyboardHeight(0);
+    try {
+      subs.push(Keyboard.addListener('keyboardDidShow', onShow));
+      subs.push(Keyboard.addListener('keyboardDidHide', onHide));
+    } catch {
+      /* registration failed — keyboard-aware scroll is best-effort */
+    }
+    return () => {
+      subs.forEach((s) => {
+        try { s.remove(); } catch { /* ignore */ }
+      });
+    };
+  }, []);
+
+  // ---- Quit handling ----
+  const confirmQuit = useCallback(() => {
+    AppAlert.alert(
+      'Quit setup?',
+      "You'll be signed out. Sign in again any time to resume — your draft is saved.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign out',
+          style: 'destructive',
+          onPress: () => {
+            signOut();
+          },
+        },
+      ],
+    );
+  }, [signOut]);
+
+  // Hardware back: collapse expanded section first; otherwise prompt to quit.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (state.expanded) {
+          dispatch({ type: 'TOGGLE', section: state.expanded });
+          return true;
+        }
+        confirmQuit();
+        return true;
+      });
+      return () => sub.remove();
+    }, [state.expanded, confirmQuit]),
+  );
+
+  // ---- Address prefill from current location ----
+  // When the Address & location section opens for the first time, offer
+  // to prefill it from the device's GPS. Tap "Use my location" → OS
+  // permission prompt → coords → reverse-geocode (Nominatim, no API key)
+  // → fill empty pincode/state/city/country and drop the map
+  // pin. We only fill *empty* fields, so this never clobbers something
+  // the user already typed (e.g., from a saved draft). One-shot per
+  // mount; subsequent opens of the section don't re-prompt.
+  const hasOfferedPrefill = useRef(false);
+  const [prefillingLocation, setPrefillingLocation] = React.useState(false);
+  // Inline banner shown when the user first opens the Address section
+  // with an empty address. Replaces the previous native AppAlert.alert
+  // because native alerts feel jarring mid-onboarding.
+  const [showPrefillBanner, setShowPrefillBanner] = React.useState(false);
+
+  const requestLocationPermission = async (): Promise<'granted' | 'denied' | 'never_ask_again'> => {
+    if (Platform.OS === 'ios') return 'granted';
+    try {
+      const status = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          title: 'Location permission',
+          message: "Allow location access so we can fill in your address automatically.",
+          buttonPositive: 'Allow',
+          buttonNegative: 'Cancel',
+        },
+      );
+      if (status === PermissionsAndroid.RESULTS.GRANTED) return 'granted';
+      if (status === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return 'never_ask_again';
+      return 'denied';
+    } catch {
+      return 'denied';
+    }
+  };
+
+  const runAddressPrefill = useCallback(async () => {
+    // Show the spinner immediately on tap. The OS permission prompt can
+    // take a beat to appear (especially on Android cold-start) and the
+    // user otherwise sees no feedback that the tap registered.
+    setPrefillingLocation(true);
+    const perm = await requestLocationPermission();
+    if (perm === 'never_ask_again') {
+      setPrefillingLocation(false);
+      AppAlert.alert(
+        'Location access needed',
+        'Enable location for this app in Settings, or fill the address manually.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => { Linking.openSettings().catch(() => {}); } },
+        ],
+      );
+      return;
+    }
+    if (perm !== 'granted') {
+      // User chose not to share location; manual entry continues to work.
+      setPrefillingLocation(false);
+      return;
+    }
+    Geolocation.getCurrentPosition(
+      async (pos: { coords: { latitude: number; longitude: number } }) => {
+        const { latitude, longitude } = pos.coords;
+        // Drop the map pin straight away so the user sees feedback even
+        // if reverse-geocoding is slow or fails.
+        dispatch({ type: 'SET', key: 'location', value: { lat: latitude, lng: longitude } });
+        const result = await reverseGeocode(latitude, longitude);
+        setPrefillingLocation(false);
+        if (!result) {
+          AppAlert.alert(
+            'Pin set',
+            "We couldn't fetch the postal address — please fill it in manually.",
+          );
+          return;
+        }
+        // Only fill empty fields; never overwrite something the user typed.
+        // We read the latest state via a functional dispatch pattern by
+        // computing the merged value from `state.address` at call time.
+        const merged: PincodeAddressValue = {
+          pincode: state.address.pincode || result.pincode,
+          state: state.address.state || result.state,
+          city: state.address.city || result.city,
+          addressLine1: state.address.addressLine1 || result.addressLine1,
+          addressLine2: state.address.addressLine2,
+          country: state.address.country || result.country || 'IN',
+        };
+        dispatch({ type: 'SET', key: 'address', value: merged });
+      },
+      (err: { code?: number; message?: string }) => {
+        setPrefillingLocation(false);
+        if (err.code === 1) {
+          AppAlert.alert(
+            'Location access needed',
+            'Enable location for this app in Settings, or fill the address manually.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => { Linking.openSettings().catch(() => {}); } },
+            ],
+          );
+        } else if (err.code === 2) {
+          AppAlert.alert(
+            'Location services unavailable',
+            'Turn on location services in your device settings, or fill the address manually.',
+          );
+        } else {
+          AppAlert.alert("Couldn't get location", err.message || 'Please fill the address manually.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+    );
+  }, [state.address]);
+
+  // Watch for the Address section opening — show the inline prefill
+  // banner once per mount, only if the address looks empty (so we don't
+  // surprise a returning user whose draft already has values).
+  useEffect(() => {
+    if (state.expanded !== 'address') return;
+    if (hasOfferedPrefill.current) return;
+    hasOfferedPrefill.current = true;
+    const isEmpty =
+      !state.address.addressLine1.trim() &&
+      !state.address.pincode.trim() &&
+      !state.address.city.trim();
+    if (isEmpty) setShowPrefillBanner(true);
+  }, [state.expanded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Hide the prefill banner once the prefill flow finishes (success or
+  // failure) so it doesn't linger above an already-filled address.
+  useEffect(() => {
+    if (!prefillingLocation && showPrefillBanner) {
+      const filled =
+        !!state.address.pincode.trim() ||
+        !!state.address.city.trim() ||
+        !!state.address.addressLine1.trim();
+      if (filled) setShowPrefillBanner(false);
+    }
+  }, [prefillingLocation, showPrefillBanner, state.address.pincode, state.address.city, state.address.addressLine1]);
+
+  // ---- File upload ----
+  // Aspect-ratio per upload target: ID front/back use the CR80 standard
+  // (PAN/Aadhaar/DL); selfie is square; address proof is free-aspect since
+  // utility bills and statements come in many shapes.
+  const handleUpload = async (source: PickSource) => {
+    if (!uploadModal) return;
+    const { slice, field } = uploadModal;
+    let aspect: 'idCard' | 'square' | 'free' = 'free';
+    if (slice === 'identity') {
+      aspect = field === 'selfieImage' ? 'square' : 'idCard';
+    }
+    try {
+      const res = await pickAndUploadImage({ source, aspect });
+      const file: UploadedFile = { uri: res.url, url: res.url };
+      dispatch({ type: 'PATCH', key: slice, value: { [field]: file } });
+      setUploadModal(null);
+    } catch (err) {
+      handleMediaUploadError(err);
+    }
+  };
+
+  // ---- Validation ----
+  // Maps each error key produced by validate() to the section that owns it,
+  // so on submit failure we can auto-expand and visually flag the right one.
+  const ERROR_SECTION_MAP: Record<string, SectionId> = {
+    ownerType: 'ownerType',
+    legalName: 'personal',
+    dateOfBirth: 'personal',
+    phone: 'personal',
+    email: 'personal',
+    businessName: 'business',
+    landLabel: 'land',
+    // All address/location/proof errors land in the unified 'address' section.
+    addressLine1: 'address',
+    pincode: 'address',
+    state: 'address',
+    city: 'address',
+    location: 'address',
+    proofDocument: 'address',
+    altAddressLine1: 'address',
+    altPincode: 'address',
+    documentNumber: 'identity',
+    frontImage: 'identity',
+    backImage: 'identity',
+    accountHolderName: 'bank',
+    accountNumber: 'bank',
+    ifscCode: 'bank',
+  };
+
+  const validate = (): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    if (showOwnerTypeSection && !state.ownerType) errs.ownerType = 'Select your owner type';
+    if (!state.personal.legalName.trim()) errs.legalName = 'Legal name is required';
+    if (!state.personal.dateOfBirth.trim()) errs.dateOfBirth = 'Date of birth is required';
+    // Email is optional but, if provided, must look like an email.
+    const emailVal = state.personal.email.trim();
+    if (emailVal && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+      errs.email = 'Enter a valid email or leave blank';
+    }
+    // Phone is read-only here (verified at sign-in), but we still guard
+    // against the edge case where the auth context has no phone — backend
+    // KYC requires it, so blocking up-front gives a clearer error.
+    if (!user?.phone) {
+      errs.phone = 'Your account has no verified phone — please sign out and sign in again.';
+    }
+    if (showBusiness && !state.business.businessName.trim()) errs.businessName = 'Business name is required';
+    if (showLand && !state.land.landLabel.trim()) errs.landLabel = 'Land label is required';
+    if (!state.address.addressLine1.trim()) errs.addressLine1 = 'Address line 1 is required';
+    if (!/^\d{6}$/.test(state.address.pincode)) errs.pincode = 'Enter a valid 6-digit pincode';
+    if (!state.address.state) errs.state = 'State is required';
+    if (!state.address.city.trim()) errs.city = 'City is required';
+    if (state.location.lat == null || state.location.lng == null) errs.location = 'Drop the pin on the map';
+    if (!state.identity.documentNumber.trim()) errs.documentNumber = 'Document number is required';
+    if (!state.identity.frontImage) errs.frontImage = 'Front image required';
+    if (state.identity.documentType !== 'passport' && !state.identity.backImage) {
+      errs.backImage = 'Back image required';
+    }
+    if (!state.addressProof.proofDocument) errs.proofDocument = 'Address proof document required';
+    if (!state.addressProof.sameAsProfile) {
+      if (!state.addressProof.altAddress.addressLine1.trim()) errs.altAddressLine1 = 'Address line 1 is required';
+      if (!/^\d{6}$/.test(state.addressProof.altAddress.pincode)) errs.altPincode = 'Valid pincode required';
+    }
+    if (!state.bank.accountHolderName.trim()) errs.accountHolderName = 'Account holder name required';
+    if (!state.bank.accountNumber.trim()) errs.accountNumber = 'Account number required';
+    if (!state.bank.ifscCode.trim()) errs.ifscCode = 'IFSC code required';
+    return errs;
+  };
+
+  // Set of sections that contain at least one error — used to flag headers.
+  const sectionsWithErrors = useMemo(() => {
+    const set = new Set<SectionId>();
+    for (const key of Object.keys(state.errors)) {
+      const section = ERROR_SECTION_MAP[key];
+      if (section) set.add(section);
+    }
+    return set;
+  }, [state.errors]);
+
+  // ---- Submit ----
+  const handleSubmit = async () => {
+    const errs = validate();
+    if (Object.keys(errs).length > 0) {
+      dispatch({ type: 'SET_ERRORS', errors: errs });
+      // Auto-expand the first section whose error appears in validation
+      // order, so the user sees the failing fields without scrolling.
+      const firstErrKey = Object.keys(errs)[0];
+      const firstSection = ERROR_SECTION_MAP[firstErrKey];
+      if (firstSection) dispatch({ type: 'EXPAND', section: firstSection });
+      const firstMsg = errs[firstErrKey];
+      AppAlert.alert(
+        'Almost there',
+        firstMsg
+          ? `${firstMsg}\n\nWe've opened the section that needs your attention.`
+          : "A few fields still need your attention.",
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // 1) Update profile (User + Owner records)
+      const profilePayload: Record<string, any> = {
+        legalName: state.personal.legalName.trim(),
+        dateOfBirth: state.personal.dateOfBirth,
+        addressLine1: state.address.addressLine1.trim(),
+        // Email is optional. Only include when the user actually typed
+        // something — sending an empty string would clobber any existing
+        // backend value.
+        ...(state.personal.email.trim() ? { email: state.personal.email.trim() } : {}),
+        addressLine2: state.address.addressLine2.trim(),
+        city: state.address.city.trim(),
+        state: state.address.state,
+        pincode: state.address.pincode,
+        country: state.address.country || 'IN',
+        locationLat: state.location.lat,
+        locationLng: state.location.lng,
+        ownerType: showOwnerTypeSection ? state.ownerType : owner?.ownerType,
+      };
+      if (showBusiness) {
+        profilePayload.businessName = state.business.businessName.trim();
+        profilePayload.roleDesignation = state.business.roleDesignation.trim();
+        profilePayload.registrationId = state.business.registrationId.trim();
+      }
+      if (showLand) {
+        profilePayload.landLabel = state.land.landLabel.trim();
+        profilePayload.landmark = state.land.landmark.trim();
+      }
+      const profileRes = await ownerService.updateProfile(profilePayload);
+      if (profileRes.user) updateUser(profileRes.user);
+      if (profileRes.owner) updateOwner(profileRes.owner);
+
+      // 2) Submit KYC. When sameAsProfile, the backend copies the address
+      //    from User; we still send the proof document URL.
+      const kycPayload: Record<string, any> = {
+        kycPersonal: {
+          fullName: state.personal.legalName.trim(),
+          dateOfBirth: state.personal.dateOfBirth,
+          phone: user?.phone || '',
+          // Prefer the freshly-typed email; fall back to the auth-context
+          // value (which may be empty for OTP-only signups).
+          email: state.personal.email.trim() || user?.email || '',
+        },
+        kycIdentity: {
+          documentType: state.identity.documentType,
+          documentNumber: state.identity.documentNumber.trim(),
+          frontImageUrl: state.identity.frontImage?.url,
+          backImageUrl: state.identity.backImage?.url,
+          selfieImageUrl: state.identity.selfieImage?.url,
+        },
+        kycBank: {
+          accountHolderName: state.bank.accountHolderName.trim(),
+          accountNumber: state.bank.accountNumber.trim(),
+          ifscCode: state.bank.ifscCode.trim().toUpperCase(),
+          bankName: state.bank.bankName.trim(),
+        },
+        kycAddressSameAsProfile: state.addressProof.sameAsProfile,
+        kycAddress: state.addressProof.sameAsProfile
+          ? { proofDocumentUrl: state.addressProof.proofDocument?.url }
+          : {
+              addressLine1: state.addressProof.altAddress.addressLine1.trim(),
+              addressLine2: state.addressProof.altAddress.addressLine2.trim(),
+              city: state.addressProof.altAddress.city.trim(),
+              state: state.addressProof.altAddress.state,
+              postalCode: state.addressProof.altAddress.pincode,
+              country: state.addressProof.altAddress.country || 'IN',
+              proofDocumentUrl: state.addressProof.proofDocument?.url,
+            },
+      };
+      const kycRes = await ownerService.submitKyc(kycPayload);
+      if (kycRes.owner) updateOwner(kycRes.owner);
+      // Capture the new kyc_status from the backend so we can pass it into
+      // updateOnboardingStep below — otherwise the dashboard's
+      // `kycStatus` slice stays at its old 'not_started' value and shows
+      // "KYC pending" / "Bank details incomplete" even though the data
+      // is fully saved server-side.
+      const newKycStatus = kycRes.owner?.kycStatus;
+
+      // 3) Auto-create a draft property listing seeded from the address.
+      //    Best-effort — failure here doesn't block onboarding completion.
+      try {
+        const draftName = (state.personal.legalName.trim() + ' Parking').slice(0, 60);
+        await listingService.createProperty({
+          propertyName: draftName,
+          address: [state.address.addressLine1, state.address.addressLine2]
+            .filter((s) => s && s.trim())
+            .join(', '),
+          city: state.address.city,
+          state: state.address.state,
+          postalCode: state.address.pincode,
+          locationLat: state.location.lat ?? 0,
+          locationLng: state.location.lng ?? 0,
+          // status: 'draft' is accepted by the backend createProperty handler.
+          status: 'draft',
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[onboarding] draft property auto-create failed:', err);
+      }
+
+      // 4) Advance onboarding state AND propagate the new kyc_status
+      //    into the auth slice so MainTabs/Dashboard immediately reflect
+      //    "verified" instead of the stale "not_started"/"draft" value.
+      //    Backend currently auto-approves so newKycStatus is usually
+      //    'verified'; if missing we still pass 'submitted' as a sane
+      //    fallback so "KYC pending" doesn't linger.
+      updateOnboardingStep('kyc_submitted', newKycStatus || 'submitted');
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    } catch (err: any) {
+      AppAlert.alert('Submission failed', err?.message || 'Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ---- Section render helper ----
+  const renderSection = (id: SectionId, title: string, subtitle: string, body: React.ReactNode) => {
+    const isExpanded = state.expanded === id;
+    const hasError = sectionsWithErrors.has(id);
+    return (
+      <View
+        style={[styles.section, hasError ? styles.sectionError : null]}
+        onLayout={(e) => {
+          // Cache the section's Y position inside the ScrollView for
+          // step-pill scroll-into-view.
+          sectionOffsets.current[id] = e.nativeEvent.layout.y;
+        }}
+      >
+        <Pressable
+          style={styles.sectionHeader}
+          onPress={() => dispatch({ type: 'TOGGLE', section: id })}
+        >
+          <View style={{ flex: 1 }}>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.sectionTitle}>{title}</Text>
+              {hasError ? (
+                <View style={styles.sectionErrorBadge}>
+                  <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                  <Text style={styles.sectionErrorText}>Needs attention</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+          </View>
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color="#6B7280"
+          />
+        </Pressable>
+        {isExpanded ? <View style={styles.sectionBody}>{body}</View> : null}
+      </View>
+    );
+  };
+
+  // ---- Step progress ----
+  // Each step has an independent 3-state status:
+  //   complete = all required fields filled
+  //   partial  = some fields filled but not all
+  //   pending  = nothing filled
+  // The user can fill them in any order; the header pills reflect each
+  // step's own state (no "earlier step blocks later step" coupling).
+  type Required = boolean[];
+  const requiredByStep: Record<'profile' | 'address' | 'identity' | 'bank', Required> = {
+    profile: [
+      !!state.personal.legalName.trim(),
+      !!state.personal.dateOfBirth.trim(),
+      ...(showOwnerTypeSection ? [!!state.ownerType] : []),
+      ...(showBusiness ? [!!state.business.businessName.trim()] : []),
+      ...(showLand ? [!!state.land.landLabel.trim()] : []),
+    ],
+    address: [
+      !!state.address.addressLine1.trim(),
+      !!state.address.pincode.trim(),
+      !!state.address.state,
+      !!state.address.city.trim(),
+      state.location.lat != null && state.location.lng != null,
+      !!state.addressProof.proofDocument,
+    ],
+    identity: [
+      !!state.identity.documentNumber.trim(),
+      !!state.identity.frontImage,
+      ...(state.identity.documentType === 'passport' ? [] : [!!state.identity.backImage]),
+    ],
+    bank: [
+      !!state.bank.accountHolderName.trim(),
+      !!state.bank.accountNumber.trim(),
+      !!state.bank.ifscCode.trim(),
+    ],
+  };
+  function classify(flags: Required): 'complete' | 'partial' | 'pending' {
+    const filled = flags.filter(Boolean).length;
+    if (filled === 0) return 'pending';
+    if (filled === flags.length) return 'complete';
+    return 'partial';
+  }
+  const stepOrder = ['profile', 'address', 'identity', 'bank'] as const;
+  const stepStatuses = stepOrder.map((k) => classify(requiredByStep[k]));
+
+  // No "active" pill emphasis — each step shows only its own
+  // independent status (complete / partial / pending). currentStepIndex
+  // is still passed for legacy ProgressHeader compatibility but is
+  // visually inert in the current design.
+  const currentStepIndex = 0;
+
+  // Tapping a step pill expands the matching accordion section. Several
+  // section IDs map to the first step (ownerType / personal / business /
+  // land are sub-sections of the "Profile" pill); we pick a sensible
+  // default per pill.
+  const stepIndexToSection: Record<number, SectionId> = {
+    0: showOwnerTypeSection && !state.ownerType ? 'ownerType' : 'personal',
+    1: 'address',
+    2: 'identity',
+    3: 'bank',
+  };
+  // Scroll a section's header to the top of the visible area. Used for
+  // both step-pill taps and section-header expansions — when a section
+  // near the bottom of the screen expands, its body would otherwise sit
+  // below the fold (auto-fill banner included).
+  const scrollSectionIntoView = useCallback((section: SectionId) => {
+    const run = () => {
+      const y = sectionOffsets.current[section];
+      if (typeof y === 'number') {
+        scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+      }
+    };
+    // Two rAFs ≈ one paint cycle after the EXPAND/TOGGLE dispatch, so
+    // the section's onLayout has reported the new position. The
+    // setTimeout is a belt-and-suspenders fallback for slower devices
+    // where the LayoutAnimation outlasts the rAF wait.
+    requestAnimationFrame(() => requestAnimationFrame(run));
+    setTimeout(run, 280);
+  }, []);
+
+  // Watch for any section becoming the expanded one (via header tap,
+  // step-pill tap, or programmatic dispatch) and scroll it into view.
+  useEffect(() => {
+    if (state.expanded) scrollSectionIntoView(state.expanded);
+  }, [state.expanded, scrollSectionIntoView]);
+
+  const handleStepPress = (idx: number) => {
+    const section = stepIndexToSection[idx];
+    if (!section) return;
+    dispatch({ type: 'EXPAND', section });
+    // The effect above will also scroll, but only if `expanded` actually
+    // *changes*. If the user taps the step pill for the already-expanded
+    // section, the effect doesn't fire — so trigger an explicit scroll
+    // here to keep the behavior consistent.
+    scrollSectionIntoView(section);
+  };
+
+  // ---- Render ----
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }} edges={['top']}>
+      <ProgressHeader
+        title="Complete your profile"
+        subtitle="A few quick details to get you ready to list your first parking spot."
+        steps={PROGRESS_STEPS}
+        currentStepIndex={currentStepIndex}
+        stepStatuses={stepStatuses}
+        onStepPress={handleStepPress}
+        savedStatus={savedStatus}
+        onBackPress={confirmQuit}
+        onMenuPress={confirmQuit}
+        showBack
+      />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={[
+            styles.scroll,
+            // Add the keyboard's height to the bottom padding while it's
+            // open so the last input has room to scroll above it.
+            { paddingBottom: 160 + keyboardHeight },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* OWNER TYPE */}
+          {showOwnerTypeSection
+            ? renderSection(
+                'ownerType',
+                'Owner type',
+                'How will you use the platform?',
+                <FormPickerInput
+                  label="I'm signing up as"
+                  required
+                  value={state.ownerType}
+                  options={OWNER_TYPE_OPTIONS}
+                  onSelect={(v) => dispatch({ type: 'SET', key: 'ownerType', value: v })}
+                  error={state.errors.ownerType}
+                  placeholder="Select owner type"
+                />,
+              )
+            : null}
+
+          {/* PERSONAL */}
+          {renderSection(
+            'personal',
+            'Personal details',
+            'Your name, DOB, and contact',
+            <View>
+              <FormTextInput
+                label="Legal name (as on ID)"
+                required
+                value={state.personal.legalName}
+                onChangeText={(v) => dispatch({ type: 'PATCH', key: 'personal', value: { legalName: v } })}
+                placeholder="Anita Sharma"
+                helperText="Your full name as on your ID."
+                error={state.errors.legalName}
+                containerStyle={styles.field}
+              />
+              <DateField
+                label="Date of birth"
+                required
+                value={state.personal.dateOfBirth}
+                onChange={(v) => dispatch({ type: 'PATCH', key: 'personal', value: { dateOfBirth: v } })}
+                error={state.errors.dateOfBirth}
+                containerStyle={styles.field}
+                hideToday
+                maxDate={new Date()}
+                modalTitle="Select your date of birth"
+              />
+              <View style={styles.readonlyRow}>
+                <Text style={styles.readonlyLabel}>Phone</Text>
+                <Text style={styles.readonlyValue}>{user?.phone || '—'}</Text>
+                <Text style={styles.readonlyHint}>Verified at sign-in</Text>
+              </View>
+              <FormTextInput
+                label="Email (optional)"
+                value={state.personal.email}
+                onChangeText={(v) => dispatch({ type: 'PATCH', key: 'personal', value: { email: v } })}
+                placeholder="you@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                helperText="For booking confirmations and receipts. You can add this later in Profile."
+                error={state.errors.email}
+                containerStyle={styles.field}
+              />
+            </View>,
+          )}
+
+          {/* BUSINESS (conditional) */}
+          {showBusiness
+            ? renderSection(
+                'business',
+                'Business details',
+                'Required for your owner type',
+                <View>
+                  <FormTextInput
+                    label="Business / property name"
+                    required
+                    value={state.business.businessName}
+                    onChangeText={(v) =>
+                      dispatch({ type: 'PATCH', key: 'business', value: { businessName: v } })
+                    }
+                    placeholder="Sunrise Apartments"
+                    error={state.errors.businessName}
+                    containerStyle={styles.field}
+                  />
+                  <FormTextInput
+                    label="Your role"
+                    value={state.business.roleDesignation}
+                    onChangeText={(v) =>
+                      dispatch({ type: 'PATCH', key: 'business', value: { roleDesignation: v } })
+                    }
+                    placeholder="Society Secretary, Owner, Manager…"
+                    containerStyle={styles.field}
+                  />
+                  <FormTextInput
+                    label="Registration ID (optional)"
+                    value={state.business.registrationId}
+                    onChangeText={(v) =>
+                      dispatch({ type: 'PATCH', key: 'business', value: { registrationId: v } })
+                    }
+                    placeholder="GST / RERA / Society reg."
+                    containerStyle={styles.field}
+                  />
+                </View>,
+              )
+            : null}
+
+          {/* LAND (conditional) */}
+          {showLand
+            ? renderSection(
+                'land',
+                'Land details',
+                'Required for empty land',
+                <View>
+                  <FormTextInput
+                    label="Land label"
+                    required
+                    value={state.land.landLabel}
+                    onChangeText={(v) =>
+                      dispatch({ type: 'PATCH', key: 'land', value: { landLabel: v } })
+                    }
+                    placeholder="Plot 14, Sector 9"
+                    error={state.errors.landLabel}
+                    containerStyle={styles.field}
+                  />
+                  <FormTextInput
+                    label="Landmark (optional)"
+                    value={state.land.landmark}
+                    onChangeText={(v) =>
+                      dispatch({ type: 'PATCH', key: 'land', value: { landmark: v } })
+                    }
+                    placeholder="Near city school"
+                    containerStyle={styles.field}
+                  />
+                </View>,
+              )
+            : null}
+
+          {/* ADDRESS — unified: address fields + map pin + address proof */}
+          {renderSection(
+            'address',
+            'Address & location',
+            'Where are you based, where to pin on the map, and your address proof',
+            <View>
+              {/* Inline prefill banner — replaces the older native AppAlert.alert.
+                  Shown once per mount when the address starts empty; hidden after
+                  the user picks an option or once any address field gets filled. */}
+              {showPrefillBanner ? (
+                <View style={styles.prefillBanner}>
+                  <View style={styles.prefillBannerIcon}>
+                    <Ionicons name="locate" size={20} color="#0D7377" />
+                  </View>
+                  <View style={styles.prefillBannerText}>
+                    <Text style={styles.prefillBannerTitle}>Auto-fill your address?</Text>
+                    <Text style={styles.prefillBannerBody}>
+                      We can detect your pincode, city and state from your current location — or you can type them yourself.
+                    </Text>
+                    <View style={styles.prefillBannerActions}>
+                      <Pressable
+                        onPress={() => {
+                          setShowPrefillBanner(false);
+                          runAddressPrefill();
+                        }}
+                        disabled={prefillingLocation}
+                        style={[styles.prefillBannerPrimary, prefillingLocation && { opacity: 0.6 }]}
+                      >
+                        {prefillingLocation ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.prefillBannerPrimaryText}>Auto-fill address</Text>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setShowPrefillBanner(false)}
+                        style={styles.prefillBannerSecondary}
+                      >
+                        <Text style={styles.prefillBannerSecondaryText}>I'll type it</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                // Compact secondary trigger so the user can re-run the prefill
+                // any time (e.g., after dismissing the banner or for a redo).
+                <Pressable
+                  style={[styles.useLocationBtn, prefillingLocation && { opacity: 0.6 }]}
+                  onPress={runAddressPrefill}
+                  disabled={prefillingLocation}
+                >
+                  {prefillingLocation ? (
+                    <ActivityIndicator size="small" color="#0D7377" />
+                  ) : (
+                    <Ionicons name="locate" size={16} color="#0D7377" />
+                  )}
+                  <Text style={styles.useLocationBtnText}>
+                    {prefillingLocation ? 'Auto-filling…' : 'Auto-fill address from location'}
+                  </Text>
+                </Pressable>
+              )}
+
+              <PincodeAddressBlock
+                value={state.address}
+                onChange={(v) => dispatch({ type: 'SET', key: 'address', value: v })}
+                required
+                errors={{
+                  pincode: state.errors.pincode,
+                  state: state.errors.state,
+                  city: state.errors.city,
+                  addressLine1: state.errors.addressLine1,
+                }}
+              />
+
+              <Text style={styles.subsectionTitle}>Pin your location</Text>
+              <Text style={styles.subsectionHint}>Tap the map or drag the pin to mark the spot drivers will navigate to.</Text>
+              <LocationPickerMap
+                value={state.location}
+                onChange={(v) => dispatch({ type: 'SET', key: 'location', value: v })}
+                seedRegion={
+                  state.location.lat != null && state.location.lng != null
+                    ? { lat: state.location.lat, lng: state.location.lng }
+                    : undefined
+                }
+                hideCurrentLocationButton
+              />
+              {state.errors.location ? (
+                <Text style={styles.errorText}>{state.errors.location}</Text>
+              ) : null}
+
+              <Text style={styles.subsectionTitle}>Address proof</Text>
+              <Text style={styles.subsectionHint}>Utility bill, bank statement, or any government-issued document showing your address.</Text>
+              <Pressable
+                style={styles.checkboxRow}
+                onPress={() =>
+                  dispatch({
+                    type: 'PATCH',
+                    key: 'addressProof',
+                    value: { sameAsProfile: !state.addressProof.sameAsProfile },
+                  })
+                }
+              >
+                <Ionicons
+                  name={state.addressProof.sameAsProfile ? 'checkbox' : 'square-outline'}
+                  size={22}
+                  color="#0D7377"
+                />
+                <Text style={styles.checkboxLabel}>Address proof matches the address above</Text>
+              </Pressable>
+              {!state.addressProof.sameAsProfile ? (
+                <PincodeAddressBlock
+                  value={state.addressProof.altAddress}
+                  onChange={(v) =>
+                    dispatch({ type: 'PATCH', key: 'addressProof', value: { altAddress: v } })
+                  }
+                  errors={{
+                    pincode: state.errors.altPincode,
+                    addressLine1: state.errors.altAddressLine1,
+                  }}
+                  required
+                />
+              ) : null}
+              <UploadCard
+                label="Proof document"
+                required
+                file={state.addressProof.proofDocument}
+                error={state.errors.proofDocument}
+                onPress={() => setUploadModal({ slice: 'addressProof', field: 'proofDocument' })}
+              />
+            </View>,
+          )}
+
+          {/* IDENTITY */}
+          {renderSection(
+            'identity',
+            'Identity proof',
+            'Government-issued photo ID',
+            <View>
+              <FormPickerInput
+                label="Document type"
+                required
+                value={state.identity.documentType}
+                options={DOCUMENT_TYPE_OPTIONS}
+                onSelect={(v) =>
+                  dispatch({ type: 'PATCH', key: 'identity', value: { documentType: v as DocumentType } })
+                }
+                containerStyle={styles.field}
+              />
+              <FormTextInput
+                label="Document number"
+                required
+                value={state.identity.documentNumber}
+                onChangeText={(v) =>
+                  dispatch({ type: 'PATCH', key: 'identity', value: { documentNumber: v } })
+                }
+                placeholder="XXXX-XXXX-XXXX"
+                error={state.errors.documentNumber}
+                containerStyle={styles.field}
+              />
+              <Text style={styles.subsectionTitle}>Document images</Text>
+              <Text style={styles.subsectionHint}>
+                Clear, well-lit photos of the front and back of your document.
+              </Text>
+              <UploadCardRow>
+                <UploadCard
+                  label="Front"
+                  required
+                  file={state.identity.frontImage}
+                  error={state.errors.frontImage}
+                  onPress={() => setUploadModal({ slice: 'identity', field: 'frontImage' })}
+                />
+                {state.identity.documentType !== 'passport' ? (
+                  <UploadCard
+                    label="Back"
+                    required
+                    file={state.identity.backImage}
+                    error={state.errors.backImage}
+                    onPress={() => setUploadModal({ slice: 'identity', field: 'backImage' })}
+                  />
+                ) : null}
+              </UploadCardRow>
+              <Text style={styles.subsectionTitle}>Selfie</Text>
+              <Text style={styles.subsectionHint}>
+                Helps us match your face with your document. Optional.
+              </Text>
+              <UploadCard
+                label="Selfie"
+                file={state.identity.selfieImage}
+                onPress={() => setUploadModal({ slice: 'identity', field: 'selfieImage' })}
+              />
+            </View>,
+          )}
+
+          {/* BANK */}
+          {renderSection(
+            'bank',
+            'Bank details',
+            'For payouts',
+            <View>
+              <FormTextInput
+                label="Account holder name"
+                required
+                value={state.bank.accountHolderName}
+                onChangeText={(v) =>
+                  dispatch({ type: 'PATCH', key: 'bank', value: { accountHolderName: v } })
+                }
+                error={state.errors.accountHolderName}
+                containerStyle={styles.field}
+              />
+              {/* Reuse-earlier-input shortcuts. Tapping fills the field
+                  with the chosen name; the field stays editable and the
+                  pill shows a check when the values match. */}
+              {state.personal.legalName.trim() ? (
+                <ReuseRow
+                  label="Use legal name"
+                  value={state.personal.legalName.trim()}
+                  active={state.bank.accountHolderName.trim() === state.personal.legalName.trim()}
+                  onPress={() =>
+                    dispatch({ type: 'PATCH', key: 'bank', value: { accountHolderName: state.personal.legalName.trim() } })
+                  }
+                />
+              ) : null}
+              {showBusiness && state.business.businessName.trim() ? (
+                <ReuseRow
+                  label="Use business name"
+                  value={state.business.businessName.trim()}
+                  active={state.bank.accountHolderName.trim() === state.business.businessName.trim()}
+                  onPress={() =>
+                    dispatch({ type: 'PATCH', key: 'bank', value: { accountHolderName: state.business.businessName.trim() } })
+                  }
+                />
+              ) : null}
+              <FormTextInput
+                label="Account number"
+                required
+                value={state.bank.accountNumber}
+                onChangeText={(v) =>
+                  dispatch({ type: 'PATCH', key: 'bank', value: { accountNumber: v } })
+                }
+                keyboardType="number-pad"
+                error={state.errors.accountNumber}
+                containerStyle={styles.field}
+              />
+              <FormTextInput
+                label="IFSC code"
+                required
+                value={state.bank.ifscCode}
+                onChangeText={(v) =>
+                  dispatch({ type: 'PATCH', key: 'bank', value: { ifscCode: v.toUpperCase() } })
+                }
+                placeholder="HDFC0001234"
+                autoCapitalize="characters"
+                error={state.errors.ifscCode}
+                containerStyle={styles.field}
+              />
+              <FormTextInput
+                label="Bank name"
+                value={state.bank.bankName}
+                onChangeText={(v) => dispatch({ type: 'PATCH', key: 'bank', value: { bankName: v } })}
+                placeholder="HDFC Bank"
+                containerStyle={styles.field}
+              />
+            </View>,
+          )}
+
+          <Pressable style={styles.submitBtn} onPress={handleSubmit} disabled={submitting}>
+            {submitting ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.submitBtnText}>Submit for verification</Text>
+            )}
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Upload source picker */}
+      {!!uploadModal ? (
+
+        <Pressable style={styles.modalBackdrop} onPress={() => setUploadModal(null)}>
+          <Pressable style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Add document</Text>
+            <Pressable style={styles.modalRow} onPress={() => handleUpload('camera')}>
+              <Ionicons name="camera-outline" size={20} color="#1F2937" />
+              <Text style={styles.modalRowText}>Take a photo</Text>
+            </Pressable>
+            <Pressable style={styles.modalRow} onPress={() => handleUpload('gallery')}>
+              <Ionicons name="images-outline" size={20} color="#1F2937" />
+              <Text style={styles.modalRowText}>Choose from gallery</Text>
+            </Pressable>
+            <Pressable style={styles.modalCancel} onPress={() => setUploadModal(null)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      
+      ) : null}
+    </SafeAreaView>
+  );
+}
+
+// ============================================================================
+// SUB-COMPONENTS
+// ============================================================================
+
+// Card-style upload tile with a dashed outer border (empty state) and a
+// small dashed-border placeholder square holding the icon. When a file is
+// present, the outer border becomes solid green, the placeholder becomes
+// a filled blue tile with a document icon, and a green check appears.
+// Two cards can sit side-by-side via the `<UploadCardRow>` wrapper.
+function UploadCard({
+  label,
+  file,
+  error,
+  required,
+  onPress,
+}: {
+  label: string;
+  file: UploadedFile | null;
+  error?: string;
+  required?: boolean;
+  onPress: () => void;
+}) {
+  const isFilled = !!file;
+  return (
+    <View style={styles.uploadCardWrap}>
+      <Pressable
+        onPress={onPress}
+        style={[
+          styles.uploadCard,
+          isFilled ? styles.uploadCardFilled : null,
+          error ? styles.uploadCardError : null,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={`Upload ${label}${required ? ', required' : ''}`}
+      >
+        {isFilled ? (
+          <View style={styles.uploadPreview}>
+            <Ionicons name="document" size={20} color="#FFFFFF" />
+          </View>
+        ) : (
+          <View style={styles.uploadPlaceholder}>
+            <Ionicons name="add" size={22} color="#9CA3AF" />
+          </View>
+        )}
+        <View style={styles.uploadCardContent}>
+          <Text style={styles.uploadCardLabel} numberOfLines={1}>
+            {label}
+            {required ? <Text style={styles.uploadCardRequired}> *</Text> : null}
+          </Text>
+          <Text style={styles.uploadCardAction}>{isFilled ? 'Replace' : 'Add'}</Text>
+        </View>
+        {isFilled ? (
+          <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+        ) : null}
+      </Pressable>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+}
+
+// Pair two UploadCards in a single row (e.g., Front + Back of an ID).
+// Falls back to single-column when only one child is provided.
+function UploadCardRow({ children }: { children: React.ReactNode }) {
+  return <View style={styles.uploadCardRow}>{children}</View>;
+}
+
+// Inline "reuse this earlier value" toggle. Renders a checkbox + label + the
+// candidate value (e.g., "Use legal name — Anita Sharma"). Tapping fills the
+// associated field; the field stays editable and the box shows a checkmark
+// while the value matches. Used wherever the same data has already been
+// entered in another section.
+function ReuseRow({
+  label,
+  value,
+  active,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.reuseRow} onPress={onPress}>
+      <View style={[styles.reuseCheckbox, active && styles.reuseCheckboxActive]}>
+        {active ? <Ionicons name="checkmark" size={12} color="#FFFFFF" /> : null}
+      </View>
+      <Text style={styles.reuseRowText} numberOfLines={1}>
+        {label} — <Text style={styles.reuseRowValue}>{value}</Text>
+      </Text>
+    </Pressable>
+  );
+}
+
+// ============================================================================
+// STYLES
+// ============================================================================
+
+const styles = StyleSheet.create({
+  scroll: { padding: 16, paddingBottom: 160 },
+  section: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E5E7EB',
+  },
+  sectionError: {
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  sectionTitle: { fontSize: 15, fontWeight: '600', color: '#1F2937' },
+  sectionSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  sectionErrorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 4,
+  },
+  sectionErrorText: {
+    fontSize: 11,
+    color: '#B91C1C',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  sectionBody: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F3F4F6',
+  },
+  field: { marginTop: 12 },
+  errorText: { color: '#EF4444', fontSize: 12, marginTop: 6 },
+  subsectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  subsectionHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  useLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#E8F5F4',
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  useLocationBtnText: {
+    color: '#0D7377',
+    fontSize: 13,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  prefillBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
+    backgroundColor: '#E8F5F4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D6ECEA',
+    marginBottom: 12,
+  },
+  prefillBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  prefillBannerText: { flex: 1 },
+  prefillBannerTitle: { fontSize: 14, fontWeight: '600', color: '#1F2937', marginBottom: 4 },
+  prefillBannerBody: { fontSize: 13, color: '#4B5563', lineHeight: 18 },
+  prefillBannerActions: { flexDirection: 'row', marginTop: 10, alignItems: 'center' },
+  prefillBannerPrimary: {
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8,
+    backgroundColor: '#0D7377', minHeight: 36, justifyContent: 'center', alignItems: 'center',
+    minWidth: 130,
+  },
+  prefillBannerPrimaryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
+  prefillBannerSecondary: {
+    paddingHorizontal: 12, paddingVertical: 9, marginLeft: 8,
+  },
+  prefillBannerSecondaryText: { color: '#4B5563', fontSize: 13, fontWeight: '500' },
+  readonlyRow: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+  },
+  readonlyLabel: { fontSize: 11, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.4 },
+  readonlyValue: { fontSize: 14, color: '#1F2937', marginTop: 2 },
+  readonlyHint: { fontSize: 11, color: '#10B981', marginTop: 2 },
+  // Upload tile (dashed-border card with placeholder square + label) —
+  // shared by identity images and address-proof document.
+  uploadCardWrap: { flex: 1, marginTop: 12 },
+  uploadCardRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  uploadCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#D1D5DB',
+    backgroundColor: '#F9FAFB',
+    minHeight: 76,
+  },
+  uploadCardFilled: {
+    borderColor: '#10B981',
+    borderStyle: 'solid',
+    backgroundColor: '#ECFDF5',
+  },
+  uploadCardError: { borderColor: '#EF4444' },
+  uploadPlaceholder: {
+    width: 48, height: 48, borderRadius: 8,
+    borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#D1D5DB',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  uploadPreview: {
+    width: 48, height: 48, borderRadius: 8,
+    backgroundColor: '#0D7377',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  uploadCardContent: { flex: 1, marginLeft: 12 },
+  uploadCardLabel: { fontSize: 13, fontWeight: '500', color: '#1F2937' },
+  uploadCardRequired: { color: '#EF4444' },
+  uploadCardAction: { fontSize: 12, fontWeight: '600', color: '#0D7377', marginTop: 2 },
+  // "Reuse earlier input" inline toggle row.
+  reuseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginTop: 4,
+  },
+  reuseCheckbox: {
+    width: 18, height: 18, borderRadius: 4,
+    borderWidth: 1.5, borderColor: '#0D7377',
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: 10,
+  },
+  reuseCheckboxActive: { backgroundColor: '#0D7377' },
+  reuseRowText: { flex: 1, fontSize: 13, color: '#6B7280' },
+  reuseRowValue: { color: '#1F2937', fontWeight: '500' },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  checkboxLabel: { fontSize: 14, color: '#1F2937', marginLeft: 10 },
+  submitBtn: {
+    marginTop: 24,
+    backgroundColor: '#0D7377',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  submitBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  modalBackdrop: {
+    // Absolutely positioned rather than flex:1 — no longer inside a
+    // <Modal>, which does not present on this build.
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+    elevation: 24,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 20,
+  },
+  modalTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 12 },
+  modalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  modalRowText: { fontSize: 15, color: '#1F2937', marginLeft: 12 },
+  modalCancel: {
+    marginTop: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+  },
+  modalCancelText: { color: '#1F2937', fontSize: 15, fontWeight: '500' },
+});

@@ -1,0 +1,1951 @@
+ParkBNB – Controller & Routes Specification with Error Handling & Response Contracts
+Generated: 2025-10-16 07:36
+Updated: 2025-10-16 (Added Route Documentation)
+Scope: This document describes all controllers and routes for ParkBNB. For each controller, it defines responsibilities, primary operations, standard success/error response shapes, validation rules, edge cases, and detailed route mappings with middleware chains.
+A. Global API Conventions
+A.1 Response Envelope
+All endpoints return a consistent JSON envelope:
+Success: { "success": true, "data": <object|array|null>, "meta": { "page": n, "limit": n, "total": n }? }
+Error:   { "success": false, "error": { "code": "<APP_CODE>", "http": <status>, "message": "<human readable>", "details": { ... }? , "traceId": "<uuid>" } }
+A.2 Error Code Taxonomy
+AUTH_UNAUTHORIZED (401) – No/invalid token
+AUTH_FORBIDDEN (403) – Insufficient role/ownership
+REQ_VALIDATION (400) – Body/query/path invalid, schema errors in details
+REQ_CONFLICT (409) – State conflict (e.g., overlapping booking)
+REQ_RATE_LIMIT (429) – Too many requests
+NOT_FOUND (404) – Resource missing
+PAYMENT_REQUIRED (402) – Payment needed/failed
+PROVIDER_ERROR (502/503) – Upstream gateway failure
+IDEMPOTENCY_REPLAY (409) – Duplicate confirmation/refund
+INTERNAL (500) – Unexpected server error
+A.3 Common Behaviors
+Pagination: query { page, limit }; response.meta includes { page, limit, total }.
+Filtering & Sorting: defined query params; reject unknown filters under validation.
+Idempotency: confirm/cancel/payment/refund endpoints accept Idempotency-Key header.
+Validation: schema validation on all requests; details array lists field errors.
+Auth: JWT via httpOnly cookie; role-based access (user/owner/admin).
+Rate Limits: strict on auth, bookings create/confirm, payments, messages.
+Audit: write operations record actor, time, and diff for compliance.
+Time & TZ: all timestamps ISO-8601 UTC; client may send local tz if needed in meta.
+A.4 Standard Field Conventions
+IDs are UUIDs (or Mongo ObjectIds) returned as strings.
+Monetary amounts in the smallest currency unit (e.g., paise).
+Geospatial fields as { lat, lng }; server stores GeoJSON.
+Soft deletes set is_active=false; physical deletes admin-only maintenance.
+1) AuthController
+Purpose
+Registration, login, account verification, password change; session lifecycle.
+Primary Operations
+POST /api/users/register – create account; send verification; sign-in on success.
+POST /api/users/login – authenticate; rotate token; return profile summary.
+POST /api/users/{id}/verify – verify with OTP/code; activate account.
+PUT  /api/users/{id}/password – change password (authenticated).
+Validation & Preconditions
+Rate limit register/login (per IP + per identifier).
+Strong password policy; hash & rotate tokens on login.
+OTP/code expiry and max attempts; lockout on brute force.
+Edge Cases & Error Handling
+Duplicate email/phone ⇒ REQ_CONFLICT (409).
+Invalid credentials ⇒ AUTH_UNAUTHORIZED (401).
+Expired or wrong OTP ⇒ REQ_VALIDATION (400).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "user": { ... } } }
+Error (invalid password): { "success": false, "error": { "code": "AUTH_UNAUTHORIZED", "http": 401, "message": "Invalid credentials" } }
+2) UsersController
+Purpose
+CRUD for user profile; admin search/list; self profile read/update; soft delete.
+Primary Operations
+GET /api/users (admin, filters & pagination)
+GET /api/users/{id}, GET /api/users/{id}/profile
+POST /api/users (admin-created accounts)
+PUT /api/users/{id}, PUT /api/users/{id}/location
+DELETE /api/users/{id} (soft delete)
+Validation & Preconditions
+Profile schema validation; restrict mutable fields.
+Only self or admin can update; enforce PII masking in logs.
+Edge Cases & Error Handling
+User not found ⇒ NOT_FOUND (404).
+Trying to update restricted fields ⇒ AUTH_FORBIDDEN (403) or REQ_VALIDATION (400).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "user": { ... } } }
+3) UserVehiclesController
+Purpose
+Manage vehicles attached to a user; support default vehicle.
+Primary Operations
+GET /api/users/{userId}/vehicles, GET /api/vehicles/{vehicleId}
+POST /api/users/{userId}/vehicles
+PUT /api/vehicles/{vehicleId}, PUT /api/vehicles/{vehicleId}/set-default
+DELETE /api/vehicles/{vehicleId}
+Validation & Preconditions
+Ensure registration_number uniqueness per user.
+Vehicle size/type enum validation.
+Edge Cases & Error Handling
+Duplicate registration ⇒ REQ_CONFLICT (409).
+Set-default when vehicle not owned by user ⇒ AUTH_FORBIDDEN (403).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "vehicle": { ... } } }
+4) UserPaymentMethodsController
+Purpose
+Reference tokens for saved payment methods; no raw PAN storage.
+Primary Operations
+GET /api/users/{userId}/payment-methods
+POST /api/users/{userId}/payment-methods
+PUT /api/payment-methods/{id}, PUT /api/payment-methods/{id}/set-default
+DELETE /api/payment-methods/{id}
+Validation & Preconditions
+Validate provider token; mask last4/brand.
+Only owner can view/modify their methods.
+Edge Cases & Error Handling
+Invalid provider token ⇒ REQ_VALIDATION (400).
+Attempt to access others’ methods ⇒ AUTH_FORBIDDEN (403).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "paymentMethod": { ... } } }
+5) OwnersController
+Purpose
+Owner lifecycle incl. KYC verification, payout info, earnings & statistics.
+Primary Operations
+GET /api/owners, GET /api/owners/{id}, GET /api/users/{userId}/owner-profile
+POST /api/owners, POST /api/owners/{id}/verify
+PUT /api/owners/{id}, PUT /api/owners/{id}/payout-info
+DELETE /api/owners/{id}
+GET /api/owners/{id}/earnings, GET /api/owners/{id}/statistics
+Validation & Preconditions
+KYC docs required to verify; sanitize stored metadata.
+Payout info validation; enforce owner_type enum.
+Edge Cases & Error Handling
+Invalid KYC ⇒ REQ_VALIDATION (400).
+Owner not verified using restricted features ⇒ AUTH_FORBIDDEN (403).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "owner": { ... }, "stats": { ... } } }
+6) PropertiesController
+Purpose
+CRUD for properties; images; nearby search; list by owner.
+Primary Operations
+GET /api/properties, GET /api/properties/{id}
+GET /api/owners/{ownerId}/properties, GET /api/properties/search/nearby
+POST /api/properties
+PUT /api/properties/{id}, PUT /api/properties/{id}/images
+DELETE /api/properties/{id}
+Validation & Preconditions
+Address normalization; {lat,lng} required; images type/size checks.
+Owner-only modification; soft delete with orphan space checks.
+Edge Cases & Error Handling
+Invalid geo params ⇒ REQ_VALIDATION (400).
+Updating others’ property ⇒ AUTH_FORBIDDEN (403).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "property": { ... } } }
+7) ParkingSpacesController
+Purpose
+Manage spaces, pricing, EV flags, availability toggles; search/filters.
+Primary Operations
+GET /api/parking-spaces, GET /api/parking-spaces/{id}
+GET /api/properties/{propertyId}/parking-spaces
+GET /api/parking-spaces/search, GET /api/parking-spaces/{id}/availability
+POST /api/parking-spaces
+PUT /api/parking-spaces/{id}, PUT /api/parking-spaces/{id}/pricing
+PUT /api/parking-spaces/{id}/toggle-availability
+DELETE /api/parking-spaces/{id}
+Validation & Preconditions
+Vehicle compatibility validation; pricing >= 0; booking_mode enum.
+Denormalize property location to space for search.
+Edge Cases & Error Handling
+Negative price ⇒ REQ_VALIDATION (400).
+Toggle availability while active booking ⇒ REQ_CONFLICT (409).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "space": { ... } } }
+8) AvailabilityController
+Purpose
+Weekly schedule per space; used by search & booking validations.
+Primary Operations
+GET /api/parking-spaces/{spaceId}/availability-schedule
+POST /api/parking-spaces/{spaceId}/availability-schedule
+PUT /api/availability-schedule/{scheduleId}
+DELETE /api/availability-schedule/{scheduleId}
+Validation & Preconditions
+Validate no overlapping day/time windows.
+Allow closures/exceptions (future extension).
+Edge Cases & Error Handling
+Overlapping schedule ⇒ REQ_CONFLICT (409).
+Editing schedule during active booking window ⇒ REQ_CONFLICT (409).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "schedule": [ ... ] } }
+9) BookingsController
+Purpose
+Create/confirm/cancel/update bookings; check-in/out; list by user/owner/space.
+Primary Operations
+GET /api/bookings, GET /api/bookings/{id}, GET /api/bookings/number/{booking_number}
+GET /api/users/{userId}/bookings, GET /api/owners/{ownerId}/bookings, GET /api/parking-spaces/{spaceId}/bookings
+POST /api/bookings (create hold), POST /api/bookings/{id}/confirm, POST /api/bookings/{id}/cancel
+POST /api/bookings/{id}/check-in, POST /api/bookings/{id}/check-out
+PUT /api/bookings/{id}, DELETE /api/bookings/{id}
+Validation & Preconditions
+Conflict check: any booking where start<end and end>start exists for space.
+Recompute totals server-side; ignore client totals for integrity.
+Cancellation policy window & fees.
+Edge Cases & Error Handling
+Overlapping booking ⇒ REQ_CONFLICT (409).
+Confirm already confirmed ⇒ IDEMPOTENCY_REPLAY (409).
+Check-in without confirmation ⇒ REQ_VALIDATION (400).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "booking": { ... } } }
+10) PaymentsController
+Purpose
+Create/process payments; update status; list by user/booking.
+Primary Operations
+GET /api/payments, GET /api/payments/{id}, GET /api/payments/number/{payment_number}
+GET /api/bookings/{bookingId}/payment, GET /api/users/{userId}/payments
+POST /api/payments, POST /api/payments/{id}/process
+PUT /api/payments/{id}, DELETE /api/payments/{id}
+Validation & Preconditions
+Verify gateway signatures; protect provider_transaction_id integrity.
+Amounts must match booking recomputation; currency fixed per booking.
+Edge Cases & Error Handling
+Gateway error ⇒ PROVIDER_ERROR (502/503).
+Mismatch totals ⇒ REQ_VALIDATION (400).
+Duplicate callback ⇒ IDEMPOTENCY_REPLAY (409).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "payment": { ... } } }
+11) RefundsController
+Purpose
+Create/process refunds; read by payment/booking.
+Primary Operations
+GET /api/refunds, GET /api/refunds/{id}, GET /api/payments/{paymentId}/refund, GET /api/bookings/{bookingId}/refund
+POST /api/refunds, POST /api/refunds/{id}/process
+PUT /api/refunds/{id}, DELETE /api/refunds/{id}
+Validation & Preconditions
+Policy validation: refundable amount cap; partial refunds ok.
+Reconcile with payment provider and booking state.
+Edge Cases & Error Handling
+Refund exceeds paid amount ⇒ REQ_VALIDATION (400).
+Duplicate process ⇒ IDEMPOTENCY_REPLAY (409).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "refund": { ... } } }
+12) ReviewsController
+Purpose
+Collect/update/delete reviews; owner responses; list by entity.
+Primary Operations
+GET /api/reviews, GET /api/reviews/{id}
+GET /api/bookings/{bookingId}/review, GET /api/parking-spaces/{spaceId}/reviews, GET /api/owners/{ownerId}/reviews
+POST /api/reviews, POST /api/reviews/{id}/respond
+PUT /api/reviews/{id}, DELETE /api/reviews/{id}
+Validation & Preconditions
+One review per completed booking per user.
+Moderation rules: profanity/harassment filter; image validation.
+Edge Cases & Error Handling
+Duplicate review ⇒ REQ_CONFLICT (409).
+Respond to others’ review without ownership ⇒ AUTH_FORBIDDEN (403).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "review": { ... } } }
+13) ConversationsController & 14) MessagesController
+Purpose
+Booking-scoped threads; message send/list; mark read.
+Primary Operations
+Conversations: GET /api/conversations, GET /api/conversations/{id}, GET /api/users/{userId}/conversations, GET /api/bookings/{bookingId}/conversation, POST /api/conversations, PUT /api/conversations/{id}, DELETE /api/conversations/{id}
+Messages: GET /api/conversations/{conversationId}/messages, GET /api/messages/{id}, POST /api/conversations/{conversationId}/messages, PUT /api/messages/{id}/mark-read, DELETE /api/messages/{id}
+Validation & Preconditions
+Participants-only access; attachment size/type limits.
+Abuse detection; rate-limit spam; notify on unread thresholds.
+Edge Cases & Error Handling
+Non-participant access ⇒ AUTH_FORBIDDEN (403).
+Oversized attachment ⇒ REQ_VALIDATION (400).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "message": { ... } } }
+15) NotificationsController
+Purpose
+Create/list/mark-read notifications; user feed management.
+Primary Operations
+GET /api/notifications, GET /api/notifications/{id}, GET /api/users/{userId}/notifications
+POST /api/notifications
+PUT /api/notifications/{id}/mark-read, PUT /api/users/{userId}/notifications/mark-all-read
+DELETE /api/notifications/{id}
+Validation & Preconditions
+Deduplication window; user preferences; silent vs alerting types.
+Edge Cases & Error Handling
+Mark read for another user ⇒ AUTH_FORBIDDEN (403).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "notification": { ... } } }
+16) PromoCodesController
+Purpose
+CRUD, validate, and usage recording for promo codes; stacking & caps.
+Primary Operations
+GET /api/promo-codes, GET /api/promo-codes/{id}, GET /api/promo-codes/code/{code}, GET /api/promo-codes/{id}/validate, GET /api/promo-codes/{id}/usage
+POST /api/promo-codes, POST /api/promo-codes/{id}/use
+PUT /api/promo-codes/{id}, PUT /api/promo-codes/{id}/deactivate
+DELETE /api/promo-codes/{id}
+Validation & Preconditions
+Validate periods, usage caps, and user eligibility.
+Recalculate cart/booking totals server-side.
+Edge Cases & Error Handling
+Expired/invalid code ⇒ REQ_VALIDATION (400).
+Exceeds cap ⇒ REQ_CONFLICT (409).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "promo": { ... }, "usage": { ... } } }
+17) SupportTicketsController
+Purpose
+Ticket lifecycle; messages; resolve/reopen; SLA & audit.
+Primary Operations
+GET /api/support-tickets, GET /api/support-tickets/{id}, GET /api/support-tickets/number/{ticket_number}, GET /api/users/{userId}/support-tickets, GET /api/support-tickets/{id}/messages
+POST /api/support-tickets, POST /api/support-tickets/{id}/messages, POST /api/support-tickets/{id}/resolve, POST /api/support-tickets/{id}/reopen
+PUT /api/support-tickets/{id}, DELETE /api/support-tickets/{id}
+Validation & Preconditions
+Category validation; attachment moderation; SLA timers.
+Edge Cases & Error Handling
+Resolve already resolved ⇒ IDEMPOTENCY_REPLAY (409).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "ticket": { ... } } }
+18) AdminsController
+Purpose
+Admin identity & role management.
+Primary Operations
+GET /api/admins, GET /api/admins/{id}, GET /api/users/{userId}/admin-profile
+POST /api/admins, PUT /api/admins/{id}, PUT /api/admins/{id}/deactivate, DELETE /api/admins/{id}
+Validation & Preconditions
+Super-admin required for writes; role enum validation.
+Edge Cases & Error Handling
+Demoting last super-admin ⇒ REQ_CONFLICT (409).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "admin": { ... } } }
+19) PlatformSettingsController
+Purpose
+Key/value settings for commissions, flags, integrations.
+Primary Operations
+GET /api/platform-settings, GET /api/platform-settings/{key}
+POST /api/platform-settings, PUT /api/platform-settings/{key}, DELETE /api/platform-settings/{key}
+Validation & Preconditions
+Validate known keys and value types; mask sensitive values in logs.
+Edge Cases & Error Handling
+Unknown key ⇒ REQ_VALIDATION (400).
+Response Contracts (Examples)
+Success: { "success": true, "data": { "setting": { "key": "...", "value": ... } } }
+B. Implementation Notes
+Controllers remain thin; heavy logic delegated to services (availability, pricing, payments).
+Central error handler maps thrown domain errors to standardized error envelope.
+Emit domain events on state transitions (booking, payment, refund) to power notifications and analytics.
+Strict schema validation on all inputs; return details array for multiple field errors.
+Security headers and CORS configured; cookies httpOnly and secure in production.
+C. Full API Endpoint Inventory (from API Endpoints File)
+This appendix enumerates every endpoint from the Parking_Management_API_Reference and maps to the controllers defined above.
+1. User Management → AuthController & UsersController
+GET /api/users
+GET /api/users/{user_id}
+GET /api/users/email/{email}
+GET /api/users/phone/{phone}
+GET /api/users/{user_id}/profile
+POST /api/users
+POST /api/users/register
+POST /api/users/login
+POST /api/users/{user_id}/verify
+PUT /api/users/{user_id}
+PUT /api/users/{user_id}/password
+PUT /api/users/{user_id}/location
+DELETE /api/users/{user_id}
+2. User Vehicles → UserVehiclesController
+GET /api/users/{user_id}/vehicles
+GET /api/vehicles/{vehicle_id}
+POST /api/users/{user_id}/vehicles
+PUT /api/vehicles/{vehicle_id}
+PUT /api/vehicles/{vehicle_id}/set-default
+DELETE /api/vehicles/{vehicle_id}
+3. User Payment Methods → UserPaymentMethodsController
+GET /api/users/{user_id}/payment-methods
+GET /api/payment-methods/{payment_method_id}
+POST /api/users/{user_id}/payment-methods
+PUT /api/payment-methods/{payment_method_id}
+PUT /api/payment-methods/{payment_method_id}/set-default
+DELETE /api/payment-methods/{payment_method_id}
+4. Owner Management → OwnersController
+GET /api/owners
+GET /api/owners/{owner_id}
+GET /api/users/{user_id}/owner-profile
+GET /api/owners/{owner_id}/earnings
+GET /api/owners/{owner_id}/statistics
+POST /api/owners
+POST /api/owners/{owner_id}/verify
+PUT /api/owners/{owner_id}
+PUT /api/owners/{owner_id}/payout-info
+DELETE /api/owners/{owner_id}
+5. Properties → PropertiesController
+GET /api/properties
+GET /api/properties/{property_id}
+GET /api/owners/{owner_id}/properties
+GET /api/properties/search/nearby
+POST /api/properties
+PUT /api/properties/{property_id}
+PUT /api/properties/{property_id}/images
+DELETE /api/properties/{property_id}
+6. Parking Spaces → ParkingSpacesController
+GET /api/parking-spaces
+GET /api/parking-spaces/{space_id}
+GET /api/properties/{property_id}/parking-spaces
+GET /api/parking-spaces/search
+GET /api/parking-spaces/{space_id}/availability
+POST /api/parking-spaces
+PUT /api/parking-spaces/{space_id}
+PUT /api/parking-spaces/{space_id}/pricing
+PUT /api/parking-spaces/{space_id}/toggle-availability
+DELETE /api/parking-spaces/{space_id}
+7. Space Availability → AvailabilityController
+GET /api/parking-spaces/{space_id}/availability-schedule
+POST /api/parking-spaces/{space_id}/availability-schedule
+PUT /api/availability-schedule/{schedule_id}
+DELETE /api/availability-schedule/{schedule_id}
+8. Bookings → BookingsController
+GET /api/bookings
+GET /api/bookings/{booking_id}
+GET /api/bookings/number/{booking_number}
+GET /api/users/{user_id}/bookings
+GET /api/owners/{owner_id}/bookings
+GET /api/parking-spaces/{space_id}/bookings
+POST /api/bookings
+POST /api/bookings/{booking_id}/confirm
+POST /api/bookings/{booking_id}/cancel
+POST /api/bookings/{booking_id}/check-in
+POST /api/bookings/{booking_id}/check-out
+PUT /api/bookings/{booking_id}
+DELETE /api/bookings/{booking_id}
+9. Payments → PaymentsController
+GET /api/payments
+GET /api/payments/{payment_id}
+GET /api/payments/number/{payment_number}
+GET /api/bookings/{booking_id}/payment
+GET /api/users/{user_id}/payments
+POST /api/payments
+POST /api/payments/{payment_id}/process
+PUT /api/payments/{payment_id}
+DELETE /api/payments/{payment_id}
+10. Refunds → RefundsController
+GET /api/refunds
+GET /api/refunds/{refund_id}
+GET /api/payments/{payment_id}/refund
+GET /api/bookings/{booking_id}/refund
+POST /api/refunds
+POST /api/refunds/{refund_id}/process
+PUT /api/refunds/{refund_id}
+DELETE /api/refunds/{refund_id}
+11. Reviews → ReviewsController
+GET /api/reviews
+GET /api/reviews/{review_id}
+GET /api/bookings/{booking_id}/review
+GET /api/parking-spaces/{space_id}/reviews
+GET /api/owners/{owner_id}/reviews
+POST /api/reviews
+POST /api/reviews/{review_id}/respond
+PUT /api/reviews/{review_id}
+DELETE /api/reviews/{review_id}
+12. Conversations → ConversationsController
+GET /api/conversations
+GET /api/conversations/{conversation_id}
+GET /api/users/{user_id}/conversations
+GET /api/bookings/{booking_id}/conversation
+POST /api/conversations
+PUT /api/conversations/{conversation_id}
+DELETE /api/conversations/{conversation_id}
+13. Messages → MessagesController
+GET /api/conversations/{conversation_id}/messages
+GET /api/messages/{message_id}
+POST /api/conversations/{conversation_id}/messages
+PUT /api/messages/{message_id}/mark-read
+DELETE /api/messages/{message_id}
+14. Notifications → NotificationsController
+GET /api/notifications
+GET /api/notifications/{notification_id}
+GET /api/users/{user_id}/notifications
+POST /api/notifications
+PUT /api/notifications/{notification_id}/mark-read
+PUT /api/users/{user_id}/notifications/mark-all-read
+DELETE /api/notifications/{notification_id}
+15. Promo Codes → PromoCodesController
+GET /api/promo-codes
+GET /api/promo-codes/{promo_id}
+GET /api/promo-codes/code/{code}
+GET /api/promo-codes/{promo_id}/validate
+GET /api/promo-codes/{promo_id}/usage
+POST /api/promo-codes
+POST /api/promo-codes/{promo_id}/use
+PUT /api/promo-codes/{promo_id}
+PUT /api/promo-codes/{promo_id}/deactivate
+DELETE /api/promo-codes/{promo_id}
+16. Support Tickets → SupportTicketsController
+GET /api/support-tickets
+GET /api/support-tickets/{ticket_id}
+GET /api/support-tickets/number/{ticket_number}
+GET /api/users/{user_id}/support-tickets
+GET /api/support-tickets/{ticket_id}/messages
+POST /api/support-tickets
+POST /api/support-tickets/{ticket_id}/messages
+POST /api/support-tickets/{ticket_id}/resolve
+POST /api/support-tickets/{ticket_id}/reopen
+PUT /api/support-tickets/{ticket_id}
+DELETE /api/support-tickets/{ticket_id}
+17. Admins → AdminsController
+GET /api/admins
+GET /api/admins/{admin_id}
+GET /api/users/{user_id}/admin-profile
+POST /api/admins
+PUT /api/admins/{admin_id}
+PUT /api/admins/{admin_id}/deactivate
+DELETE /api/admins/{admin_id}
+18. Platform Settings → PlatformSettingsController
+GET /api/platform-settings
+GET /api/platform-settings/{setting_key}
+POST /api/platform-settings
+PUT /api/platform-settings/{setting_key}
+DELETE /api/platform-settings/{setting_key}
+================================================================================
+SECTION B: DETAILED ROUTE DOCUMENTATION
+================================================================================
+
+This section provides comprehensive route documentation for all 19 controllers,
+including HTTP methods, paths, middleware chains, authentication requirements,
+request/response examples, and implementation notes.
+
+--------------------------------------------------------------------------------
+1. AUTHENTICATION ROUTES (authRoutes.js)
+--------------------------------------------------------------------------------
+Controller: authController.js
+Base Path: /api/auth
+
+ROUTE 1.1: Register User
+  Method: POST
+  Path: /api/auth/register
+  Auth: Public
+  Rate Limit: authLimiter (5 requests/15min)
+  Middleware Chain:
+    1. authLimiter (rate limiting)
+    2. sanitize (input sanitization)
+    3. validateRequired(['email', 'phone', 'password', 'first_name', 'last_name'])
+    4. validateEmail
+    5. validatePassword
+    6. authController.register
+  
+  Request Body:
+    {
+      "email": "user@example.com",
+      "phone": "+1234567890",
+      "password": "SecurePass123",
+      "first_name": "John",
+      "last_name": "Doe",
+      "user_type": "user" (optional, defaults to "user")
+    }
+  
+  Success Response (201):
+    {
+      "success": true,
+      "data": {
+        "user": {
+          "_id": "507f1f77bcf86cd799439011",
+          "email": "user@example.com",
+          "first_name": "John",
+          "last_name": "Doe",
+          "user_type": "user",
+          "is_verified": false
+        },
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      }
+    }
+  
+  Error Responses:
+    - 409 REQ_DUPLICATE: Email or phone already exists
+    - 400 REQ_VALIDATION: Invalid input format
+    - 429 RATE_LIMIT_EXCEEDED: Too many registration attempts
+
+ROUTE 1.2: Login User
+  Method: POST
+  Path: /api/auth/login
+  Auth: Public
+  Rate Limit: authLimiter (5 requests/15min)
+  Middleware Chain:
+    1. authLimiter
+    2. sanitize
+    3. validateRequired(['email', 'password'])
+    4. validateEmail
+    5. authController.login
+  
+  Request Body:
+    {
+      "email": "user@example.com",
+      "password": "SecurePass123"
+    }
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "user": { ... },
+        "token": "eyJhbGci..."
+      }
+    }
+
+ROUTE 1.3: Verify Email
+  Method: GET
+  Path: /api/auth/verify/:token
+  Auth: Public
+  Middleware Chain: authController.verifyEmail
+
+ROUTE 1.4: Forgot Password
+  Method: POST
+  Path: /api/auth/forgot-password
+  Auth: Public
+  Rate Limit: authLimiter
+
+ROUTE 1.5: Reset Password
+  Method: PUT
+  Path: /api/auth/reset-password/:token
+  Auth: Public
+  Rate Limit: authLimiter
+
+ROUTE 1.6: Refresh Token
+  Method: POST
+  Path: /api/auth/refresh-token
+  Auth: Public
+
+ROUTE 1.7: Logout
+  Method: POST
+  Path: /api/auth/logout
+  Auth: Private (protect)
+  Middleware Chain: protect -> authController.logout
+
+ROUTE 1.8: Get Current User
+  Method: GET
+  Path: /api/auth/me
+  Auth: Private (protect)
+
+ROUTE 1.9: Resend Verification Email
+  Method: POST
+  Path: /api/auth/resend-verification
+  Auth: Private (protect)
+
+ROUTE 1.10: Change Password
+  Method: PUT
+  Path: /api/auth/change-password
+  Auth: Private (protect)
+  Middleware Chain: protect -> sanitize -> validateRequired -> validatePassword
+
+--------------------------------------------------------------------------------
+2. USER ROUTES (userRoutes.js)
+--------------------------------------------------------------------------------
+Controller: usersController.js
+Base Path: /api/users
+
+ROUTE 2.1: Get All Users (Admin Only)
+  Method: GET
+  Path: /api/users
+  Auth: Private/Admin
+  Middleware Chain: protect -> authorize('admin') -> usersController.getAllUsers
+  Query Params: ?page=1&limit=10&search=john&user_type=user&is_verified=true
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": [
+        { "_id": "...", "email": "...", "first_name": "...", ... }
+      ],
+      "meta": {
+        "page": 1,
+        "limit": 10,
+        "total": 100,
+        "totalPages": 10
+      }
+    }
+
+ROUTE 2.2: Get Nearby Users
+  Method: GET
+  Path: /api/users/nearby
+  Auth: Private
+  Query Params: ?lat=40.7128&lng=-74.0060&radius=5000 (radius in meters)
+
+ROUTE 2.3: Get User By ID
+  Method: GET
+  Path: /api/users/:id
+  Auth: Private (self or admin)
+  Middleware Chain: protect -> validateObjectId('id') -> usersController.getUserById
+
+ROUTE 2.4: Update User
+  Method: PUT
+  Path: /api/users/:id
+  Auth: Private (self or admin)
+  Request Body: { "first_name": "Jane", "phone": "+9876543210" }
+
+ROUTE 2.5: Delete User (Soft Delete)
+  Method: DELETE
+  Path: /api/users/:id
+  Auth: Private (self or admin)
+
+ROUTE 2.6: Get User Statistics
+  Method: GET
+  Path: /api/users/:id/stats
+  Auth: Private (self or admin)
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "total_bookings": 15,
+        "active_bookings": 2,
+        "total_spent": 150000,
+        "total_reviews": 8,
+        "average_rating": 4.5
+      }
+    }
+
+ROUTE 2.7: Update User Location
+  Method: PUT
+  Path: /api/users/:id/location
+  Auth: Private (self)
+  Request Body: { "location_lat": 40.7128, "location_lng": -74.0060 }
+
+--------------------------------------------------------------------------------
+3. VEHICLE ROUTES (vehicleRoutes.js)
+--------------------------------------------------------------------------------
+Controller: userVehiclesController.js
+Base Path: /api/vehicles (and /api/users/:userId/vehicles)
+
+ROUTE 3.1: Get User's Vehicles
+  Method: GET
+  Path: /api/users/:userId/vehicles
+  Auth: Private (self or admin)
+
+ROUTE 3.2: Add Vehicle
+  Method: POST
+  Path: /api/users/:userId/vehicles
+  Auth: Private
+  Request Body:
+    {
+      "license_plate": "ABC123",
+      "vehicle_type": "sedan",
+      "make": "Toyota",
+      "model": "Camry",
+      "year": 2020,
+      "color": "blue",
+      "is_default": false
+    }
+
+ROUTE 3.3: Get Vehicle By ID
+  Method: GET
+  Path: /api/vehicles/:id
+  Auth: Private (owner)
+
+ROUTE 3.4: Update Vehicle
+  Method: PUT
+  Path: /api/vehicles/:id
+  Auth: Private (owner)
+
+ROUTE 3.5: Delete Vehicle
+  Method: DELETE
+  Path: /api/vehicles/:id
+  Auth: Private (owner)
+
+ROUTE 3.6: Set Default Vehicle
+  Method: PUT
+  Path: /api/vehicles/:id/set-default
+  Auth: Private (owner)
+  Note: Automatically unsets other vehicles as default
+
+--------------------------------------------------------------------------------
+4. PAYMENT METHOD ROUTES (paymentMethodRoutes.js)
+--------------------------------------------------------------------------------
+Controller: userPaymentMethodsController.js
+Base Path: /api/payment-methods (and /api/users/:userId/payment-methods)
+
+ROUTE 4.1: Get User's Payment Methods
+  Method: GET
+  Path: /api/users/:userId/payment-methods
+  Auth: Private (self or admin)
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": [
+        {
+          "_id": "...",
+          "payment_type": "card",
+          "provider": "stripe",
+          "last4": "4242",
+          "brand": "visa",
+          "expiry_month": 12,
+          "expiry_year": 2025,
+          "is_default": true
+        }
+      ]
+    }
+
+ROUTE 4.2: Add Payment Method
+  Method: POST
+  Path: /api/users/:userId/payment-methods
+  Auth: Private
+  Request Body:
+    {
+      "payment_type": "card",
+      "provider": "stripe",
+      "provider_token": "tok_xxxxxxxx"
+    }
+
+ROUTE 4.3-4.6: Get, Update, Delete, Set Default Payment Method
+  Similar pattern to vehicle routes
+
+--------------------------------------------------------------------------------
+5. OWNER ROUTES (ownerRoutes.js)
+--------------------------------------------------------------------------------
+Controller: ownersController.js
+Base Path: /api/owners
+
+ROUTE 5.1: Get All Owners (Admin Only)
+  Method: GET
+  Path: /api/owners
+  Auth: Private/Admin
+  Query Params: ?page=1&limit=10&kyc_status=verified
+
+ROUTE 5.2: Register as Owner
+  Method: POST
+  Path: /api/owners/register
+  Auth: Private
+  Request Body:
+    {
+      "business_name": "My Parking Business",
+      "business_email": "business@example.com",
+      "business_phone": "+1234567890",
+      "tax_id": "123456789"
+    }
+  Note: Upgrades user to owner role
+
+ROUTE 5.3: Get Owner By ID
+  Method: GET
+  Path: /api/owners/:id
+  Auth: Private (self or admin)
+
+ROUTE 5.4: Update Owner Profile
+  Method: PUT
+  Path: /api/owners/:id
+  Auth: Private (self)
+
+ROUTE 5.5: Submit KYC Documents
+  Method: POST
+  Path: /api/owners/:id/kyc
+  Auth: Private/Owner
+  Request Body:
+    {
+      "kyc_document_type": "passport",
+      "kyc_document_number": "A12345678",
+      "kyc_document_url": "https://storage.example.com/kyc/doc.pdf"
+    }
+
+ROUTE 5.6: Verify KYC (Admin Only)
+  Method: PUT
+  Path: /api/owners/:id/verify-kyc
+  Auth: Private/Admin
+  Request Body:
+    {
+      "kyc_status": "verified",
+      "kyc_notes": "All documents verified"
+    }
+
+ROUTE 5.7: Get Owner Earnings
+  Method: GET
+  Path: /api/owners/:id/earnings
+  Auth: Private (self)
+  Query Params: ?start_date=2025-01-01&end_date=2025-12-31
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "total_earnings": 500000,
+        "platform_commission": 50000,
+        "net_earnings": 450000,
+        "pending_payout": 100000,
+        "paid_out": 350000,
+        "breakdown_by_month": [ ... ]
+      }
+    }
+
+ROUTE 5.8: Get Owner Statistics
+  Method: GET
+  Path: /api/owners/:id/stats
+  Auth: Private (self)
+
+--------------------------------------------------------------------------------
+6. PROPERTY ROUTES (propertyRoutes.js)
+--------------------------------------------------------------------------------
+Controller: propertiesController.js
+Base Path: /api/properties
+
+ROUTE 6.1: Search Properties Nearby (Geospatial)
+  Method: GET
+  Path: /api/properties/search/nearby
+  Auth: Public (optionalAuth)
+  Query Params: ?lat=40.7128&lng=-74.0060&radius=5000&page=1&limit=10
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": [
+        {
+          "_id": "...",
+          "property_name": "Downtown Parking",
+          "address": "123 Main St",
+          "location_lat": 40.7128,
+          "location_lng": -74.0060,
+          "distance": 1200,
+          "available_spaces": 5,
+          "min_price": 500
+        }
+      ],
+      "meta": { "page": 1, "limit": 10, "total": 25 }
+    }
+
+ROUTE 6.2: Get All Properties
+  Method: GET
+  Path: /api/properties
+  Auth: Public (optionalAuth)
+  Query Params: ?page=1&limit=10&city=NewYork&is_active=true
+
+ROUTE 6.3: Create Property
+  Method: POST
+  Path: /api/properties
+  Auth: Private/Owner
+  Request Body:
+    {
+      "property_name": "Downtown Parking",
+      "address": "123 Main St",
+      "city": "New York",
+      "state": "NY",
+      "country": "USA",
+      "zip_code": "10001",
+      "location_lat": 40.7128,
+      "location_lng": -74.0060,
+      "property_type": "outdoor",
+      "description": "Secure parking in downtown"
+    }
+
+ROUTE 6.4: Get Properties by Owner
+  Method: GET
+  Path: /api/properties/owners/:ownerId
+  Auth: Private (self or admin)
+
+ROUTE 6.5-6.7: Get, Update, Delete Property
+  Standard CRUD operations with owner/admin authorization
+
+ROUTE 6.8: Upload Property Images
+  Method: POST
+  Path: /api/properties/:id/images
+  Auth: Private/Owner
+  Note: Multipart form data for image upload
+
+--------------------------------------------------------------------------------
+7. PARKING SPACE ROUTES (parkingSpaceRoutes.js)
+--------------------------------------------------------------------------------
+Controller: parkingSpacesController.js
+Base Path: /api/parking-spaces
+
+ROUTE 7.1: Search Available Parking Spaces
+  Method: GET
+  Path: /api/parking-spaces/search
+  Auth: Public (optionalAuth)
+  Query Params:
+    ?lat=40.7128&lng=-74.0060&radius=5000
+    &start_time=2025-10-20T10:00:00Z&end_time=2025-10-20T18:00:00Z
+    &vehicle_type=sedan&min_price=0&max_price=2000
+    &space_type=covered&amenities=ev_charging,security
+    &page=1&limit=10
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": [
+        {
+          "_id": "...",
+          "space_number": "A-101",
+          "space_type": "covered",
+          "hourly_rate": 1000,
+          "daily_rate": 5000,
+          "property": {
+            "property_name": "Downtown Parking",
+            "address": "123 Main St"
+          },
+          "distance": 800,
+          "available": true
+        }
+      ],
+      "meta": { "page": 1, "limit": 10, "total": 15 }
+    }
+
+ROUTE 7.2: Get All Parking Spaces
+  Method: GET
+  Path: /api/parking-spaces
+  Auth: Public (optionalAuth)
+
+ROUTE 7.3: Get Spaces by Property
+  Method: GET
+  Path: /api/parking-spaces/properties/:propertyId
+  Auth: Public (optionalAuth)
+
+ROUTE 7.4: Create Parking Space
+  Method: POST
+  Path: /api/properties/:propertyId/spaces
+  Auth: Private/Owner
+  Request Body:
+    {
+      "space_number": "A-101",
+      "space_type": "covered",
+      "vehicle_type": "sedan",
+      "length_cm": 500,
+      "width_cm": 250,
+      "height_cm": 200,
+      "hourly_rate": 1000,
+      "daily_rate": 5000,
+      "monthly_rate": 100000,
+      "amenities": ["ev_charging", "security"],
+      "instructions": "Enter from north gate"
+    }
+
+ROUTE 7.5: Get Parking Space By ID
+  Method: GET
+  Path: /api/parking-spaces/:id
+  Auth: Public (optionalAuth)
+
+ROUTE 7.6: Check Space Availability
+  Method: GET
+  Path: /api/parking-spaces/:id/availability
+  Auth: Public (optionalAuth)
+  Query Params: ?start_time=2025-10-20T10:00:00Z&end_time=2025-10-20T18:00:00Z
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "available": true,
+        "conflicts": [],
+        "price_estimate": 8000
+      }
+    }
+
+ROUTE 7.7-7.9: Update, Delete, Update Pricing
+  Standard operations with owner authorization
+
+--------------------------------------------------------------------------------
+8. AVAILABILITY ROUTES (availabilityRoutes.js)
+--------------------------------------------------------------------------------
+Controller: availabilityController.js
+Base Path: /api/availability
+
+ROUTE 8.1: Get Space Availability Schedules
+  Method: GET
+  Path: /api/parking-spaces/:spaceId/availability
+  Auth: Public (optionalAuth)
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": [
+        {
+          "_id": "...",
+          "day_of_week": "monday",
+          "start_time": "09:00",
+          "end_time": "18:00",
+          "is_available": true
+        },
+        ...
+      ]
+    }
+
+ROUTE 8.2: Create Availability Schedule
+  Method: POST
+  Path: /api/parking-spaces/:spaceId/availability
+  Auth: Private/Owner
+  Request Body:
+    {
+      "day_of_week": "monday",
+      "start_time": "09:00",
+      "end_time": "18:00",
+      "is_available": true
+    }
+
+ROUTE 8.3: Bulk Create Weekly Availability
+  Method: POST
+  Path: /api/parking-spaces/:spaceId/availability/bulk
+  Auth: Private/Owner
+  Request Body:
+    {
+      "schedules": [
+        { "day_of_week": "monday", "start_time": "09:00", "end_time": "18:00" },
+        { "day_of_week": "tuesday", "start_time": "09:00", "end_time": "18:00" },
+        ...
+      ]
+    }
+
+ROUTE 8.4: Check Conflicts
+  Method: POST
+  Path: /api/parking-spaces/:spaceId/availability/check-conflict
+  Auth: Private/Owner
+  Request Body:
+    {
+      "start_time": "2025-10-20T10:00:00Z",
+      "end_time": "2025-10-20T18:00:00Z"
+    }
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "has_conflict": false,
+        "conflicts": []
+      }
+    }
+
+ROUTE 8.5-8.6: Update, Delete Availability Schedule
+
+--------------------------------------------------------------------------------
+9. BOOKING ROUTES (bookingRoutes.js)
+--------------------------------------------------------------------------------
+Controller: bookingsController.js
+Base Path: /api/bookings
+
+ROUTE 9.1: Get All Bookings (Admin Only)
+  Method: GET
+  Path: /api/bookings
+  Auth: Private/Admin
+  Query Params: ?page=1&limit=10&status=confirmed&start_date=2025-10-01
+
+ROUTE 9.2: Get User's Bookings
+  Method: GET
+  Path: /api/users/:userId/bookings
+  Auth: Private (self)
+  Query Params: ?status=active&page=1&limit=10
+
+ROUTE 9.3: Get Owner's Bookings
+  Method: GET
+  Path: /api/owners/:ownerId/bookings
+  Auth: Private (self)
+
+ROUTE 9.4: Create Booking
+  Method: POST
+  Path: /api/bookings
+  Auth: Private
+  Rate Limit: bookingLimiter (10 requests/hour)
+  Idempotency: Required (checkIdempotency middleware)
+  Request Body:
+    {
+      "space_id": "507f1f77bcf86cd799439011",
+      "vehicle_id": "507f1f77bcf86cd799439012",
+      "start_time": "2025-10-20T10:00:00Z",
+      "end_time": "2025-10-20T18:00:00Z",
+      "promo_code": "SAVE20" (optional)
+    }
+  
+  Success Response (201):
+    {
+      "success": true,
+      "data": {
+        "booking": {
+          "_id": "...",
+          "booking_number": "BKG-20251020-001",
+          "status": "pending",
+          "total_amount": 8000,
+          "discount_amount": 1600,
+          "final_amount": 6400,
+          "payment_required": true
+        }
+      }
+    }
+  
+  Error Responses:
+    - 409 BIZ_BOOKING_CONFLICT: Time slot already booked
+    - 400 BIZ_SPACE_UNAVAILABLE: Space not available for selected time
+    - 400 BIZ_PROMO_INVALID: Promo code expired or invalid
+
+ROUTE 9.5: Get Booking By ID
+  Method: GET
+  Path: /api/bookings/:id
+  Auth: Private (user or space owner or admin)
+
+ROUTE 9.6: Update Booking
+  Method: PUT
+  Path: /api/bookings/:id
+  Auth: Private (user or admin)
+  Note: Limited fields can be updated based on booking status
+
+ROUTE 9.7: Cancel Booking
+  Method: PUT
+  Path: /api/bookings/:id/cancel
+  Auth: Private (user or space owner or admin)
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "booking": { "status": "cancelled", ... },
+        "refund": {
+          "eligible": true,
+          "refund_amount": 5000,
+          "refund_percentage": 80
+        }
+      }
+    }
+
+ROUTE 9.8: Check-In to Booking
+  Method: PUT
+  Path: /api/bookings/:id/checkin
+  Auth: Private (user)
+  Request Body:
+    {
+      "verification_code": "123456" (optional)
+    }
+
+ROUTE 9.9: Check-Out from Booking
+  Method: PUT
+  Path: /api/bookings/:id/checkout
+  Auth: Private (user)
+
+ROUTE 9.10: Extend Booking
+  Method: PUT
+  Path: /api/bookings/:id/extend
+  Auth: Private (user)
+  Request Body:
+    {
+      "new_end_time": "2025-10-20T20:00:00Z"
+    }
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "booking": { ... },
+        "additional_payment": {
+          "amount": 2000,
+          "payment_required": true
+        }
+      }
+    }
+
+--------------------------------------------------------------------------------
+10. PAYMENT ROUTES (paymentRoutes.js)
+--------------------------------------------------------------------------------
+Controller: paymentsController.js
+Base Path: /api/payments
+
+ROUTE 10.1: Get All Payments (Admin Only)
+  Method: GET
+  Path: /api/payments
+  Auth: Private/Admin
+
+ROUTE 10.2: Get User's Payments
+  Method: GET
+  Path: /api/users/:userId/payments
+  Auth: Private (self or admin)
+
+ROUTE 10.3: Get Booking's Payments
+  Method: GET
+  Path: /api/bookings/:bookingId/payments
+  Auth: Private (booking participant or admin)
+
+ROUTE 10.4: Process Payment
+  Method: POST
+  Path: /api/payments
+  Auth: Private
+  Rate Limit: paymentLimiter (5 requests/hour)
+  Idempotency: Required
+  Request Body:
+    {
+      "booking_id": "507f1f77bcf86cd799439011",
+      "amount": 6400,
+      "payment_method_id": "507f1f77bcf86cd799439013",
+      "payment_gateway": "stripe"
+    }
+  Headers:
+    Idempotency-Key: <uuid>
+  
+  Success Response (201):
+    {
+      "success": true,
+      "data": {
+        "payment": {
+          "_id": "...",
+          "transaction_id": "txn_xxxxxxxx",
+          "status": "completed",
+          "amount": 6400,
+          "gateway_response": { ... }
+        }
+      }
+    }
+  
+  Error Responses:
+    - 402 PAY_DECLINED: Payment declined by gateway
+    - 502 PAY_GATEWAY_ERROR: Gateway connection failure
+    - 409 IDEMPOTENCY_CONFLICT: Duplicate payment attempt
+
+ROUTE 10.5: Verify Payment
+  Method: PUT
+  Path: /api/payments/:id/verify
+  Auth: Private
+
+ROUTE 10.6: Payment Webhook
+  Method: POST
+  Path: /api/payments/webhook
+  Auth: Public (verified by gateway signature)
+  Note: Handles async payment confirmations from gateway
+
+--------------------------------------------------------------------------------
+11. REFUND ROUTES (refundRoutes.js)
+--------------------------------------------------------------------------------
+Controller: refundsController.js
+Base Path: /api/refunds
+
+ROUTE 11.1: Get All Refunds (Admin Only)
+  Method: GET
+  Path: /api/refunds
+  Auth: Private/Admin
+
+ROUTE 11.2: Get Booking's Refunds
+  Method: GET
+  Path: /api/bookings/:bookingId/refunds
+  Auth: Private (booking participant or admin)
+
+ROUTE 11.3: Request Refund
+  Method: POST
+  Path: /api/bookings/:bookingId/refund
+  Auth: Private (user)
+  Idempotency: Recommended
+  Request Body:
+    {
+      "reason": "cancellation",
+      "description": "Change of plans"
+    }
+  
+  Success Response (201):
+    {
+      "success": true,
+      "data": {
+        "refund": {
+          "_id": "...",
+          "status": "pending",
+          "refund_amount": 5000,
+          "refund_reason": "cancellation"
+        }
+      }
+    }
+  
+  Error Responses:
+    - 400 BIZ_REFUND_NOT_ELIGIBLE: Booking not eligible for refund
+
+ROUTE 11.4: Get Refund By ID
+  Method: GET
+  Path: /api/refunds/:id
+  Auth: Private (refund participant or admin)
+
+ROUTE 11.5: Approve Refund (Admin Only)
+  Method: PUT
+  Path: /api/refunds/:id/approve
+  Auth: Private/Admin
+
+ROUTE 11.6: Reject Refund (Admin Only)
+  Method: PUT
+  Path: /api/refunds/:id/reject
+  Auth: Private/Admin
+  Request Body:
+    {
+      "rejection_reason": "Outside refund policy window"
+    }
+
+ROUTE 11.7: Process Refund (Admin Only)
+  Method: PUT
+  Path: /api/refunds/:id/process
+  Auth: Private/Admin
+  Note: Initiates refund transaction with payment gateway
+
+--------------------------------------------------------------------------------
+12. REVIEW ROUTES (reviewRoutes.js)
+--------------------------------------------------------------------------------
+Controller: reviewsController.js
+Base Path: /api/reviews
+
+ROUTE 12.1: Get All Reviews
+  Method: GET
+  Path: /api/reviews
+  Auth: Public (optionalAuth)
+
+ROUTE 12.2: Get Reviews for Parking Space
+  Method: GET
+  Path: /api/parking-spaces/:spaceId/reviews
+  Auth: Public (optionalAuth)
+  Query Params: ?page=1&limit=10&min_rating=4
+
+ROUTE 12.3: Get Reviews by User
+  Method: GET
+  Path: /api/users/:userId/reviews
+  Auth: Public (optionalAuth)
+
+ROUTE 12.4: Get Average Rating for Space
+  Method: GET
+  Path: /api/parking-spaces/:spaceId/rating
+  Auth: Public (optionalAuth)
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "average_rating": 4.5,
+        "total_reviews": 42,
+        "rating_distribution": {
+          "5": 25,
+          "4": 10,
+          "3": 5,
+          "2": 1,
+          "1": 1
+        }
+      }
+    }
+
+ROUTE 12.5: Create Review
+  Method: POST
+  Path: /api/bookings/:bookingId/review
+  Auth: Private (user with completed booking)
+  Request Body:
+    {
+      "rating": 5,
+      "comment": "Great parking spot, very secure!",
+      "cleanliness_rating": 5,
+      "security_rating": 5,
+      "value_rating": 4
+    }
+  
+  Success Response (201):
+    {
+      "success": true,
+      "data": {
+        "review": {
+          "_id": "...",
+          "rating": 5,
+          "comment": "Great parking spot, very secure!",
+          "created_at": "2025-10-20T10:00:00Z"
+        }
+      }
+    }
+  
+  Error Responses:
+    - 400 BIZ_OPERATION_NOT_ALLOWED: Booking not completed
+    - 409 REQ_DUPLICATE: Review already exists for booking
+
+ROUTE 12.6: Get Review By ID
+  Method: GET
+  Path: /api/reviews/:id
+  Auth: Public (optionalAuth)
+
+ROUTE 12.7: Update Review
+  Method: PUT
+  Path: /api/reviews/:id
+  Auth: Private (review author)
+
+ROUTE 12.8: Delete Review
+  Method: DELETE
+  Path: /api/reviews/:id
+  Auth: Private (review author or admin)
+
+ROUTE 12.9: Add Owner Response
+  Method: POST
+  Path: /api/reviews/:id/response
+  Auth: Private/Owner (space owner)
+  Request Body:
+    {
+      "response": "Thank you for your feedback!"
+    }
+
+--------------------------------------------------------------------------------
+13. CONVERSATION ROUTES (conversationRoutes.js)
+--------------------------------------------------------------------------------
+Controller: conversationsController.js
+Base Path: /api/conversations
+
+ROUTE 13.1: Get User's Conversations
+  Method: GET
+  Path: /api/conversations
+  Auth: Private
+  Query Params: ?page=1&limit=20&unread_only=true
+
+ROUTE 13.2: Get Unread Conversation Count
+  Method: GET
+  Path: /api/conversations/unread/count
+  Auth: Private
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "unread_count": 3
+      }
+    }
+
+ROUTE 13.3: Create or Get Conversation
+  Method: POST
+  Path: /api/conversations
+  Auth: Private
+  Request Body:
+    {
+      "participant_id": "507f1f77bcf86cd799439011",
+      "regarding_booking_id": "507f1f77bcf86cd799439012" (optional)
+    }
+  Note: Returns existing conversation if one exists between participants
+
+ROUTE 13.4: Get Conversation By ID
+  Method: GET
+  Path: /api/conversations/:id
+  Auth: Private (participant)
+
+ROUTE 13.5: Mark Conversation as Read
+  Method: PUT
+  Path: /api/conversations/:id/read
+  Auth: Private (participant)
+
+ROUTE 13.6: Delete Conversation
+  Method: DELETE
+  Path: /api/conversations/:id
+  Auth: Private (participant)
+
+--------------------------------------------------------------------------------
+14. MESSAGE ROUTES (messageRoutes.js)
+--------------------------------------------------------------------------------
+Controller: messagesController.js
+Base Path: /api/messages
+
+ROUTE 14.1: Get Unread Message Count
+  Method: GET
+  Path: /api/messages/unread/count
+  Auth: Private
+
+ROUTE 14.2: Get Messages in Conversation
+  Method: GET
+  Path: /api/conversations/:conversationId/messages
+  Auth: Private (participant)
+  Query Params: ?page=1&limit=50
+
+ROUTE 14.3: Send Message
+  Method: POST
+  Path: /api/conversations/:conversationId/messages
+  Auth: Private (participant)
+  Rate Limit: messageLimiter (20 messages/10min)
+  Request Body:
+    {
+      "content": "Hello, is the parking space still available?",
+      "message_type": "text"
+    }
+  
+  Success Response (201):
+    {
+      "success": true,
+      "data": {
+        "message": {
+          "_id": "...",
+          "content": "Hello, is the parking space still available?",
+          "sender_id": "...",
+          "created_at": "2025-10-20T10:00:00Z",
+          "is_read": false
+        }
+      }
+    }
+
+ROUTE 14.4: Get Message By ID
+  Method: GET
+  Path: /api/messages/:id
+  Auth: Private (participant)
+
+ROUTE 14.5: Mark Message as Read
+  Method: PUT
+  Path: /api/messages/:id/read
+  Auth: Private (recipient)
+
+ROUTE 14.6: Delete Message
+  Method: DELETE
+  Path: /api/messages/:id
+  Auth: Private (sender or admin)
+
+--------------------------------------------------------------------------------
+15. NOTIFICATION ROUTES (notificationRoutes.js)
+--------------------------------------------------------------------------------
+Controller: notificationsController.js
+Base Path: /api/notifications
+
+ROUTE 15.1: Get User's Notifications
+  Method: GET
+  Path: /api/notifications
+  Auth: Private
+  Query Params: ?page=1&limit=20&unread_only=true&type=booking
+
+ROUTE 15.2: Get Unread Notification Count
+  Method: GET
+  Path: /api/notifications/unread/count
+  Auth: Private
+
+ROUTE 15.3: Mark All Notifications as Read
+  Method: PUT
+  Path: /api/notifications/read-all
+  Auth: Private
+
+ROUTE 15.4: Clear Read Notifications
+  Method: DELETE
+  Path: /api/notifications/clear
+  Auth: Private
+
+ROUTE 15.5: Get Notification By ID
+  Method: GET
+  Path: /api/notifications/:id
+  Auth: Private (notification owner)
+
+ROUTE 15.6: Mark Notification as Read
+  Method: PUT
+  Path: /api/notifications/:id/read
+  Auth: Private (notification owner)
+
+ROUTE 15.7: Delete Notification
+  Method: DELETE
+  Path: /api/notifications/:id
+  Auth: Private (notification owner)
+
+--------------------------------------------------------------------------------
+16. PROMO CODE ROUTES (promoCodeRoutes.js)
+--------------------------------------------------------------------------------
+Controller: promoCodesController.js
+Base Path: /api/promo-codes
+
+ROUTE 16.1: Get All Promo Codes (Admin Only)
+  Method: GET
+  Path: /api/promo-codes
+  Auth: Private/Admin
+
+ROUTE 16.2: Validate Promo Code
+  Method: POST
+  Path: /api/promo-codes/validate
+  Auth: Private
+  Request Body:
+    {
+      "code": "SAVE20",
+      "booking_amount": 10000 (optional)
+    }
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "valid": true,
+        "code": "SAVE20",
+        "discount_type": "percentage",
+        "discount_value": 20,
+        "max_discount": 2000,
+        "calculated_discount": 2000
+      }
+    }
+  
+  Error Responses:
+    - 400 BIZ_PROMO_INVALID: Code invalid or not found
+    - 400 BIZ_PROMO_EXPIRED: Code expired
+
+ROUTE 16.3: Apply Promo Code
+  Method: POST
+  Path: /api/promo-codes/apply
+  Auth: Private
+  Request Body:
+    {
+      "code": "SAVE20",
+      "booking_id": "507f1f77bcf86cd799439011"
+    }
+
+ROUTE 16.4: Create Promo Code (Admin Only)
+  Method: POST
+  Path: /api/promo-codes
+  Auth: Private/Admin
+  Request Body:
+    {
+      "code": "SAVE20",
+      "discount_type": "percentage",
+      "discount_value": 20,
+      "max_discount": 2000,
+      "min_booking_amount": 5000,
+      "max_uses": 100,
+      "valid_from": "2025-10-01T00:00:00Z",
+      "valid_until": "2025-12-31T23:59:59Z",
+      "is_active": true
+    }
+
+ROUTE 16.5: Get Promo Code By Code
+  Method: GET
+  Path: /api/promo-codes/:code
+  Auth: Public
+
+ROUTE 16.6: Get Promo Code Usage (Admin Only)
+  Method: GET
+  Path: /api/promo-codes/:id/usage
+  Auth: Private/Admin
+
+ROUTE 16.7-16.8: Update, Delete Promo Code (Admin Only)
+
+--------------------------------------------------------------------------------
+17. SUPPORT TICKET ROUTES (supportTicketRoutes.js)
+--------------------------------------------------------------------------------
+Controller: supportTicketsController.js
+Base Path: /api/support-tickets
+
+ROUTE 17.1: Get All Support Tickets (Admin Only)
+  Method: GET
+  Path: /api/support-tickets
+  Auth: Private/Admin
+  Query Params: ?page=1&limit=20&status=open&priority=high
+
+ROUTE 17.2: Get User's Tickets
+  Method: GET
+  Path: /api/users/:userId/tickets
+  Auth: Private (self)
+
+ROUTE 17.3: Create Support Ticket
+  Method: POST
+  Path: /api/support-tickets
+  Auth: Private
+  Request Body:
+    {
+      "subject": "Payment issue with booking",
+      "description": "I was charged twice for the same booking",
+      "category": "payment",
+      "priority": "high",
+      "related_booking_id": "507f1f77bcf86cd799439011" (optional)
+    }
+  
+  Success Response (201):
+    {
+      "success": true,
+      "data": {
+        "ticket": {
+          "_id": "...",
+          "ticket_number": "TKT-20251020-001",
+          "subject": "Payment issue with booking",
+          "status": "open",
+          "priority": "high",
+          "created_at": "2025-10-20T10:00:00Z"
+        }
+      }
+    }
+
+ROUTE 17.4: Get Ticket By ID
+  Method: GET
+  Path: /api/support-tickets/:id
+  Auth: Private (ticket owner or admin)
+
+ROUTE 17.5: Update Ticket (Admin Only)
+  Method: PUT
+  Path: /api/support-tickets/:id
+  Auth: Private/Admin
+
+ROUTE 17.6: Assign Ticket (Admin Only)
+  Method: PUT
+  Path: /api/support-tickets/:id/assign
+  Auth: Private/Admin
+  Request Body:
+    {
+      "admin_id": "507f1f77bcf86cd799439011"
+    }
+
+ROUTE 17.7: Close Ticket
+  Method: PUT
+  Path: /api/support-tickets/:id/close
+  Auth: Private (ticket owner or admin)
+
+ROUTE 17.8: Reopen Ticket
+  Method: PUT
+  Path: /api/support-tickets/:id/reopen
+  Auth: Private (ticket owner)
+
+ROUTE 17.9: Get Ticket Messages
+  Method: GET
+  Path: /api/support-tickets/:id/messages
+  Auth: Private (ticket owner or admin)
+
+ROUTE 17.10: Add Ticket Message
+  Method: POST
+  Path: /api/support-tickets/:id/messages
+  Auth: Private (ticket owner or admin)
+  Request Body:
+    {
+      "message": "We have investigated the issue and processed a refund."
+    }
+
+--------------------------------------------------------------------------------
+18. ADMIN ROUTES (adminRoutes.js)
+--------------------------------------------------------------------------------
+Controller: adminsController.js
+Base Path: /api/admins
+
+All routes require admin authentication (protect + authorize('admin'))
+
+ROUTE 18.1: Get All Admins
+  Method: GET
+  Path: /api/admins
+  Auth: Private/Admin
+
+ROUTE 18.2: Create Admin (Super Admin Only)
+  Method: POST
+  Path: /api/admins
+  Auth: Private/Admin (super admin check in controller)
+  Request Body:
+    {
+      "user_id": "507f1f77bcf86cd799439011",
+      "role": "support"
+    }
+
+ROUTE 18.3: Get Admin By ID
+  Method: GET
+  Path: /api/admins/:id
+  Auth: Private/Admin
+
+ROUTE 18.4: Update Admin (Super Admin Only)
+  Method: PUT
+  Path: /api/admins/:id
+  Auth: Private/Admin
+
+ROUTE 18.5: Delete Admin (Super Admin Only)
+  Method: DELETE
+  Path: /api/admins/:id
+  Auth: Private/Admin
+
+ROUTE 18.6: Update Admin Permissions (Super Admin Only)
+  Method: PUT
+  Path: /api/admins/:id/permissions
+  Auth: Private/Admin
+  Request Body:
+    {
+      "permissions": ["manage_users", "manage_bookings", "view_reports"]
+    }
+
+ROUTE 18.7: Get Admin Activity
+  Method: GET
+  Path: /api/admins/:id/activity
+  Auth: Private/Admin
+
+--------------------------------------------------------------------------------
+19. PLATFORM SETTINGS ROUTES (platformSettingRoutes.js)
+--------------------------------------------------------------------------------
+Controller: platformSettingsController.js
+Base Path: /api/settings
+
+ROUTE 19.1: Get Public Settings
+  Method: GET
+  Path: /api/settings/public
+  Auth: Public
+  
+  Success Response (200):
+    {
+      "success": true,
+      "data": {
+        "app_version": "1.0.0",
+        "maintenance_mode": false,
+        "features": {
+          "booking_enabled": true,
+          "payments_enabled": true,
+          "messaging_enabled": true
+        }
+      }
+    }
+
+ROUTE 19.2: Get All Settings (Admin Only)
+  Method: GET
+  Path: /api/settings
+  Auth: Private/Admin
+
+ROUTE 19.3: Get Setting By Key (Admin Only)
+  Method: GET
+  Path: /api/settings/:key
+  Auth: Private/Admin
+
+ROUTE 19.4: Create or Update Setting (Admin Only)
+  Method: PUT
+  Path: /api/settings/:key
+  Auth: Private/Admin
+  Request Body:
+    {
+      "value": "1.0.1",
+      "description": "Current app version"
+    }
+
+ROUTE 19.5: Delete Setting (Super Admin Only)
+  Method: DELETE
+  Path: /api/settings/:key
+  Auth: Private/Admin
+
+ROUTE 19.6: Bulk Update Settings (Admin Only)
+  Method: PUT
+  Path: /api/settings/bulk
+  Auth: Private/Admin
+  Request Body:
+    {
+      "settings": [
+        { "key": "maintenance_mode", "value": true },
+        { "key": "booking_enabled", "value": false }
+      ]
+    }
+
+ROUTE 19.7: Reset Settings to Default (Super Admin Only)
+  Method: POST
+  Path: /api/settings/reset
+  Auth: Private/Admin
+
+================================================================================
+MIDDLEWARE REFERENCE
+================================================================================
+
+Authentication Middleware (auth.js):
+  - protect: Verifies JWT token, attaches req.user
+  - optionalAuth: Attaches user if token exists, continues if not
+
+Authorization Middleware (roleCheck.js):
+  - authorize(...roles): Restricts access to specific roles
+  - isOwner: Requires owner or admin role
+  - isAdmin: Requires admin role
+  - isResourceOwner: Checks resource ownership (requires req.resourceOwnerId)
+
+Validation Middleware (validation.js):
+  - validateRequired(fields): Checks required fields
+  - validateEmail: Validates email format
+  - validatePhone: Validates phone format
+  - validatePassword: Checks password strength
+  - validateObjectId(paramName): Validates MongoDB ObjectId
+  - validateCoordinates: Validates lat/lng
+  - validateDateRange: Ensures end_time > start_time
+  - sanitize: Sanitizes string inputs
+
+Rate Limiting Middleware (rateLimit.js):
+  - generalLimiter: 100 requests/15min
+  - authLimiter: 5 requests/15min (login/register)
+  - bookingLimiter: 10 requests/hour
+  - messageLimiter: 20 messages/10min
+  - paymentLimiter: 5 requests/hour
+
+Idempotency Middleware (idempotency.js):
+  - checkIdempotency: Caches responses by Idempotency-Key header
+  - requireIdempotency: Requires Idempotency-Key header
+
+Error Handler (errorHandler.js):
+  - Global error handler for consistent error responses
+  - Handles Mongoose errors, JWT errors, validation errors
+
+================================================================================
+IMPLEMENTATION NOTES
+================================================================================
+
+1. All routes are created and mapped to controller function stubs
+2. Controllers contain JSDoc comments and TODO markers for implementation
+3. Middleware chains are properly configured for security and validation
+4. Rate limiting is applied to sensitive endpoints
+5. Idempotency is enforced on critical operations (payments, refunds)
+6. Response format follows the standardized envelope structure
+7. Error codes match the taxonomy defined in errorCodes.js
+8. Geospatial queries use MongoDB's geospatial features
+9. Pagination is supported on all list endpoints
+10. Soft deletes are implemented via is_active flag
+
+Next Steps:
+1. Implement controller logic one module at a time
+2. Add comprehensive input validation
+3. Implement business logic and edge case handling
+4. Add integration tests for each route
+5. Configure payment gateway integration
+6. Set up email/SMS notification service
+7. Implement file upload for images and documents
+8. Add WebSocket support for real-time messaging
+9. Configure database indexes for performance
+10. Set up monitoring and logging
+

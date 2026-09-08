@@ -1,0 +1,418 @@
+============================================================
+ PARKBNB — STAGE 2 : PARKING SPACE OPTIMIZER
+ RESEARCH + DESIGN NOTES + BUILD LOG
+ Last updated : 19 Aug 2026
+============================================================
+
+------------------------------------------------------------
+1. PROJECT KYA HAI (OVERVIEW)
+------------------------------------------------------------
+Goal: Ek tool jo satellite map par khali plot select karne par
+us plot ke andar MAXIMUM parking slots ka professional layout
+automatically design kar de — aisles, entry/exit, accessible
+stalls, EV stalls sab ke saath.
+
+Pipeline (input se output tak):
+  1. User satellite map par plot ke corners click karta hai
+     (+ optional: obstacles jaise ped, pole, structure)
+  2. Lat/Lng (WGS84) -> UTM metres conversion (pyproj se,
+     UTM zone automatic; Indore = zone 43N, EPSG:32643)
+  3. Usable area = boundary polygon MINUS obstacle polygons
+  4. Optimizer har parking angle (0-90 deg) aur row offset try
+     karke sabse zyada slots wala layout dhoondta hai
+  5. Access lane reserve hoti hai, reachability check hota hai
+  6. Result wapas lat/lng mein convert karke map par overlay
+
+------------------------------------------------------------
+2. STAGE-1 PROTOTYPE (GOOGLE COLAB) — KYA THA
+------------------------------------------------------------
+Files: "PARKING SPACEOPTIMIZER.ipynb - Colab.pdf" (v1, 21 pg)
+       "PARKING SPACEOPTIMIZER2.ipynb - Colab.pdf" (v2, 58 pg)
+
+v1 (Cells 1-4):
+  - Google Maps JS API + Colab callback se 4 corner selection
+  - pyproj + shapely se metric geometry
+  - Angle sweep 0-90 deg (1 deg step), har angle par 31 row
+    offsets try, double-sided bay modules (row+aisle+row)
+  - Slot: BIS SP 73:2023 shared 2.75 x 5.0 m
+  - Aisle widths: 0->3.6, 45->4.8, 60->4.8, 90->6.0 (interp)
+  - Result: 39-44 slots @ 90 deg on the Indore test plot
+
+v2 (adds):
+  - Obstacle marking UI (3+ point polygons)
+  - Usable = boundary - obstacles
+  - Cell 5: access spine (left/right 6m lane) + reachability
+  - Cell 6: result ko wapas Google satellite par overlay
+  - Improved Cell 5: entry connector corridor to nearest aisle
+  - Final run: 48 accessible stalls @ 90 deg (LEFT access)
+
+Colab version ki problems (jo STAGE2 app mein fix hui):
+  [BUG] v2 ka optimizer LOCAL_POLYGON = rotate(PARKING_POLYGON_UTM)
+        use karta tha kai jagah — matlab obstacles ke bawajood
+        poore boundary par search karta tha
+  [LOSS] Spine BAAD mein lagti thi — spine se takraane wale
+        slots delete ho jaate the (6+ slots waste)
+  [SLOW] 91 angles x 31 offsets full sweep har baar
+  [LIMIT] Sirf 4-corner boundary
+  [DEP]  Google Maps API key chahiye (aur key PDF mein leak
+        ho gayi hai — REGENERATE KARNI HAI!)
+
+------------------------------------------------------------
+3. RESEARCH — YE KAAM PROFESSIONALLY KAUN KARTA HAI
+------------------------------------------------------------
+Log/roles jo real duniya mein parking layout design karte hain:
+  - Traffic / Transportation Engineers (circulation, access)
+  - Civil / Site Engineers (grading, drainage, paving)
+  - Architects (building codes, sanction drawings)
+  - Specialized Parking Consultants — US firms: Walker
+    Consultants, Kimley-Horn, WGI. India mein architects +
+    liaison consultants NBC/bye-laws ke saath.
+  - Landscape architects (islands, shade trees, stormwater)
+
+Unka standard WORKFLOW (important!):
+  STEP 1: Site analysis — access road kahan hai, entry/exit
+          kahan ban sakta hai (intersection se door)
+  STEP 2: CIRCULATION FIRST — pehle aisle/lane network design
+          hota hai, stalls baad mein. Rules:
+            - Aisles plot ke LONG dimension ke parallel
+            - Dead-end aisles AVOID karo — loop/flow-through
+            - Har aisle ke dono taraf parking (double-loaded)
+  STEP 3: Angle selection (turnover ke hisaab se):
+            - High turnover (shops, clinic): 45-60 deg one-way
+            - Low turnover (office, resident): 90 deg two-way
+              (max density)
+  STEP 4: Striping plan — accessible stalls entrance ke paas,
+          EV stalls, islands, walkways, signage
+  STEP 5: Code compliance check + sanction drawing
+
+------------------------------------------------------------
+4. RESEARCH — STANDARDS & DIMENSIONS
+------------------------------------------------------------
+A) INDIA — NBC 2016 (National Building Code):
+   - Minimum common car stall  : 2.5 m x 5.0 m
+   - Individual/open stall     : 3.0 m x 6.0 m
+   - Aisle: 90 deg parking -> 6.0 m
+           angled parking -> 5.0-5.5 m
+           parallel       -> 3.6 m
+   - ECS (Equivalent Car Space) area norms:
+           open parking     -> 23 m2 / car
+           stilt parking    -> 28 m2 / car
+           basement         -> 32 m2 / car
+   - Basement: min 2 ramps opposite ends, slope max 1:8
+
+B) BIS SP 73:2023 — shared parking stall 2.75 x 5.0 m
+   (thoda comfortable; app mein preset hai)
+
+C) INTERNATIONAL (US practice, feet -> metres):
+   - Standard stall: 9 x 18 ft (2.7 x 5.5 m)
+   - Aisle widths by angle:
+       90 deg -> 24 ft (7.3 m)  two-way
+       60 deg -> 18 ft (5.5 m)  ONE-WAY
+       45 deg -> 13 ft (4.0 m)  ONE-WAY
+       30 deg -> 11 ft (3.4 m)  ONE-WAY
+   - 90 deg hi single config hai jo two-way support karti hai;
+     angled parking one-way circulation maangti hai
+   - EFFICIENCY BENCHMARK: surface lot 350-400 sq ft per car
+     = ~32-37 m2/car (aisles included). Isse kam = efficient.
+   - Structured garage: 300-350 sq ft (~28-32 m2) per car
+
+D) ACCESSIBLE PARKING (India — Harmonised Guidelines 2021,
+   MoHUA/CPWD, RPwD Rules; UK BS 8300 pattern similar):
+   - Accessible bay: 2400 mm stall + 1200 mm transfer zone
+     beside = 3600 mm total width (+1200 rear zone for boot)
+   - Location: entrance ke SABSE PAAS, accessible route par
+   - Signage: international accessibility symbol
+   - Count: public buildings ~ min 2 ya ~4-5% of total
+     (ADA/IBC: 1 per 25 spaces ratio bhi common reference)
+   - Do accessible stalls EK shared transfer bay use kar
+     sakte hain (pair pattern: [A][T][A]) — space efficient
+
+E) EV CHARGING: modern codes 5-10% EV-ready + extra %
+   EV-capable (conduit pre-installed)
+
+F) LANDSCAPE ISLANDS: 1 island per 10-15 stalls (ya lot area
+   ka min % landscaping) — heat island kam, stormwater, trees,
+   light poles, wayfinding. End islands har row ke end par
+   (min 5-6 ft wide).
+
+G) OTHER PRO ELEMENTS (future ke liye):
+   - Pedestrian walkways: 4-6 ft, striped/curbed, building tak
+   - Fire lane: 20 ft (6 m) unobstructed
+   - Entry/exit lanes: 10-12 ft each
+   - End islands, wheel stops, drainage slope 1-5%
+
+------------------------------------------------------------
+5. STAGE-2 APP — ARCHITECTURE
+------------------------------------------------------------
+Standalone local web app (Colab/Google API ki zaroorat nahi):
+
+  optimizer.py  — core engine (Python: shapely, pyproj, numpy)
+  app.py        — Flask server, POST /api/optimize
+  static/index.html — Leaflet UI (free Esri satellite tiles,
+                  Nominatim location search — NO API KEY)
+
+  Run: python app.py  ->  http://localhost:5000
+
+Algorithm (engine):
+  1. WGS84 -> auto UTM zone -> shapely polygons
+  2. usable = boundary - union(obstacles); MultiPolygon ho to
+     largest piece (+warning)
+  3. Orientation: longest edge ke PARALLEL aur PERPENDICULAR
+     dono rotations try hoti hain (squarish plots doosri
+     taraf better pack hote hain)
+  4. Two-stage angle sweep: coarse 5-deg step (11 offsets)
+     -> fine 1-deg around best (15 offsets) — fast + accurate
+  5. CIRCULATION FIRST: access lane (6 m car / 3 m bike)
+     pehle RESERVE hoti hai, phir bache area par best 3
+     candidate angles 31 offsets se re-optimize — isliye koi
+     slot spine se conflict karke waste nahi hota
+  6. Reachability: sirf wo slots count hote hain jo access-
+     lane-connected aisle ko touch karte hain
+  7. Striping plan (classification):
+       - islands: har Nth stall -> landscape island
+       - accessible: entry ke nearest pairs [A][T][A] shared
+         transfer bay ke saath
+       - EV: uske baad ke nearest stalls
+  8. Result -> rotate back -> UTM -> lat/lng -> JSON
+
+------------------------------------------------------------
+6. APP FEATURES (UI)
+------------------------------------------------------------
+  - "MY CURRENT LOCATION" button: browser geolocation se map
+    aapki current jagah par (accuracy circle ke saath).
+    Note: browser location permission maangega; localhost
+    secure context hai isliye chalta hai.
+  - Boundary: kitne bhi corners (4 ki limit nahi)
+  - Obstacles: multiple polygons, undo
+  - SET GATE: map par gate click karo — access lane usi side,
+    entry point gate ke saamne
+  - Vehicle presets: Car NBC 2.5x5.0 | Car BIS 2.75x5.0 |
+    SUV 3.0x5.5 | Two-wheeler 1.2x2.2 (alag aisle table)
+  - Circulation: two-way / one-way (aisle widths badalti hain)
+  - Access: single entry / LOOP (entry + exit, no dead-ends)
+  - Accessible % (default 4), EV % (default 5),
+    Island per N stalls (0 = off; codes: 10-15)
+  - Stats panel: stall counts by type, angle, aisle width,
+    areas, m2/stall vs 32-37 benchmark, NBC 23 m2/ECS bound
+  - GeoJSON export (QGIS/CAD compatible, types tagged)
+
+Aisle width tables (m) at angles [0, 45, 60, 90]:
+  car  two-way : 3.6  5.0  5.5  6.0   (NBC-ish)
+  car  one-way : 3.0  4.0  5.5  6.0   (international)
+  bike two-way : 2.5  2.8  2.8  3.0
+  bike one-way : 2.0  2.2  2.5  3.0
+
+------------------------------------------------------------
+7. TEST RESULTS (Indore plot, ~1210 m2, 4 corners)
+------------------------------------------------------------
+  Boundary: 22.71981772,75.85805852 / 22.72014182,75.85803706
+            22.72018388,75.85842062 / 22.71993648,75.85841526
+
+  Mode                          Stalls  m2/stall   Time
+  ---------------------------------------------------------
+  Two-way, single entry (def)   43      28.1 eff!  ~13s
+   (38 std + 2 acc + 3 EV + 1 transfer bay)
+  One-way circulation           43      28.1       ~15s
+  Loop (entry+exit)             35      34.6       ~8s
+  Islands every 10 stalls       40+3isl 30.2       ~10s
+  Gate on east side             43      entry east ~9s
+  Two-wheeler 1.2x2.2           230     5.3        ~79s
+
+  Colab comparison: v1 -> 39-44 slots (no access check),
+  v2 final -> 48 (bigger/different boundary, not comparable).
+  STAGE2 default 43 stalls with FULL access + accessible +
+  EV compliance, 28.1 m2/stall (benchmark 32-37 se better).
+
+------------------------------------------------------------
+8. IMPORTANT NOTES / TODO
+------------------------------------------------------------
+  [!] SECURITY: Google Maps API key PDFs mein visible hai
+      (AIzaSy...) — Google Cloud Console mein REGENERATE ya
+      RESTRICT karo. App ko iski zaroorat nahi.
+  [!] Aisle/stall values engineering defaults hain — sanction
+      ke liye LOCAL AUTHORITY bye-laws verify karna zaroori.
+  [ ] Two-wheeler mode slow (~80s) — offsets kam kar sakte
+  [ ] Future: pedestrian walkways, end islands, one-way flow
+      arrows on map, fire lane check, PDF/DXF export,
+      multi-piece plots (MultiPolygon dono pieces optimize),
+      column grid (basement/stilt), ramp placement
+
+------------------------------------------------------------
+9. HONEST REVIEW + PRODUCT ROADMAP (19 Aug 2026)
+------------------------------------------------------------
+STRENGTHS:
+  - Real geodesy (UTM), real standards (NBC/BIS), circulation-
+    first, obstacle-aware, GeoJSON export — free calculators
+    se bahut aage; ParkCAD (paid, AutoCAD) vs hum web+instant.
+
+HONEST LIMITATIONS (engine):
+  - Heuristic hai, true optimizer nahi: straight rows, single
+    global angle; irregular edges par 5-15% slots waste
+    (perimeter/mixed-angle packing nahi hai)
+  - Turning radius / swing path check nahi hota
+  - Gate sirf left/right spine; top/bottom edge gate weak
+  - Satellite georeferencing hi +/-1-3m off — output CONCEPT
+    PLAN hai, construction drawing NAHI (positioning mein
+    clearly bolna)
+
+HONEST LIMITATIONS (product):
+  - Save/load nahi (refresh = sab gaya) — biggest UX gap
+  - Vertex drag-edit/undo nahi; two-wheeler slow (~80s);
+    Flask dev server production-grade nahi
+  - Aisle widths defaults hain; city bye-laws alag — rule
+    packs + disclaimer chahiye
+
+ROADMAP (priority):
+  P1 (1-2 weeks): save/load projects, draggable vertices +
+     undo, PDF report export, DXF export (ezdxf), STRtree/
+     numpy vectorization for speed
+  P2 (product-defining): REVENUE ESTIMATOR (slots x occupancy
+     x rate = "aapka plot Rs X/month kama sakta hai") — ParkBnB
+     marketplace ke liye killer feature; city rule-packs;
+     KML/GeoTIFF import (drone survey accuracy fix);
+     turning-path check; perimeter/mixed-angle packing
+  P3: hosted SaaS (accounts, PostGIS), multi-level stilt/
+     basement, auto obstacle detection from imagery
+
+PRODUCT STRATEGY:
+  3 possible users: (1) plot owner — supply-side onboarding/
+  lead-gen for ParkBnB marketplace, (2) architect/consultant —
+  paid DXF+compliance reports, (3) parking operator.
+  RECOMMENDATION: #1 core (free tool -> "List your plot on
+  ParkBnB" funnel), #2 paid add-on. Asli value slot count
+  nahi — "is zameen se paisa banega ya nahi" ka 2-minute
+  jawab hai.
+
+------------------------------------------------------------
+10. BUILD LOG — v3 (19 Aug 2026): P1+P2+P3 EXECUTED
+------------------------------------------------------------
+Section 9 ke roadmap par kaam hua. Problem -> Solution:
+
+P1 (DONE):
+  - Save/Load: SQLite (projects.db) + REST API
+    (GET/POST /api/projects, GET/DELETE /api/projects/<id>).
+    UI: project name + SAVE/LOAD/DELETE + saved list.
+  - Vertex editing: boundary finish hone ke baad har corner
+    par draggable handle; drag karke adjust, phir re-OPTIMIZE.
+  - UNDO ab point-wise hai (pehle poora shape cancel hota tha).
+  - PDF report: /api/report (matplotlib) — A4 page 1 = site
+    plan (colored stalls, entry/exit, metres), page 2 = stats
+    + revenue + warnings + DISCLAIMER. Sellable artifact.
+  - DXF export: /api/dxf (ezdxf, R2010, INSUNITS=metres) —
+    layers: SITE/SLOTS_*/AISLES/ACCESS_LANE/OBSTACLES/TEXT;
+    origin note (EPSG + easting/northing) NOTES layer mein.
+    AutoCAD/architect-ready.
+  - SPEED: slot placement vectorized (shapely 2 array ops —
+    shapely.polygons + shapely.covers + shapely.prepare):
+    car 13s -> 2.5s, two-wheeler 79s -> 6.2s. Same results.
+
+P2 (DONE):
+  - REVENUE ESTIMATOR: inputs rate Rs/hr, occupancy %, paid
+    hrs/day, days/month -> monthly + yearly estimate, stats
+    panel ke upar green box + PDF report mein. Indore test:
+    43 stalls x Rs30 x 40% x 12h x 30d = Rs 1,45,000/month.
+  - RULE PACKS: NBC 2016 (2.5x5.0) / BIS SP 73 (2.75x5.0) /
+    US-ITE (2.7x5.5, 7.3m two-way aisle) — verified values
+    only; city-specific packs abhi bhi TODO (research needed).
+  - GATE ANY EDGE FIX: access ab DONO orientations mein
+    evaluate hota hai — top/bottom edge ka gate perpendicular
+    frame mein left/right ban jaata hai. Tie-break: zyada
+    reachable stalls, phir gate se paas entry.
+  - TURNING CHECK: chosen aisle vs standard-for-angle;
+    "ok"/"tight" stats mein + warning agar custom aisle chhota.
+  - KML/GeoJSON IMPORT: survey file upload — pehla polygon =
+    boundary, baaki = obstacles (drone/DGPS accuracy fix).
+
+P3 GROUNDWORK (DONE):
+  - Waitress production WSGI server (8 threads) — Flask dev
+    server replace ho gaya.
+  - SQLite persistence = hosted SaaS ka base (aage PostGIS).
+  STILL FUTURE: hosted deployment + accounts, multi-level
+  stilt/basement, auto obstacle detection, perimeter/mixed-
+  angle packing (engine v4), real swing-path simulation.
+
+v3.1 FIX — COURTYARD MODE (19 Aug 2026, user bug report):
+  Problem: chhote plot (house compound ~256 m2) par bay-layout
+  logic fail — 6m access lane + aisle grid fit nahi hota tha,
+  sirf 2 ajeeb stalls aa rahe the. User ne screenshot bheja.
+  Root cause: engine sirf "bay + aisle" pattern jaanta tha,
+  jo bade lots ke liye hai. Chhote plots real duniya mein
+  COURTYARD style hote hain: stalls boundary ke along, saamne
+  shared maneuvering court, gate se direct entry, koi aisle
+  grid nahi.
+  Fix: perimeter_layout() — har edge par 90 deg / parallel
+  stalls greedy place hote hain, har stall ke saamne apron
+  (maneuvering) polygon jo plot ke andar hona chahiye aur
+  kisi stall se overlap nahi; reachability = stall gate wale
+  free court component ko touch kare. Bay vs courtyard dono
+  compute hote hain, zyada stalls wala jeet-ta hai (tie ->
+  courtyard). Stats mein "layout_mode" aata hai.
+  FP BUG bhi mila: boundary line par exact rakhe stalls
+  floating-point se 1e-9 m bahar nikal ke covers() fail kar
+  rahe the — fix: 5 cm inset (real striping paint gap) +
+  area-based overlap checks (touch != overlap).
+  Results: small compound 2 -> 8 stalls; narrow strip 8x22m
+  -> 3 stalls + transfer bay; big plot unchanged (43, bay).
+
+v3.2 — ALIGNED COURTYARD (19 Aug 2026, 2nd user report):
+  Problem: v3.1 courtyard har edge apne normal ke hisaab se
+  stalls ghumata tha -> irregular plot par sawtooth/messy
+  look. User ne bola "still not optimized, proper research
+  karo, product banana hai."
+  RESEARCH (validation):
+   - IOP paper "General Algorithm for Rectangular Parking
+     Optimization": double/single-side channel choice via
+     greedy — humara bay approach isi family ka hai.
+   - ParkCAD (Transoft, industry standard): rows HAMESHA
+     straight alignments (lines/arcs) par bante hain,
+     exclusion areas, standards DB, on-the-fly row/angle
+     edits. Slanted boundary par stalls same orientation
+     mein STAIRCASE pattern banate hain — kabhi per-edge
+     rotation nahi.
+  FIX (engine v3.2): courtyard ab ALIGNED STRIP-PACKING hai:
+   - dominant frame mein 4 axis directions (S/N/E/W) mein
+     boundary par rest karte stalls; vertical/horizontal
+     strips ke through slanted edges clean staircase mein
+     follow hote hain
+   - pass 1 perpendicular (90 deg), pass 2 parallel fill
+     (narrow strips ke liye); grid offset search (0, w/2)
+   - dono orientations try hoti hain, back-to-back allowed,
+     apron/court connectivity same
+  Results (pehle -> ab):
+   small compound 256 m2 : 2 (v3) -> 8 messy (v3.1) -> 10 CLEAN
+   slanted diamond plot  : 12 stalls, sab aligned staircase
+   narrow strip          : 4 stalls (top+bottom, beech court)
+   big plot              : 44 (44 was 43 — offset search improved)
+  Visual proof: layout_check.png (4 plots side by side).
+
+Files ab: optimizer.py (engine v3.2), app.py (API v3),
+static/index.html (UI v3), projects.db (auto-created).
+Deps: flask, shapely>=2, pyproj, numpy, matplotlib, ezdxf,
+waitress.  Run: python app.py -> http://localhost:5000
+
+------------------------------------------------------------
+11. SOURCES
+------------------------------------------------------------
+  - Parking BOXX — Parking Lot Layout & Dimensions
+    https://parkingboxx.com/parking-lot-layout
+  - PDHonline C620 — Complete Parking Lot Design
+    https://pdhonline.com/courses/c620/c620content.pdf
+  - TruTec — Modern Parking Lot Design Standards
+    https://trutec.ai/blog/parking-lot-design-standards
+  - Layak Architect — Parking Standards (India)
+    https://layakarchitect.com/parking-standards/
+  - Noah Infra — NBC 2016 Guidelines
+    https://noahinfra.in/national-building-code-of-india-guidelines/
+  - CCPD — Harmonised Guidelines for Accessibility (India)
+    https://ccpd.nic.in/harmonized-guidelines-for-standards-of-accessibility/
+  - NIUA — Harmonised Guidelines 2021 guide
+    https://niua.org/harmonised-guide/chapter-1
+  - Engineers Universe — Parking Lot & Traffic Design
+    https://engineersuniverse.com/studios/civil-structural/parking-lot-design-guide
+  - Winsparking — Dimensions & Layout Standards
+    https://winsparking.com/parking-lot-dimensions-layout-standards
+  - ADA.gov — Accessible Parking Spaces
+    https://www.ada.gov/topics/parking/
+  - WBDG — Surface Parking space type
+    https://www.wbdg.org/space-types/parking-surface
+============================================================

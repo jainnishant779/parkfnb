@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Parking Space Optimizer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; }
+  #map { position: absolute; inset: 0; }
+  #panel {
+    position: absolute; top: 12px; left: 12px; z-index: 1000;
+    background: #fff; padding: 14px 16px; border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.35); width: 305px;
+    max-height: calc(100% - 40px); overflow-y: auto; font-size: 13px;
+  }
+  #panel h2 { margin: 0 0 8px; font-size: 16px; }
+  button {
+    margin: 4px 4px 0 0; padding: 8px 11px; border: none; border-radius: 6px;
+    cursor: pointer; font-size: 12.5px; color: #fff;
+  }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  #btnLocate     { background: #0d9488; width: 100%; margin: 0 0 8px; }
+  #btnBoundary   { background: #16a34a; }
+  #btnObstacle   { background: #ea580c; }
+  #btnGate       { background: #f59e0b; }
+  #btnFinish     { background: #0891b2; }
+  #btnUndo       { background: #6b7280; }
+  #btnReset      { background: #dc2626; }
+  #btnOptimize   { background: #2563eb; width: 100%; padding: 10px; font-size: 14px; font-weight: bold; margin-top: 8px; }
+  #btnExport, #btnPdf, #btnDxf { background: #7c3aed; flex: 1; }
+  #btnSave       { background: #16a34a; }
+  #btnLoad       { background: #0891b2; }
+  #btnDelete     { background: #dc2626; }
+  .exports { display: flex; gap: 4px; }
+  .hint { font-size: 12px; color: #555; margin-top: 6px; min-height: 16px; }
+  .row { margin-top: 5px; display: flex; align-items: center; }
+  .row label { flex: 1; }
+  .row input, .row select { width: 118px; padding: 3px; font-size: 12px; }
+  #search { width: 100%; padding: 6px; box-sizing: border-box; margin-bottom: 8px; }
+  #projName { width: 100%; padding: 5px; box-sizing: border-box; margin-top: 4px; }
+  #projList { width: 100%; padding: 4px; margin-top: 4px; }
+  details { margin-top: 8px; }
+  details summary { cursor: pointer; font-weight: bold; }
+  #stats { margin-top: 10px; border-top: 1px solid #ddd; padding-top: 8px; display: none; }
+  #stats table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #stats td { padding: 2px 0; }
+  #stats td:last-child { text-align: right; font-weight: bold; }
+  #revBox { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 8px; margin-top: 8px; font-size: 13px; }
+  #revBox b { color: #15803d; }
+  #warnings { color: #b45309; font-size: 11.5px; margin-top: 6px; }
+  .legend { margin-top: 8px; font-size: 11.5px; color: #444; }
+  .legend span { display: inline-block; width: 11px; height: 11px; margin: 0 5px 0 0; vertical-align: middle; border: 1px solid #999; }
+  .slot-label { color: #fff; font-size: 9px; font-weight: bold; text-shadow: 0 0 3px #000; white-space: nowrap; text-align: center; }
+  .slot-sym { font-size: 11px; text-shadow: 0 0 3px #fff; text-align: center; }
+  #spinner { display: none; text-align: center; margin-top: 8px; font-weight: bold; color: #2563eb; }
+  .vertex-handle { border-radius: 50%; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="panel">
+  <h2>Parking Space Optimizer</h2>
+  <input id="search" type="text" placeholder="Search location… (press Enter)">
+  <button id="btnLocate" onclick="goToMyLocation()">📍 MY CURRENT LOCATION</button>
+
+  <details>
+    <summary>Project (save / load)</summary>
+    <input id="projName" type="text" placeholder="Project name…">
+    <button id="btnSave" onclick="saveProject()">SAVE</button>
+    <button id="btnLoad" onclick="loadProject()">LOAD</button>
+    <button id="btnDelete" onclick="deleteProject()">DELETE</button>
+    <select id="projList"><option value="">— saved projects —</option></select>
+    <div class="row"><label>Import survey file</label>
+      <input type="file" id="importFile" accept=".geojson,.json,.kml" style="width:118px" onchange="importFile(this.files[0])"></div>
+  </details>
+
+  <div style="margin-top:8px"><b>Step 1</b> — plot &amp; site</div>
+  <button id="btnBoundary" onclick="startBoundary()">BOUNDARY</button>
+  <button id="btnObstacle" onclick="startObstacle()">+ OBSTACLE</button>
+  <button id="btnGate" onclick="startGate()">SET GATE</button>
+  <br>
+  <button id="btnFinish" onclick="finishShape()">FINISH SHAPE</button>
+  <button id="btnUndo" onclick="undoAction()">UNDO</button>
+  <button id="btnReset" onclick="resetAll()">RESET</button>
+  <div style="margin-top:4px">Boundary: <span id="bcount">0</span> pts&nbsp;|&nbsp;Obstacles: <span id="ocount">0</span>&nbsp;|&nbsp;Gate: <span id="gset">no</span></div>
+
+  <details open>
+    <summary>Step 2 — design options</summary>
+    <div class="row"><label>Standard</label>
+      <select id="rulePack" onchange="applyPack()">
+        <option value="nbc" data-w="2.5" data-l="5.0" selected>NBC 2016 (India)</option>
+        <option value="bis" data-w="2.75" data-l="5.0">BIS SP 73 (comfort)</option>
+        <option value="us_ite" data-w="2.7" data-l="5.5">US / ITE</option>
+      </select></div>
+    <div class="row"><label>Vehicle</label>
+      <select id="vehicle" onchange="applyVehicle()">
+        <option value="car" selected>Car</option>
+        <option value="bike">Two-wheeler</option>
+      </select></div>
+    <div class="row"><label>Stall W × L (m)</label>
+      <span><input id="slotW" type="number" step="0.05" value="2.5" style="width:54px">
+      <input id="slotL" type="number" step="0.05" value="5.0" style="width:54px"></span></div>
+    <div class="row"><label>Circulation</label>
+      <select id="circulation">
+        <option value="two_way" selected>Two-way aisles</option>
+        <option value="one_way">One-way aisles</option>
+      </select></div>
+    <div class="row"><label>Access</label>
+      <select id="access">
+        <option value="single" selected>Single entry</option>
+        <option value="loop">Loop (entry + exit)</option>
+      </select></div>
+    <div class="row"><label>Accessible ♿ %</label><input id="accPct" type="number" min="0" max="20" step="1" value="4"></div>
+    <div class="row"><label>EV ⚡ %</label><input id="evPct" type="number" min="0" max="50" step="1" value="5"></div>
+    <div class="row"><label>Island / N stalls</label><input id="islandN" type="number" min="0" max="30" step="1" value="0" title="0 = off; codes typically use 10-15"></div>
+  </details>
+
+  <details>
+    <summary>Step 3 — revenue inputs 💰</summary>
+    <div class="row"><label>Rate (₹/hour)</label><input id="revRate" type="number" min="0" step="5" value="30"></div>
+    <div class="row"><label>Occupancy %</label><input id="revOcc" type="number" min="0" max="100" step="5" value="40"></div>
+    <div class="row"><label>Paid hours/day</label><input id="revHrs" type="number" min="0" max="24" step="1" value="12"></div>
+    <div class="row"><label>Days/month</label><input id="revDays" type="number" min="0" max="31" step="1" value="30"></div>
+  </details>
+
+  <div class="hint" id="hint">Click BOUNDARY, then click corners on the map.</div>
+  <button id="btnOptimize" onclick="runOptimize()" disabled>OPTIMIZE LAYOUT</button>
+  <div id="spinner">Optimizing…</div>
+
+  <div id="stats">
+    <div id="revBox"></div>
+    <table id="statsTable"></table>
+    <div id="warnings"></div>
+    <div class="exports">
+      <button id="btnPdf" onclick="exportPdf()">PDF</button>
+      <button id="btnDxf" onclick="exportDxf()">DXF</button>
+      <button id="btnExport" onclick="exportGeoJSON()">GEOJSON</button>
+    </div>
+    <div class="legend">
+      <div><span style="background:#00ff0055;border-color:#00c800"></span>Site boundary</div>
+      <div><span style="background:#ea580c88"></span>Obstacles</div>
+      <div><span style="background:#2563eb88"></span>Standard stall</div>
+      <div><span style="background:#0ea5e988"></span>Accessible ♿ &nbsp;<span style="background:#93c5fd55"></span>Transfer bay</div>
+      <div><span style="background:#16a34a88"></span>EV ⚡ &nbsp;<span style="background:#15803d88"></span>Island 🌳</div>
+      <div><span style="background:#eab30833;border-color:#eab308"></span>Aisles &nbsp;<span style="background:#9333ea55"></span>Access lane</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map', { zoomControl: true }).setView([22.7196, 75.8577], 19);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 21, maxNativeZoom: 19,
+  attribution: 'Imagery © Esri, Maxar, Earthstar Geographics'
+}).addTo(map);
+
+let mode = null;
+let boundary = [];
+let boundaryDone = false;
+let obstacles = [];
+let gate = null;
+let gateMarker = null;
+let current = [];
+let tempLayers = [];
+let boundaryLayer = null;
+let vertexHandles = [];
+let obstacleLayers = [];
+let resultLayers = [];
+let lastResult = null;
+
+const $ = id => document.getElementById(id);
+const hint = t => $('hint').innerText = t;
+
+function applyPack() {
+  const o = $('rulePack').selectedOptions[0];
+  if ($('vehicle').value === 'car') { $('slotW').value = o.dataset.w; $('slotL').value = o.dataset.l; }
+}
+function applyVehicle() {
+  if ($('vehicle').value === 'bike') { $('slotW').value = 1.2; $('slotL').value = 2.2; }
+  else applyPack();
+}
+
+function clearTemp() { tempLayers.forEach(l => map.removeLayer(l)); tempLayers = []; }
+
+function redrawTemp(color) {
+  clearTemp();
+  current.forEach(p => {
+    tempLayers.push(L.circleMarker(p, { radius: 5, color: '#fff', weight: 1.5,
+      fillColor: color, fillOpacity: 1 }).addTo(map));
+  });
+  if (current.length >= 2)
+    tempLayers.push(L.polyline(current, { color, weight: 2, dashArray: '5,5' }).addTo(map));
+}
+
+function startBoundary() {
+  if (boundaryDone) { hint('Boundary already drawn. RESET to start over.'); return; }
+  mode = 'boundary'; current = [];
+  hint('Click plot corners on the map, then FINISH SHAPE.');
+}
+function startObstacle() {
+  if (!boundaryDone) { hint('Finish the boundary first.'); return; }
+  mode = 'obstacle'; current = [];
+  hint('Click 3+ points around the obstacle, then FINISH SHAPE.');
+}
+function startGate() {
+  if (!boundaryDone) { hint('Finish the boundary first.'); return; }
+  mode = 'gate';
+  hint('Click where the entry gate meets the road.');
+}
+
+function drawBoundaryLayer() {
+  if (boundaryLayer) map.removeLayer(boundaryLayer);
+  vertexHandles.forEach(h => map.removeLayer(h)); vertexHandles = [];
+  boundaryLayer = L.polygon(boundary, { color: '#00ff00', weight: 3,
+    fillColor: '#00ff00', fillOpacity: .15 }).addTo(map);
+  // draggable corner handles
+  boundary.forEach((p, i) => {
+    const h = L.marker(p, {
+      draggable: true,
+      icon: L.divIcon({ className: 'vertex-handle', iconSize: [12, 12],
+        html: '<div style="width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid #16a34a"></div>' })
+    }).addTo(map);
+    h.on('drag', e => {
+      boundary[i] = { lat: e.latlng.lat, lng: e.latlng.lng };
+      boundaryLayer.setLatLngs(boundary);
+    });
+    h.on('dragend', () => hint('Corner moved. Re-OPTIMIZE to update layout.'));
+    vertexHandles.push(h);
+  });
+}
+
+function setBoundary(points) {
+  boundary = points; boundaryDone = true;
+  clearTemp(); drawBoundaryLayer();
+  $('bcount').innerText = boundary.length;
+  $('btnOptimize').disabled = false;
+}
+
+function finishShape() {
+  if (mode === 'boundary') {
+    if (current.length < 3) { hint('Need at least 3 corners.'); return; }
+    setBoundary(current.slice());
+    hint('Boundary done — corners drag karke adjust kar sakte ho. Add obstacles/gate or OPTIMIZE.');
+  } else if (mode === 'obstacle') {
+    if (current.length < 3) { hint('Need at least 3 points for an obstacle.'); return; }
+    obstacles.push(current.slice());
+    clearTemp();
+    obstacleLayers.push(L.polygon(current, { color: '#ea580c', weight: 2,
+      fillColor: '#ea580c', fillOpacity: .35 }).addTo(map));
+    $('ocount').innerText = obstacles.length;
+    hint('Obstacle added. Add another or OPTIMIZE.');
+  }
+  mode = null; current = [];
+}
+
+function undoAction() {
+  if (mode && current.length) {           // remove last drawn point
+    current.pop();
+    redrawTemp(mode === 'boundary' ? '#00ff00' : '#ea580c');
+    if (mode === 'boundary') $('bcount').innerText = current.length;
+    if (!current.length) { mode = null; hint('Drawing cancelled.'); }
+    return;
+  }
+  if (obstacles.length) {                  // remove last obstacle
+    obstacles.pop();
+    map.removeLayer(obstacleLayers.pop());
+    $('ocount').innerText = obstacles.length;
+  }
+}
+
+function clearResults() {
+  resultLayers.forEach(l => map.removeLayer(l)); resultLayers = [];
+  $('stats').style.display = 'none';
+  lastResult = null;
+}
+
+function resetAll() {
+  mode = null; current = []; clearTemp();
+  boundary = []; boundaryDone = false;
+  if (boundaryLayer) { map.removeLayer(boundaryLayer); boundaryLayer = null; }
+  vertexHandles.forEach(h => map.removeLayer(h)); vertexHandles = [];
+  obstacles = []; obstacleLayers.forEach(l => map.removeLayer(l)); obstacleLayers = [];
+  gate = null; if (gateMarker) { map.removeLayer(gateMarker); gateMarker = null; }
+  clearResults();
+  $('bcount').innerText = '0'; $('ocount').innerText = '0'; $('gset').innerText = 'no';
+  $('btnOptimize').disabled = true;
+  hint('Click BOUNDARY, then click corners on the map.');
+}
+
+function setGate(p) {
+  gate = p;
+  if (gateMarker) map.removeLayer(gateMarker);
+  gateMarker = L.circleMarker(p, { radius: 9, color: '#000', weight: 2,
+    fillColor: '#f59e0b', fillOpacity: 1 }).bindTooltip('Entry gate').addTo(map);
+  $('gset').innerText = 'yes';
+}
+
+map.on('click', e => {
+  if (!mode) return;
+  const p = { lat: e.latlng.lat, lng: e.latlng.lng };
+  if (mode === 'gate') { setGate(p); mode = null; hint('Gate set. OPTIMIZE when ready.'); return; }
+  current.push(p);
+  redrawTemp(mode === 'boundary' ? '#00ff00' : '#ea580c');
+  if (mode === 'boundary') $('bcount').innerText = current.length;
+});
+
+function gatherOptions() {
+  return {
+    rule_pack: $('rulePack').value,
+    slot_width: parseFloat($('slotW').value) || null,
+    slot_length: parseFloat($('slotL').value) || null,
+    vehicle: $('vehicle').value,
+    circulation: $('circulation').value,
+    access: $('access').value,
+    accessible_pct: parseFloat($('accPct').value) || 0,
+    ev_pct: parseFloat($('evPct').value) || 0,
+    island_every: parseInt($('islandN').value) || 0,
+    gate: gate
+  };
+}
+
+async function runOptimize() {
+  if (!boundaryDone) return;
+  clearResults();
+  $('spinner').style.display = 'block';
+  $('btnOptimize').disabled = true;
+  try {
+    const res = await fetch('/api/optimize', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ boundary, obstacles, options: gatherOptions() })
+    });
+    const data = await res.json();
+    if (!data.ok) { hint('Error: ' + data.error); return; }
+    drawResult(data.result);
+  } catch (err) {
+    hint('Request failed: ' + err.message);
+  } finally {
+    $('spinner').style.display = 'none';
+    $('btnOptimize').disabled = false;
+  }
+}
+
+const SLOT_STYLE = {
+  standard:   { color: '#dbeafe', fill: '#2563eb', op: .5 },
+  accessible: { color: '#e0f2fe', fill: '#0ea5e9', op: .6 },
+  transfer:   { color: '#60a5fa', fill: '#93c5fd', op: .3, dash: '4,3' },
+  ev:         { color: '#dcfce7', fill: '#16a34a', op: .55 },
+  island:     { color: '#bbf7d0', fill: '#15803d', op: .55 }
+};
+const SLOT_SYM = { accessible: '♿', ev: '⚡', island: '🌳', transfer: '' };
+
+function computeRevenue(nSlots) {
+  const rate = parseFloat($('revRate').value) || 0;
+  const occ = (parseFloat($('revOcc').value) || 0) / 100;
+  const hrs = parseFloat($('revHrs').value) || 0;
+  const days = parseFloat($('revDays').value) || 0;
+  const monthly = nSlots * rate * occ * hrs * days;
+  return {
+    monthly,
+    assumptions: `${nSlots} stalls x Rs${rate}/hr x ${Math.round(occ * 100)}% occ x ${hrs} hr x ${days} d`
+  };
+}
+
+function drawResult(r) {
+  lastResult = r;
+  r.spine.forEach(p => resultLayers.push(
+    L.polygon(p, { color: '#9333ea', weight: 1, fillColor: '#9333ea', fillOpacity: .25 }).addTo(map)));
+  r.aisles.forEach(p => resultLayers.push(
+    L.polygon(p, { color: '#eab308', weight: 1.5, fillOpacity: 0, dashArray: '4,4' }).addTo(map)));
+  r.slots.forEach(s => {
+    const st = SLOT_STYLE[s.type] || SLOT_STYLE.standard;
+    resultLayers.push(L.polygon(s.path, { color: st.color, weight: 1,
+      fillColor: st.fill, fillOpacity: st.op, dashArray: st.dash || null }).addTo(map));
+    const sym = SLOT_SYM[s.type];
+    const label = sym !== undefined ? sym : String(s.id);
+    if (label) resultLayers.push(L.marker(s.center, {
+      icon: L.divIcon({ className: sym !== undefined ? 'slot-sym' : 'slot-label',
+        html: label, iconSize: [18, 12], iconAnchor: [9, 6] }),
+      interactive: false
+    }).addTo(map));
+  });
+  resultLayers.push(L.circleMarker(r.entry, { radius: 8, color: '#000', weight: 2,
+    fillColor: '#fbbf24', fillOpacity: 1 }).bindTooltip('Entry').addTo(map));
+  if (r.exit) resultLayers.push(L.circleMarker(r.exit, { radius: 8, color: '#000', weight: 2,
+    fillColor: '#f87171', fillOpacity: 1 }).bindTooltip('Exit').addTo(map));
+
+  const st = r.stats;
+  const rev = computeRevenue(st.n_slots);
+  $('revBox').innerHTML =
+    `💰 Est. revenue: <b>₹${Math.round(rev.monthly).toLocaleString('en-IN')}/month</b>` +
+    ` (₹${Math.round(rev.monthly * 12).toLocaleString('en-IN')}/yr)<br>` +
+    `<span style="font-size:11px;color:#555">${rev.assumptions}</span>`;
+  const bench = st.area_per_slot_m2 == null ? '—'
+    : st.area_per_slot_m2 <= st.benchmark_m2[1] ? 'efficient ✔' : 'below benchmark';
+  $('statsTable').innerHTML = `
+    <tr><td>Total stalls</td><td>${st.n_slots}</td></tr>
+    <tr><td>&nbsp;&nbsp;standard / ♿ / ⚡</td><td>${st.n_standard} / ${st.n_accessible} / ${st.n_ev}</td></tr>
+    <tr><td>Islands 🌳 / transfer bays</td><td>${st.n_islands} / ${st.n_transfer}</td></tr>
+    <tr><td>Rule pack</td><td>${st.rule_pack}</td></tr>
+    <tr><td>Layout mode</td><td>${st.layout_mode === 'courtyard' ? 'courtyard (direct)' : 'bay + aisles'}</td></tr>
+    <tr><td>Best angle</td><td>${st.angle.toFixed(1)}&deg;</td></tr>
+    <tr><td>Circulation</td><td>${st.circulation === 'one_way' ? 'one-way' : 'two-way'}, ${st.access_mode}</td></tr>
+    <tr><td>Aisle width / turning</td><td>${st.aisle_width_m} m / ${st.turning_check}</td></tr>
+    <tr><td>Plot / usable area</td><td>${st.plot_area_m2} / ${st.usable_area_m2} m&sup2;</td></tr>
+    <tr><td>Area per stall</td><td>${st.area_per_slot_m2 ?? '—'} m&sup2; (${bench})</td></tr>
+    <tr><td>Stall size</td><td>${st.slot_width_m} &times; ${st.slot_length_m} m</td></tr>`;
+  $('warnings').innerHTML = (r.warnings || []).map(w => '&#9888; ' + w).join('<br>');
+  $('stats').style.display = 'block';
+  hint(`Done — ${st.n_slots} stalls @ ${st.angle.toFixed(1)}°.`);
+}
+
+// ------------------------------------------------------------
+// PROJECTS
+// ------------------------------------------------------------
+async function refreshProjects() {
+  try {
+    const res = await fetch('/api/projects');
+    const js = await res.json();
+    const sel = $('projList');
+    sel.innerHTML = '<option value="">— saved projects —</option>';
+    js.projects.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = p.name + ' (' + p.updated.slice(0, 10) + ')';
+      sel.appendChild(o);
+    });
+  } catch {}
+}
+
+async function saveProject() {
+  const name = $('projName').value.trim();
+  if (!name) { hint('Project name likho pehle.'); return; }
+  if (!boundary.length) { hint('Save karne ke liye boundary chahiye.'); return; }
+  const res = await fetch('/api/projects', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, data: {
+      boundary, obstacles, gate, options: gatherOptions(),
+      view: { center: map.getCenter(), zoom: map.getZoom() },
+      revenue: { rate: $('revRate').value, occ: $('revOcc').value,
+                 hrs: $('revHrs').value, days: $('revDays').value }
+    }})
+  });
+  const js = await res.json();
+  hint(js.ok ? 'Project "' + name + '" saved ✔' : 'Save failed: ' + js.error);
+  refreshProjects();
+}
+
+async function loadProject() {
+  const id = $('projList').value;
+  if (!id) { hint('List se project choose karo.'); return; }
+  const res = await fetch('/api/projects/' + id);
+  const js = await res.json();
+  if (!js.ok) { hint('Load failed.'); return; }
+  resetAll();
+  const d = js.data;
+  $('projName').value = js.name;
+  if (d.boundary && d.boundary.length >= 3) setBoundary(d.boundary);
+  (d.obstacles || []).forEach(o => {
+    obstacles.push(o);
+    obstacleLayers.push(L.polygon(o, { color: '#ea580c', weight: 2,
+      fillColor: '#ea580c', fillOpacity: .35 }).addTo(map));
+  });
+  $('ocount').innerText = obstacles.length;
+  if (d.gate) setGate(d.gate);
+  const o = d.options || {};
+  if (o.rule_pack) $('rulePack').value = o.rule_pack;
+  if (o.vehicle) $('vehicle').value = o.vehicle;
+  if (o.slot_width) $('slotW').value = o.slot_width;
+  if (o.slot_length) $('slotL').value = o.slot_length;
+  if (o.circulation) $('circulation').value = o.circulation;
+  if (o.access) $('access').value = o.access;
+  if (o.accessible_pct != null) $('accPct').value = o.accessible_pct;
+  if (o.ev_pct != null) $('evPct').value = o.ev_pct;
+  if (o.island_every != null) $('islandN').value = o.island_every;
+  const rv = d.revenue || {};
+  if (rv.rate) $('revRate').value = rv.rate;
+  if (rv.occ) $('revOcc').value = rv.occ;
+  if (rv.hrs) $('revHrs').value = rv.hrs;
+  if (rv.days) $('revDays').value = rv.days;
+  if (d.view) map.setView(d.view.center, d.view.zoom);
+  else if (d.boundary?.length) map.fitBounds(L.polygon(d.boundary).getBounds());
+  hint('Project "' + js.name + '" loaded — OPTIMIZE to regenerate layout.');
+}
+
+async function deleteProject() {
+  const id = $('projList').value;
+  if (!id) { hint('List se project choose karo.'); return; }
+  if (!confirm('Delete this project?')) return;
+  await fetch('/api/projects/' + id, { method: 'DELETE' });
+  refreshProjects();
+  hint('Project deleted.');
+}
+refreshProjects();
+
+// ------------------------------------------------------------
+// IMPORT (GeoJSON / KML)
+// ------------------------------------------------------------
+function importFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const polys = [];
+      if (/\.kml$/i.test(file.name)) {
+        const doc = new DOMParser().parseFromString(reader.result, 'text/xml');
+        doc.querySelectorAll('Polygon').forEach(pg => {
+          const el = pg.querySelector('outerBoundaryIs coordinates') || pg.querySelector('coordinates');
+          if (!el) return;
+          const pts = el.textContent.trim().split(/\s+/).map(t => {
+            const [lng, lat] = t.split(',').map(Number);
+            return { lat, lng };
+          }).filter(p => isFinite(p.lat) && isFinite(p.lng));
+          if (pts.length >= 3) polys.push(pts);
+        });
+      } else {
+        const js = JSON.parse(reader.result);
+        const feats = js.type === 'FeatureCollection' ? js.features
+          : js.type === 'Feature' ? [js] : [{ geometry: js }];
+        feats.forEach(f => {
+          const geom = f.geometry;
+          if (!geom) return;
+          const rings = geom.type === 'Polygon' ? [geom.coordinates[0]]
+            : geom.type === 'MultiPolygon' ? geom.coordinates.map(c => c[0]) : [];
+          rings.forEach(ring => {
+            const pts = ring.map(([lng, lat]) => ({ lat, lng }));
+            if (pts.length >= 3) polys.push(pts);
+          });
+        });
+      }
+      if (!polys.length) { hint('File mein koi polygon nahi mila.'); return; }
+      resetAll();
+      // last point == first point? drop the duplicate closing point
+      polys.forEach(p => {
+        const a = p[0], b = p[p.length - 1];
+        if (Math.abs(a.lat - b.lat) < 1e-9 && Math.abs(a.lng - b.lng) < 1e-9) p.pop();
+      });
+      setBoundary(polys[0]);
+      polys.slice(1).forEach(o => {
+        obstacles.push(o);
+        obstacleLayers.push(L.polygon(o, { color: '#ea580c', weight: 2,
+          fillColor: '#ea580c', fillOpacity: .35 }).addTo(map));
+      });
+      $('ocount').innerText = obstacles.length;
+      map.fitBounds(boundaryLayer.getBounds());
+      hint(`Imported: boundary (${polys[0].length} pts) + ${polys.length - 1} obstacle(s).`);
+    } catch (e) { hint('Import failed: ' + e.message); }
+  };
+  reader.readAsText(file);
+}
+
+// ------------------------------------------------------------
+// EXPORTS
+// ------------------------------------------------------------
+async function downloadBlob(url, body, filename) {
+  hint('Generating ' + filename + '…');
+  const res = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) { hint('Export failed.'); return; }
+  const blob = await res.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  hint(filename + ' downloaded ✔');
+}
+
+function exportPdf() {
+  if (!lastResult) return;
+  const rev = computeRevenue(lastResult.stats.n_slots);
+  downloadBlob('/api/report', {
+    result: lastResult, revenue: rev,
+    project_name: $('projName').value.trim() || 'Parking Layout'
+  }, 'parking_report.pdf');
+}
+
+function exportDxf() {
+  if (!lastResult) return;
+  downloadBlob('/api/dxf', { result: lastResult }, 'parking_layout.dxf');
+}
+
+function exportGeoJSON() {
+  if (!lastResult) return;
+  const ring = path => [[...path.map(p => [p.lng, p.lat]), [path[0].lng, path[0].lat]]];
+  const feats = [];
+  feats.push({ type: 'Feature', properties: { kind: 'site' },
+    geometry: { type: 'Polygon', coordinates: ring(lastResult.site) } });
+  lastResult.obstacles.forEach((p, i) => feats.push({ type: 'Feature', properties: { kind: 'obstacle', id: i + 1 },
+    geometry: { type: 'Polygon', coordinates: ring(p) } }));
+  lastResult.aisles.forEach((p, i) => feats.push({ type: 'Feature', properties: { kind: 'aisle', id: i + 1 },
+    geometry: { type: 'Polygon', coordinates: ring(p) } }));
+  lastResult.spine.forEach((p, i) => feats.push({ type: 'Feature', properties: { kind: 'access_lane', id: i + 1 },
+    geometry: { type: 'Polygon', coordinates: ring(p) } }));
+  lastResult.slots.forEach(s => feats.push({ type: 'Feature',
+    properties: { kind: s.type, id: s.id ?? null },
+    geometry: { type: 'Polygon', coordinates: ring(s.path) } }));
+  feats.push({ type: 'Feature', properties: { kind: 'entry' },
+    geometry: { type: 'Point', coordinates: [lastResult.entry.lng, lastResult.entry.lat] } });
+  if (lastResult.exit) feats.push({ type: 'Feature', properties: { kind: 'exit' },
+    geometry: { type: 'Point', coordinates: [lastResult.exit.lng, lastResult.exit.lat] } });
+  const blob = new Blob([JSON.stringify({ type: 'FeatureCollection',
+    properties: lastResult.stats, features: feats }, null, 2)], { type: 'application/geo+json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'parking_layout.geojson';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ------------------------------------------------------------
+// LOCATION + SEARCH
+// ------------------------------------------------------------
+let myLocLayers = [];
+function goToMyLocation() {
+  if (!navigator.geolocation) { hint('Browser mein geolocation support nahi hai.'); return; }
+  hint('Locating…');
+  navigator.geolocation.getCurrentPosition(pos => {
+    const p = [pos.coords.latitude, pos.coords.longitude];
+    const acc = pos.coords.accuracy || 0;
+    myLocLayers.forEach(l => map.removeLayer(l));
+    myLocLayers = [
+      L.circle(p, { radius: acc, color: '#0d9488', weight: 1,
+        fillColor: '#0d9488', fillOpacity: .12 }).addTo(map),
+      L.circleMarker(p, { radius: 7, color: '#fff', weight: 2,
+        fillColor: '#0d9488', fillOpacity: 1 })
+        .bindTooltip('You are here (±' + Math.round(acc) + ' m)').addTo(map)
+    ];
+    map.setView(p, acc > 200 ? 16 : 19);
+    hint('Current location mil gayi (±' + Math.round(acc) + ' m accuracy).');
+  }, err => {
+    const msg = { 1: 'Location permission denied — browser mein allow karo.',
+                  2: 'Location unavailable (GPS/network issue).',
+                  3: 'Location request timeout.' }[err.code] || err.message;
+    hint(msg);
+  }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+}
+
+$('search').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  const q = e.target.value.trim();
+  if (!q) return;
+  hint('Searching…');
+  try {
+    const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q));
+    const js = await res.json();
+    if (js.length) { map.setView([+js[0].lat, +js[0].lon], 18); hint('Found: ' + js[0].display_name.slice(0, 60)); }
+    else hint('Location not found.');
+  } catch { hint('Search failed (network?).'); }
+});
+</script>
+</body>
+</html>
