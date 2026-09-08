@@ -40,13 +40,33 @@ const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .map((o) => o.trim())
   .filter(Boolean);
 
+// Print them at boot. A single malformed entry — "ttps://" for "https://" —
+// refuses every browser request including localhost, and the symptom is an
+// unreachable server rather than anything that points at CORS.
+console.log('CORS allows:', allowedOrigins.join(', '), '+ *.onrender.com');
+
+const isAllowedOrigin = (origin) => {
+  if (allowedOrigins.includes(origin)) return true;
+  // Both the panel and the API are deployed on Render, which assigns the
+  // subdomain rather than letting us choose it. Allowing the whole domain
+  // means a redeploy under a new name does not silently break the panel.
+  try {
+    return new URL(origin).hostname.endsWith('.onrender.com');
+  } catch {
+    return false;
+  }
+};
+
 app.use(cors({
   origin(origin, callback) {
     // No Origin header at all: curl, server-to-server, and the mobile apps,
     // which are native and send none. Those are not browser requests, so the
     // same-origin policy this guards has nothing to protect there.
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Origin not allowed'));
+    if (!origin || isAllowedOrigin(origin)) return callback(null, true);
+    // Refuse by omitting the header, not by throwing: a thrown error becomes
+    // a 500 that says nothing useful, and the browser blocks the response
+    // either way.
+    return callback(null, false);
   },
   credentials: true
 }));
