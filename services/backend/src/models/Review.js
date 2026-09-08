@@ -4,8 +4,9 @@ const reviewSchema = new mongoose.Schema({
   booking_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Booking',
-    required: true,
-    index: true
+    required: true
+    // Indexed below as a unique index; declaring it here too builds the same
+    // index twice and Mongoose warns about it on every boot.
   },
   user_id: {
     type: mongoose.Schema.Types.ObjectId,
