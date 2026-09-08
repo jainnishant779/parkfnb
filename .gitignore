@@ -5,6 +5,11 @@ node_modules/
 .env
 .env.local
 .env.*.local
+# Any file whose name ends in .env. Credential dumps get named things like
+# atlas-credentials.env and are one careless "git add -A" from being published.
+*.env
+!.env.example
+!**/ios/.xcode.env
 *.keystore
 !debug.keystore
 
