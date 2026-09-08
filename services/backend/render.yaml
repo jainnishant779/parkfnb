@@ -1,0 +1,33 @@
+# Render blueprint for the Parkfnb API.
+#
+# The free plan sleeps after 15 minutes of inactivity and takes about a minute
+# to wake, which is fine for a demo and not for a pilot — move to `starter`
+# (about Rs 600/month) before putting it in front of anyone.
+#
+# Secrets are deliberately not set here. Add MONGODB_URI and JWT_SECRET in the
+# Render dashboard so they never live in the repository.
+
+services:
+  - type: web
+    name: parkfnb-api
+    runtime: node
+    plan: free
+    region: singapore          # closest to India of Render's regions
+    rootDir: services/backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false            # set in the dashboard
+      - key: JWT_SECRET
+        sync: false            # set in the dashboard
+      - key: JWT_EXPIRE
+        value: 7d
+      - key: FRONTEND_URL
+        sync: false            # the admin panel's origin, for CORS
+      # ALLOW_DEV_OTP is intentionally absent. Setting it to 'true' returns the
+      # login code in the API response, which would let anyone sign in as any
+      # phone number. It exists only for local development.

@@ -22,6 +22,8 @@ const ok = (label, cond, extra = '') => {
   process.env.JWT_SECRET = 'smoke-test-secret';
   process.env.JWT_EXPIRE = '7d';
   process.env.NODE_ENV = 'development';
+  // dev_code is now behind an explicit flag, not NODE_ENV alone.
+  process.env.ALLOW_DEV_OTP = 'true';
 
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('mongo up\n');

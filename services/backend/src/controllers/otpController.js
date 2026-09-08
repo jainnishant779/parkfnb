@@ -27,6 +27,17 @@ const RESEND_COOLDOWN_MS = 30 * 1000;
 const isProd = () => process.env.NODE_ENV === 'production';
 
 /**
+ * Whether to return the OTP in the API response.
+ *
+ * This has to be opted into explicitly rather than inferred from NODE_ENV.
+ * Managed hosts do not always set NODE_ENV, and if it were ever missing or
+ * set to something like 'staging', an inferred check would fail open and hand
+ * anyone the login code for any phone number they asked about.
+ */
+const exposeDevCode = () =>
+  !isProd() && process.env.ALLOW_DEV_OTP === 'true';
+
+/**
  * Accepts a 10-digit Indian mobile number, optionally with +91 / 0 prefix,
  * or an email address. Returns the normalised value and its channel.
  */
@@ -157,9 +168,9 @@ const issueCode = async (res, rawIdentifier, rawChannel, { isResend }) => {
     channel,
     expires_in: TTL_SECONDS
   };
-  // Without an SMS provider there is no other way to read the code, so expose
-  // it outside production only. This must never leak in a live deployment.
-  if (!isProd()) payload.dev_code = code;
+  // Without an SMS provider there is no other way to read the code. Gated on
+  // an explicit flag, never on NODE_ENV alone — see exposeDevCode above.
+  if (exposeDevCode()) payload.dev_code = code;
 
   return success(res, payload);
 };
