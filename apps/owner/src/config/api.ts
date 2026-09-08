@@ -1,7 +1,9 @@
-// Local backend over the adb reverse tunnel:  adb reverse tcp:5000 tcp:5000
-// (The Render deployment is not responding, and the owner onboarding
-// endpoints only exist locally so far.)
-export const API_BASE_URL = 'http://localhost:5000';
-// export const API_BASE_URL = 'https://parkingbnbbackend.onrender.com';
+// Deployed on Render, so the app works on any device without a laptop
+// running. For local backend work, swap in http://localhost:5000 and run
+// `adb reverse tcp:5000 tcp:5000`.
+export const API_BASE_URL = 'https://parkfnb.onrender.com';
 
-export const API_TIMEOUT = 15000; // 15 seconds
+// Render's free tier sleeps after 15 minutes idle and takes roughly a
+// minute to wake, so the first request after a quiet spell is slow. Fifteen
+// seconds timed that out and looked like the server was down.
+export const API_TIMEOUT = 60000; // 60 seconds
