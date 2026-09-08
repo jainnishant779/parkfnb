@@ -80,8 +80,14 @@ const apiLimiter = rateLimit({
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', http: 429,
     message: 'Too many requests. Please slow down.' } }
 });
+// Auth first, and the general limiter skips those paths: mounting both meant
+// each request ran through the pair, so the looser limit's headers overwrote
+// the strict one's and the tighter auth budget never took effect.
 app.use('/api/auth', authLimiter);
-app.use('/api', apiLimiter);
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/auth')) return next();
+  return apiLimiter(req, res, next);
+});
 
 // Health check
 app.get('/', (req, res) => {
