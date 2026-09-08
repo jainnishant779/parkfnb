@@ -31,8 +31,23 @@ app.set('trust proxy', 1);
 
 // Middleware
 app.use(helmet());
+// The admin panel runs both locally and deployed, and both need to reach the
+// API from a browser. A single origin would mean choosing one; FRONTEND_URL
+// takes a comma-separated list so the deployed panel can be added without
+// breaking local development.
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin(origin, callback) {
+    // No Origin header at all: curl, server-to-server, and the mobile apps,
+    // which are native and send none. Those are not browser requests, so the
+    // same-origin policy this guards has nothing to protect there.
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Origin not allowed'));
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '1mb' }));

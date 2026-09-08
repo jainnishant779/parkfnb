@@ -104,8 +104,13 @@ exports.login = async (req, res, next) => {
       return error(res, errorCodes.AUTH_ACCOUNT_LOCKED, 403, 'Account is inactive. Please contact support.');
     }
 
-    // Verify password
-    const isPasswordMatch = await bcrypt.compare(password, user.password_hash);
+    // password_hash is optional: OTP sign-up never sets one, and
+    // bcrypt.compare against undefined throws rather than returning false.
+    // Answer with the same message either way — a 500 for one address and a
+    // 401 for another would tell an attacker which accounts exist.
+    const isPasswordMatch = user.password_hash
+      ? await bcrypt.compare(password, user.password_hash)
+      : false;
 
     if (!isPasswordMatch) {
       return error(res, errorCodes.AUTH_INVALID_CREDENTIALS, 401, 'Invalid email or password');

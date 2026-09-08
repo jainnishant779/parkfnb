@@ -1,49 +1,62 @@
 #!/usr/bin/env node
 /**
- * Promote a phone number to admin, creating the account if it does not exist.
+ * Create or promote an admin account.
  *
- *   node scripts/make-admin.js 9826012345
+ *   node scripts/make-admin.js admin@parkfnb.com "a-strong-password"
+ *   node scripts/make-admin.js admin@parkfnb.com "a-strong-password" "mongodb+srv://..."
  *
- * There is no other way in: the admin panel signs in through the same OTP flow
- * as the apps and then checks user_type === 'admin', and nothing in the API
- * can grant that role — deliberately, since an endpoint that mints admins is
- * an endpoint someone can find.
+ * Admins sign in with an email and password rather than an OTP: the code goes
+ * to the server log, and making someone read a deploy log to reach a dashboard
+ * is not a login flow.
  *
- * Reads MONGODB_URI from .env, so run it against whichever database you mean
- * to change. For the deployed database, export the Atlas URI first.
+ * No API endpoint grants this role, deliberately — an endpoint that mints
+ * admins is an endpoint someone can find.
  */
-// An explicit MONGODB_URI wins over .env. Without this the script could read
-// .env's local database while the operator believed they were pointing it at
-// Atlas — and the mistake is silent: an admin gets created, just in the wrong
-// place, and the panel then refuses the login for no visible reason.
-if (!process.env.MONGODB_URI) {
-  require('dotenv').config();
+
+const path = require('path');
+
+// An explicit URI (argument or environment) wins over .env. Without this the
+// script could quietly act on the local database while the operator believed
+// they were pointing it at Atlas, report success, and leave the panel
+// rejecting the login for no visible reason.
+const [, , emailArg, passwordArg, uriArg] = process.argv;
+
+if (uriArg) {
+  process.env.MONGODB_URI = uriArg;
 }
+if (!process.env.MONGODB_URI) {
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+}
+
+const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const User = require('../src/models/User');
 
-const phone = (process.argv[2] || '').replace(/\D/g, '').slice(-10);
-
-// The connection string may also be passed as the second argument. On Windows
-// `set MONGODB_URI=...` silently truncates at the first & — and Atlas URIs
-// almost always contain one (?retryWrites=true&w=majority) — so the variable
-// ends up holding half a URI and the script quietly hits the wrong database.
-if (process.argv[3]) {
-  process.env.MONGODB_URI = process.argv[3];
-}
-
-if (phone.length !== 10) {
-  console.error('Usage: node scripts/make-admin.js <10-digit-mobile> [mongodb-uri]');
+const usage = () => {
+  console.error('Usage: node scripts/make-admin.js <email> <password> [mongodb-uri]');
   console.error('');
-  console.error('  Local:  node scripts/make-admin.js 9876543210');
-  console.error('  Atlas:  node scripts/make-admin.js 9876543210 "mongodb+srv://..."');
+  console.error('  Local:  node scripts/make-admin.js admin@parkfnb.com "secret1234"');
+  console.error('  Atlas:  node scripts/make-admin.js admin@parkfnb.com "secret1234" "mongodb+srv://..."');
   console.error('');
-  console.error('Quote the URI. Windows cmd cuts an unquoted one at the first &.');
+  console.error('Quote both arguments. Windows cmd cuts an unquoted URI at the');
+  console.error('first &, and Atlas strings carry one in ?retryWrites=true&w=majority.');
+  process.exit(1);
+};
+
+const email = (emailArg || '').trim().toLowerCase();
+const password = passwordArg || '';
+
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) usage();
+
+// Eight is the floor the API's own password validator enforces; anything
+// shorter would be accepted here and then rejected at every reset.
+if (password.length < 8) {
+  console.error('The password must be at least 8 characters.');
   process.exit(1);
 }
 
 if (!process.env.MONGODB_URI) {
-  console.error('MONGODB_URI is not set. Check .env, or export it for a remote database.');
+  console.error('No database. Pass the URI as the third argument, or set MONGODB_URI.');
   process.exit(1);
 }
 
@@ -52,35 +65,39 @@ if (!process.env.MONGODB_URI) {
   // driver's 30s default makes a wrong connection string look like a hang.
   await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
 
-  // Show which database is about to change: running this against the wrong
-  // one is easy and the mistake is invisible afterwards.
+  // Name the database before changing it: running this against the wrong one
+  // is easy, and the mistake is invisible afterwards.
   const { host, name } = mongoose.connection;
   console.log(`Connected to ${host}/${name}`);
 
-  let user = await User.findOne({ phone });
+  const passwordHash = await bcrypt.hash(password, 10);
+  let user = await User.findOne({ email });
 
   if (user) {
-    if (user.user_type === 'admin') {
-      console.log(`${phone} is already an admin.`);
-    } else {
-      user.user_type = 'admin';
-      user.onboarding_step = 'completed';
-      await user.save();
-      console.log(`${phone} promoted to admin (was ${user.user_type}).`);
-    }
+    const wasAdmin = user.user_type === 'admin';
+    user.user_type = 'admin';
+    user.password_hash = passwordHash;
+    user.onboarding_step = 'completed';
+    user.is_verified = true;
+    user.is_active = true;
+    await user.save();
+    console.log(wasAdmin
+      ? `Password reset for existing admin ${email}.`
+      : `${email} promoted to admin and given a password.`);
   } else {
     user = await User.create({
-      phone,
+      email,
       user_type: 'admin',
-      auth_method: 'otp',
+      password_hash: passwordHash,
+      auth_method: 'password',
+      first_name: 'Admin',
       onboarding_step: 'completed',
       is_verified: true,
     });
-    console.log(`Created admin account for ${phone}.`);
+    console.log(`Created admin account for ${email}.`);
   }
 
-  console.log('\nSign in at the admin panel with this number. The one-time code');
-  console.log('is printed to the API server log, not returned to the browser.');
+  console.log('\nSign in at the admin panel with this email and password.');
 
   await mongoose.disconnect();
 })().catch((err) => {

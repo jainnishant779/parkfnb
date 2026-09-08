@@ -1,0 +1,32 @@
+# Render blueprint for the Parkfnb admin panel.
+#
+# A static site: Vite builds to dist/ and Render serves it. Free, and unlike a
+# web service it does not sleep.
+#
+# The panel talks to the API from the browser, so the API's CORS origin must
+# include this site's URL — set FRONTEND_URL on the parkfnb service to whatever
+# Render assigns here, or the panel will load and then fail every request.
+
+services:
+  - type: web
+    name: parkfnb-admin
+    runtime: static
+    rootDir: apps/admin
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://parkfnb.onrender.com
+    routes:
+      # Client-side routing: every path has to return index.html, or a reload
+      # on /owners/:id — or any link someone pastes — answers 404.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
