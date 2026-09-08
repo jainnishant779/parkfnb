@@ -12,7 +12,13 @@
  * Reads MONGODB_URI from .env, so run it against whichever database you mean
  * to change. For the deployed database, export the Atlas URI first.
  */
-require('dotenv').config();
+// An explicit MONGODB_URI wins over .env. Without this the script could read
+// .env's local database while the operator believed they were pointing it at
+// Atlas — and the mistake is silent: an admin gets created, just in the wrong
+// place, and the panel then refuses the login for no visible reason.
+if (!process.env.MONGODB_URI) {
+  require('dotenv').config();
+}
 const mongoose = require('mongoose');
 const User = require('../src/models/User');
 
@@ -29,7 +35,9 @@ if (!process.env.MONGODB_URI) {
 }
 
 (async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  // Atlas can take a few seconds to elect a primary from a cold client; the
+  // driver's 30s default makes a wrong connection string look like a hang.
+  await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
 
   // Show which database is about to change: running this against the wrong
   // one is easy and the mistake is invisible afterwards.
