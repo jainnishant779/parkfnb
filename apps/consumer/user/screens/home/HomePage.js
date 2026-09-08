@@ -40,11 +40,13 @@ import { VehicleIcon, ParkingPinIcon } from '../../components/glass/VehicleIcons
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Time-of-day greeting for the home headline.
+// Time-of-day greeting for the home headline. No trailing comma — the
+// caller appends the user's name only when one is known, so a comma baked
+// in here would dangle for a user with no name on file.
 const greetingForHour = (hour) => {
-  if (hour < 12) return 'Good morning,';
-  if (hour < 17) return 'Good afternoon,';
-  return 'Good evening,';
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
 };
 
 // Rough travel-time estimate from distance. Under ~1 km people walk
@@ -243,6 +245,15 @@ const amenityOptions = [
 ];
 
 
+// The three-step explainer under the headline. Purely descriptive — these
+// are not filters and nothing routes off them, so they stay a static array
+// rather than becoming pressable like `categories` above.
+const journeySteps = [
+  { id: 'find', icon: 'map-search-outline', label: 'FIND' },
+  { id: 'book', icon: 'calendar-check-outline', label: 'BOOK' },
+  { id: 'park', icon: 'car-outline', label: 'PARK' },
+];
+
 // Default to Delhi, India for demo
 const initialRegion = {
   latitude: 28.6139,
@@ -350,6 +361,15 @@ const HomePage = ({ navigation }) => {
     .trim()
     .charAt(0)
     .toUpperCase() || '?';
+
+  // First name only — the greeting is a one-liner and a full legal name
+  // would wrap or truncate next to the eco card. Falls back to an empty
+  // string (not a placeholder name) so the greeting reads "Good morning 👋"
+  // rather than inventing a user who isn't signed in yet.
+  const firstName = useMemo(() => {
+    const name = (auth?.user?.legalName || '').trim();
+    return name ? name.split(/\s+/)[0] : '';
+  }, [auth?.user?.legalName]);
 
   // Favourites are UI-only for now — the backend has no favourites
   // endpoint, so the heart state lives with the screen (same approach as
@@ -1228,11 +1248,18 @@ const HomePage = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']} mode="padding">
       {/* Header Panel - covers brand row, greeting, search bar, and category buttons */}
       <View style={styles.headerPanel}>
-        {/* Brand Row — wordmark + tagline on the left, bell and avatar right */}
+        {/* Brand Row — logo mark + wordmark on the left, bell and avatar right */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.brandWordmark}>PARK</Text>
-            <Text style={styles.brandTagline}>Park Smart. Live More.</Text>
+          <View style={styles.brandLockup}>
+            <Image
+              source={require('../../assets/logo-mark.png')}
+              style={styles.brandMark}
+              resizeMode="contain"
+            />
+            <View>
+              <Text style={styles.brandWordmark}>PARKFNB</Text>
+              <Text style={styles.brandTagline}>SMART PARKING / BRIGHTER CITIES</Text>
+            </View>
           </View>
           <View style={styles.headerRight}>
             <TouchableOpacity style={styles.notificationButton}>
@@ -1253,8 +1280,14 @@ const HomePage = ({ navigation }) => {
         {/* Greeting + headline, with the eco promo card alongside */}
         <View style={styles.greetingSection}>
           <View style={styles.greetingTextBlock}>
-            <Text style={styles.greetingLabel}>{greeting}</Text>
-            <Text style={styles.greetingHeadline}>Where are you{'\n'}parking today?</Text>
+            <Text style={styles.greetingLabel} numberOfLines={1}>
+              {greeting}{firstName ? `, ${firstName}` : ''} 👋
+            </Text>
+            <Text style={styles.greetingSubtitle}>Find. Book. Park. Stress Free.</Text>
+            <Text style={styles.greetingHeadline}>
+              A Smarter{'\n'}
+              <Text style={styles.greetingHeadlineAccent}>Way to Park</Text>
+            </Text>
           </View>
           {/* Decorative — there is no sustainability screen to route to yet. */}
           <View style={styles.ecoCard}>
@@ -1265,6 +1298,20 @@ const HomePage = ({ navigation }) => {
             </View>
             <Icon name="chevron-right" size={18} color={palette.primary} />
           </View>
+        </View>
+
+        {/* Three-step explainer. Dividers render between items rather than
+            after each, so the row has no trailing rule on the right. */}
+        <View style={styles.journeyRow}>
+          {journeySteps.map((step, index) => (
+            <React.Fragment key={step.id}>
+              {index > 0 && <View style={styles.journeyDivider} />}
+              <View style={styles.journeyStep}>
+                <MaterialIcon name={step.icon} size={20} color={palette.primary} />
+                <Text style={styles.journeyStepLabel}>{step.label}</Text>
+              </View>
+            </React.Fragment>
+          ))}
         </View>
 
         {/* Search Section */}
@@ -1883,22 +1930,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    // Trimmed from 10 to buy back part of the height the three-step row
+    // below costs — the map has to stay reachable above the fold.
+    paddingVertical: 6,
+  },
+  brandLockup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  brandMark: {
+    width: 34,
+    height: 34,
   },
   brandWordmark: {
     fontFamily: fontStacks.medium,
-    fontSize: 26,
-    fontWeight: '600',
-    // Wide tracking is what makes the four letters read as a wordmark
-    // rather than the word "park".
-    letterSpacing: 6,
+    fontSize: 22,
+    fontWeight: '700',
+    // Tracking is what makes the letters read as a wordmark rather than a
+    // word. Tighter than the mark-less version was: the logo now carries
+    // the brand, so the type doesn't have to shout to do it alone.
+    letterSpacing: 3,
     color: palette.text,
   },
   brandTagline: {
-    fontFamily: fontStacks.regular,
-    fontSize: 13,
+    fontFamily: fontStacks.medium,
+    // Small letter-spaced caps — reads as a strapline under the wordmark,
+    // not as body copy competing with the greeting below it.
+    fontSize: 8,
+    fontWeight: '600',
+    letterSpacing: 1.4,
     color: palette.textMuted,
-    marginTop: 2,
+    marginTop: 3,
   },
   avatarButton: {
     width: 42,
@@ -1925,18 +1988,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   greetingLabel: {
+    fontFamily: fontStacks.medium,
+    fontSize: 16,
+    fontWeight: '600',
+    color: palette.text,
+  },
+  greetingSubtitle: {
     fontFamily: fontStacks.regular,
-    fontSize: 15,
+    fontSize: 12,
     color: palette.textMuted,
+    marginTop: 2,
   },
   greetingHeadline: {
     fontFamily: fontStacks.medium,
-    fontSize: 27,
+    fontSize: 25,
     fontWeight: '700',
     letterSpacing: -0.8,
-    lineHeight: 33,
+    lineHeight: 30,
     color: palette.text,
-    marginTop: 4,
+    marginTop: 10,
+  },
+  // Second line of the headline only. Nested <Text> inherits the size and
+  // weight above, so this carries the colour shift and nothing else.
+  greetingHeadlineAccent: {
+    color: palette.primary,
   },
   ecoCard: {
     width: 158,
@@ -1946,8 +2021,11 @@ const styles = StyleSheet.create({
     backgroundColor: palette.primarySoft,
     borderRadius: radii.md,
     paddingHorizontal: 12,
-    paddingVertical: 14,
-    marginTop: 20,
+    paddingVertical: 12,
+    // Sits against the headline block, not the greeting line above it —
+    // the card is shorter than the text column beside it, so the offset
+    // is what keeps their optical centres roughly aligned.
+    marginTop: 34,
   },
   ecoCardText: {
     flex: 1,
@@ -1962,6 +2040,36 @@ const styles = StyleSheet.create({
     fontFamily: fontStacks.regular,
     fontSize: 12,
     color: palette.textMuted,
+  },
+  journeyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 14,
+    paddingVertical: 10,
+    backgroundColor: palette.surface,
+    borderRadius: radii.md,
+  },
+  journeyStep: {
+    // Equal flex on each step keeps the three labels evenly spaced
+    // regardless of word length, so the dividers land on thirds.
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  journeyStepLabel: {
+    fontFamily: fontStacks.medium,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    color: palette.text,
+  },
+  journeyDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: palette.bgSoft,
   },
   mapArea: {
     flex: 1,
@@ -2418,7 +2526,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     paddingHorizontal: 16,
-    marginTop: 18,
+    // The journey row above carries its own top margin, so this only
+    // needs to separate the two bands rather than clear the greeting.
+    marginTop: 12,
   },
   searchBar: {
     flex: 1,
