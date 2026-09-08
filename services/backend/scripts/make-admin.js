@@ -70,6 +70,18 @@ if (!process.env.MONGODB_URI) {
   const { host, name } = mongoose.connection;
   console.log(`Connected to ${host}/${name}`);
 
+  // An Atlas URI without a path selects 'test'. The admin lands there, the
+  // script reports success, and the API — pointed at a different database —
+  // then refuses the login with nothing to explain it.
+  if (name === 'test') {
+    console.error('');
+    console.error("Refusing to write to the 'test' database.");
+    console.error('The connection string has no database name. Add /parkfnb before');
+    console.error('the query string:  ...mongodb.net/parkfnb?retryWrites=true...');
+    await mongoose.disconnect();
+    process.exit(1);
+  }
+
   const passwordHash = await bcrypt.hash(password, 10);
   let user = await User.findOne({ email });
 
