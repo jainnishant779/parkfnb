@@ -207,16 +207,43 @@ exports.verifyKYC = async (req, res, next) => {
       return error(res, errorCodes.NOT_FOUND, 404, 'Owner not found');
     }
 
-    // Update verification status
-    owner.is_verified = is_verified !== undefined ? is_verified : true;
-    owner.kyc_verified_at = new Date();
+    const approved = is_verified !== undefined ? is_verified : true;
+
+    // kyc_status is the field the owner app and /onboarding-status read.
+    // Setting only is_verified left an approved owner still seeing "KYC under
+    // review", indistinguishable from one nobody had looked at yet.
+    owner.is_verified = approved;
+    owner.kyc_status = approved ? 'verified' : 'rejected';
     owner.kyc_verification_notes = verification_notes || '';
+
+    if (approved) {
+      owner.kyc_verified_at = new Date();
+      owner.kyc_rejection_reason = undefined;
+    } else {
+      // The app renders this to tell the owner what to fix; without it a
+      // rejection is a dead end.
+      owner.kyc_rejection_reason = verification_notes || 'Please resubmit your documents';
+      owner.kyc_verified_at = undefined;
+    }
 
     await owner.save();
 
+    // Move the user's onboarding step in step with the decision, so the app
+    // routes them to the dashboard rather than back into the wizard.
+    const user = await User.findById(owner.user_id);
+    if (user) {
+      if (approved) {
+        user.onboarding_step = 'completed';
+      } else if (user.onboarding_step === 'kyc_submitted') {
+        user.onboarding_step = 'profile_setup';
+      }
+      await user.save();
+    }
+
+    const { publicOwner } = require('./otpController');
     return success(res, {
-      message: `Owner KYC ${owner.is_verified ? 'verified' : 'rejected'} successfully`,
-      owner
+      message: `Owner KYC ${approved ? 'verified' : 'rejected'} successfully`,
+      owner: publicOwner(owner)
     });
   } catch (err) {
     console.error('Verify KYC error:', err);

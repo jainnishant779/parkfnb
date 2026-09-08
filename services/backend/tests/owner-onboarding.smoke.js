@@ -183,6 +183,57 @@ const toSnake = (obj) => {
   r = await call('PUT', '/api/owners/me/kyc', { kycPersonal: { fullName: 'Rajesh' } }, token);
   ok('KYC cannot be submitted twice', r.status === 409, JSON.stringify(r.json));
 
+  // ------------------------------------------------------- admin verify
+  console.log('\nPUT /owners/:id/verify/kyc');
+
+  const adminPhone = '9826033333';
+  r = await call('POST', '/api/auth/otp/send', { identifier: adminPhone });
+  r = await call('POST', '/api/auth/otp/verify', {
+    identifier: adminPhone, code: r.json.data.dev_code, role: 'user',
+  });
+  const adminToken = r.json.data.token;
+
+  // The admin role cannot be granted through the API by design — an endpoint
+  // that mints admins is an endpoint someone can find — so set it directly,
+  // the way scripts/make-admin.js does.
+  const User = require('../src/models/User');
+  await User.findByIdAndUpdate(r.json.data.user.id, { user_type: 'admin' });
+
+  const Owner = require('../src/models/Owner');
+  const submitted = await Owner.findOne({ kyc_status: 'submitted' });
+  ok('there is a submitted owner to review', !!submitted);
+
+  r = await call('PUT', `/api/owners/${submitted._id}/verify/kyc`,
+    { isVerified: true }, token);
+  ok('a non-admin cannot verify', r.status === 403, String(r.status));
+
+  r = await call('PUT', `/api/owners/${submitted._id}/verify/kyc`,
+    { isVerified: true }, adminToken);
+  ok('an admin can verify', r.status === 200, JSON.stringify(r.json).slice(0, 140));
+  ok('kyc_status becomes verified',
+    r.json.data?.owner?.kyc_status === 'verified', r.json.data?.owner?.kyc_status);
+
+  r = await call('GET', '/api/auth/onboarding-status', null, token);
+  ok('a verified owner is sent to the dashboard',
+    r.json.data?.onboarding_step === 'completed', JSON.stringify(r.json.data));
+
+  // ---- rejection carries a reason the owner can act on -----------------
+  // Reuse the business owner created earlier rather than signing a new one
+  // in: this exercises the rejection path, not sign-up.
+  const rejectOwner = await Owner.findOne({ business_name: 'Sharma Realty' });
+  ok('there is a second owner to reject', !!rejectOwner);
+  const rejectOwnerId = rejectOwner._id;
+
+  r = await call('PUT', `/api/owners/${rejectOwnerId}/verify/kyc`,
+    { isVerified: false, verificationNotes: 'Aadhaar image is unreadable' }, adminToken);
+  ok('an admin can reject', r.status === 200, JSON.stringify(r.json).slice(0, 140));
+  ok('kyc_status becomes rejected',
+    r.json.data?.owner?.kyc_status === 'rejected', r.json.data?.owner?.kyc_status);
+  ok('the reason reaches the owner',
+    r.json.data?.owner?.kyc_rejection_reason === 'Aadhaar image is unreadable',
+    r.json.data?.owner?.kyc_rejection_reason);
+
+
   console.log(`\n${pass} passed, ${fail} failed`);
   await server.close();
   await mongoose.disconnect();
