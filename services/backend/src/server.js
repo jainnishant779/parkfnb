@@ -98,7 +98,11 @@ app.get('/health', (req, res) => {
   // a pod with a dead database in the load balancer.
   const mongoose = require('mongoose');
   const dbUp = mongoose.connection.readyState === 1;
-  res.status(dbUp ? 200 : 503).json({
+  // 200 either way. A 503 here takes the service out of the load balancer
+  // entirely, so a database that is briefly unreachable becomes a host that
+  // answers nothing at all — including this endpoint, which is the one thing
+  // that would have explained why. The body still reports the real state.
+  res.status(200).json({
     success: dbUp,
     status: dbUp ? 'healthy' : 'degraded',
     database: dbUp ? 'connected' : 'disconnected',
