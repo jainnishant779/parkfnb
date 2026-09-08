@@ -24,8 +24,21 @@ const User = require('../src/models/User');
 
 const phone = (process.argv[2] || '').replace(/\D/g, '').slice(-10);
 
+// The connection string may also be passed as the second argument. On Windows
+// `set MONGODB_URI=...` silently truncates at the first & — and Atlas URIs
+// almost always contain one (?retryWrites=true&w=majority) — so the variable
+// ends up holding half a URI and the script quietly hits the wrong database.
+if (process.argv[3]) {
+  process.env.MONGODB_URI = process.argv[3];
+}
+
 if (phone.length !== 10) {
-  console.error('Usage: node scripts/make-admin.js <10-digit-mobile>');
+  console.error('Usage: node scripts/make-admin.js <10-digit-mobile> [mongodb-uri]');
+  console.error('');
+  console.error('  Local:  node scripts/make-admin.js 9876543210');
+  console.error('  Atlas:  node scripts/make-admin.js 9876543210 "mongodb+srv://..."');
+  console.error('');
+  console.error('Quote the URI. Windows cmd cuts an unquoted one at the first &.');
   process.exit(1);
 }
 
