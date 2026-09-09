@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Modal,
-  FlatList,
   Platform,
   ViewStyle,
+  TextInput,
+  Keyboard,
+  ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../theme/colors';
 import { spacing, borderRadius } from '../../theme/spacing';
@@ -47,7 +47,7 @@ const pickerTheme = {
   background: colors.white,
   backgroundDisabled: colors.gray[100],
   border: colors.gray[300],
-  borderFocused: colors.primary[500],
+  borderFocused: '#0D7377',
   borderError: colors.error[500],
   text: colors.gray[900],
   textDisabled: colors.gray[400],
@@ -56,9 +56,8 @@ const pickerTheme = {
   helper: colors.gray[500],
   error: colors.error[500],
   required: colors.error[500],
-  modalBackground: 'rgba(0, 0, 0, 0.5)',
-  optionSelected: colors.primary[50],
-  optionSelectedText: colors.primary[600],
+  optionSelected: '#E8F5F4',
+  optionSelectedText: '#0D7377',
 };
 
 // ============================================================================
@@ -77,46 +76,38 @@ export default function FormPickerInput({
   helperText,
   containerStyle,
   disabled = false,
+  searchable = false,
 }: FormPickerInputProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const selectedOption = options.find((opt) => opt.value === value);
   const displayValue = valueLabel || selectedOption?.label;
+  const showSearch = searchable || options.length > 7;
 
-  const getBorderColor = () => {
-    if (error) return pickerTheme.borderError;
-    if (isOpen) return pickerTheme.borderFocused;
-    return pickerTheme.border;
+  const filteredOptions = searchQuery.trim()
+    ? options.filter((opt) =>
+        opt.label.toLowerCase().includes(searchQuery.toLowerCase().trim()),
+      )
+    : options;
+
+  const handleToggle = () => {
+    if (disabled) return;
+    Keyboard.dismiss();
+    setIsOpen((prev) => !prev);
+    setSearchQuery('');
   };
 
   const handleSelect = (optionValue: string) => {
     onSelect(optionValue);
     setIsOpen(false);
+    setSearchQuery('');
   };
 
-  const renderOption = ({ item }: { item: PickerOption }) => {
-    const isSelected = item.value === value;
-    return (
-      <Pressable
-        style={[styles.option, isSelected && styles.optionSelected]}
-        onPress={() => handleSelect(item.value)}
-        accessibilityRole="menuitem"
-        accessibilityState={{ selected: isSelected }}
-      >
-        <Text
-          style={[styles.optionText, isSelected && styles.optionTextSelected]}
-        >
-          {item.label}
-        </Text>
-        {isSelected && (
-          <Ionicons
-            name="checkmark"
-            size={20}
-            color={pickerTheme.optionSelectedText}
-          />
-        )}
-      </Pressable>
-    );
+  const getBorderColor = () => {
+    if (error) return pickerTheme.borderError;
+    if (isOpen) return pickerTheme.borderFocused;
+    return pickerTheme.border;
   };
 
   return (
@@ -127,7 +118,7 @@ export default function FormPickerInput({
         {required && <Text style={styles.required}> *</Text>}
       </View>
 
-      {/* Picker Button */}
+      {/* Picker Trigger Button */}
       <Pressable
         style={[
           styles.pickerButton,
@@ -137,8 +128,9 @@ export default function FormPickerInput({
               ? pickerTheme.backgroundDisabled
               : pickerTheme.background,
           },
+          isOpen && styles.pickerButtonOpen,
         ]}
-        onPress={() => !disabled && setIsOpen(true)}
+        onPress={handleToggle}
         disabled={disabled}
         accessibilityRole="combobox"
         accessibilityLabel={`${label}${required ? ', required' : ''}`}
@@ -156,14 +148,90 @@ export default function FormPickerInput({
           {displayValue || placeholder}
         </Text>
         <Ionicons
-          name="chevron-down"
+          name={isOpen ? 'chevron-up' : 'chevron-down'}
           size={20}
-          color={disabled ? pickerTheme.textDisabled : pickerTheme.text}
+          color={disabled ? pickerTheme.textDisabled : (isOpen ? pickerTheme.borderFocused : pickerTheme.text)}
         />
       </Pressable>
 
-      {/* Helper / Error Text */}
-      {(error || helperText) && (
+      {/* Inline Dropdown Options */}
+      {isOpen && (
+        <View style={styles.dropdownContainer}>
+          {showSearch && (
+            <View style={styles.searchContainer}>
+              <Ionicons
+                name="search"
+                size={16}
+                color={colors.gray[400]}
+                style={styles.searchIcon}
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={`Search ${label.toLowerCase()}...`}
+                placeholderTextColor={colors.gray[400]}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={colors.gray[400]} />
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          <ScrollView
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            style={styles.dropdownScroll}
+            showsVerticalScrollIndicator={true}
+          >
+            {filteredOptions.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No options found</Text>
+              </View>
+            ) : (
+              filteredOptions.map((item, index) => {
+                const isSelected = item.value === value;
+                return (
+                  <Pressable
+                    key={item.value}
+                    style={[
+                      styles.option,
+                      isSelected && styles.optionSelected,
+                      index < filteredOptions.length - 1 && styles.optionBorder,
+                    ]}
+                    onPress={() => handleSelect(item.value)}
+                    accessibilityRole="menuitem"
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        isSelected && styles.optionTextSelected,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={18}
+                        color={pickerTheme.optionSelectedText}
+                      />
+                    )}
+                  </Pressable>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Helper / Error Text (shown when closed) */}
+      {!isOpen && (error || helperText) && (
         <View style={styles.bottomTextContainer}>
           <Text
             style={[
@@ -176,43 +244,6 @@ export default function FormPickerInput({
           </Text>
         </View>
       )}
-
-      {/* Options Modal */}
-      {isOpen ? (
-
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setIsOpen(false)}
-        >
-          <SafeAreaView style={styles.modalSafeArea}>
-            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-              {/* Modal Header */}
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{label}</Text>
-                <Pressable
-                  onPress={() => setIsOpen(false)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  accessibilityLabel="Close"
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="close" size={24} color={pickerTheme.text} />
-                </Pressable>
-              </View>
-
-              {/* Options List */}
-              <FlatList
-                data={options}
-                renderItem={renderOption}
-                keyExtractor={(item) => item.value}
-                showsVerticalScrollIndicator={false}
-                style={styles.optionsList}
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
-              />
-            </Pressable>
-          </SafeAreaView>
-        </Pressable>
-      
-      ) : null}
     </View>
   );
 }
@@ -246,6 +277,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     minHeight: 52,
     paddingHorizontal: spacing[4],
+    backgroundColor: pickerTheme.background,
     ...Platform.select({
       ios: {
         shadowColor: colors.black,
@@ -257,6 +289,11 @@ const styles = StyleSheet.create({
         elevation: 1,
       },
     }),
+  },
+  pickerButtonOpen: {
+    borderColor: pickerTheme.borderFocused,
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
   },
   pickerText: {
     flex: 1,
@@ -283,55 +320,59 @@ const styles = StyleSheet.create({
     color: pickerTheme.error,
   },
 
-  // Modal Styles
-  modalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 9999,
-    elevation: 24,
-    backgroundColor: pickerTheme.modalBackground,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing[5],
-  },
-  modalSafeArea: {
-    width: '100%',
-    maxHeight: '80%',
-  },
-  modalContent: {
+  // Dropdown list styles
+  dropdownContainer: {
+    marginTop: 4,
     backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
+    borderWidth: 1.5,
+    borderColor: pickerTheme.borderFocused,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
-    maxHeight: 400,
+    maxHeight: 250,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.black,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
-  modalHeader: {
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
     borderBottomWidth: 1,
     borderBottomColor: colors.gray[200],
+    backgroundColor: colors.gray[50],
   },
-  modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    color: pickerTheme.text,
+  searchIcon: {
+    marginRight: spacing[2],
   },
-  optionsList: {
+  searchInput: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.gray[900],
+    paddingVertical: 4,
+  },
+  dropdownScroll: {
     flexGrow: 0,
   },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3] + 2,
+    minHeight: 48,
+  },
+  optionBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
   },
   optionSelected: {
     backgroundColor: pickerTheme.optionSelected,
@@ -342,10 +383,14 @@ const styles = StyleSheet.create({
   },
   optionTextSelected: {
     color: pickerTheme.optionSelectedText,
-    fontWeight: fontWeight.medium as any,
+    fontWeight: fontWeight.semibold as any,
   },
-  separator: {
-    height: 1,
-    backgroundColor: colors.gray[100],
+  emptyContainer: {
+    padding: spacing[4],
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: fontSize.sm,
+    color: colors.gray[400],
   },
 });
