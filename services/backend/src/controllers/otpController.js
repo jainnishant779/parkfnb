@@ -38,6 +38,17 @@ const exposeDevCode = () =>
   !isProd() && process.env.ALLOW_DEV_OTP === 'true';
 
 /**
+ * Test OTP support for development and pre-production testing.
+ * By default, '123456' is accepted unless DISABLE_TEST_OTP='true'.
+ * A custom test OTP can also be set via TEST_OTP env var.
+ */
+const isTestOtp = (candidate) => {
+  if (process.env.DISABLE_TEST_OTP === 'true') return false;
+  const testOtp = process.env.TEST_OTP || '123456';
+  return String(candidate).trim() === testOtp;
+};
+
+/**
  * Accepts a 10-digit Indian mobile number, optionally with +91 / 0 prefix,
  * or an email address. Returns the normalised value and its channel.
  */
@@ -114,7 +125,10 @@ const publicOwner = (owner) => (owner ? {
  * provider call — nothing else in this file needs to change.
  */
 const sendCode = async (identifier, channel, code) => {
-  console.log(`[otp] ${channel} -> ${identifier} : ${code} (valid ${TTL_SECONDS}s)`);
+  const testInfo = process.env.DISABLE_TEST_OTP !== 'true'
+    ? ` | Test OTP '${process.env.TEST_OTP || '123456'}' is active`
+    : '';
+  console.log(`[otp] ${channel} -> ${identifier} : ${code} (valid ${TTL_SECONDS}s)${testInfo}`);
   return true;
 };
 
@@ -236,38 +250,44 @@ exports.verifyOtp = async (req, res) => {
     }
 
     const { identifier, channel } = parsed;
+    const cleanCode = String(code).trim();
+    const isTest = isTestOtp(cleanCode);
 
     const otp = await OtpCode.findOne({ identifier, consumed_at: null })
       .sort({ created_at: -1 })
       .select('+code_hash');
 
-    if (!otp) {
-      return error(res, errorCodes.AUTH_INVALID_CREDENTIALS, 400,
-        'That code has expired. Request a new one.');
+    if (!isTest) {
+      if (!otp) {
+        return error(res, errorCodes.AUTH_INVALID_CREDENTIALS, 400,
+          'That code has expired. Request a new one.');
+      }
+      if (otp.expires_at.getTime() < Date.now()) {
+        return error(res, errorCodes.AUTH_INVALID_CREDENTIALS, 400,
+          'That code has expired. Request a new one.');
+      }
+      if (otp.attempts >= MAX_ATTEMPTS) {
+        otp.consumed_at = new Date();
+        await otp.save();
+        return error(res, errorCodes.AUTH_INVALID_CREDENTIALS, 429,
+          'Too many incorrect attempts. Request a new code.');
+      }
+
+      if (!(await otp.matches(cleanCode))) {
+        otp.attempts += 1;
+        await otp.save();
+        const left = MAX_ATTEMPTS - otp.attempts;
+        return error(res, errorCodes.AUTH_INVALID_CREDENTIALS, 400,
+          left > 0 ? `Incorrect code. ${left} attempt${left === 1 ? '' : 's'} left.`
+                   : 'Incorrect code. Request a new one.');
+      }
     }
-    if (otp.expires_at.getTime() < Date.now()) {
-      return error(res, errorCodes.AUTH_INVALID_CREDENTIALS, 400,
-        'That code has expired. Request a new one.');
-    }
-    if (otp.attempts >= MAX_ATTEMPTS) {
+
+    // Code is good — retire active OTP if one exists so it cannot be replayed.
+    if (otp) {
       otp.consumed_at = new Date();
       await otp.save();
-      return error(res, errorCodes.AUTH_INVALID_CREDENTIALS, 429,
-        'Too many incorrect attempts. Request a new code.');
     }
-
-    if (!(await otp.matches(String(code).trim()))) {
-      otp.attempts += 1;
-      await otp.save();
-      const left = MAX_ATTEMPTS - otp.attempts;
-      return error(res, errorCodes.AUTH_INVALID_CREDENTIALS, 400,
-        left > 0 ? `Incorrect code. ${left} attempt${left === 1 ? '' : 's'} left.`
-                 : 'Incorrect code. Request a new one.');
-    }
-
-    // Code is good — retire it so it cannot be replayed.
-    otp.consumed_at = new Date();
-    await otp.save();
 
     const isEmail = channel === 'email';
     const lookup = isEmail ? { email: identifier } : { phone: identifier };
