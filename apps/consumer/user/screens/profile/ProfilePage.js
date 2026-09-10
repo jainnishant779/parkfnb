@@ -109,14 +109,28 @@ const ProfilePage = ({ navigation }) => {
   const [showSuccess, setShowSuccess] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Load vehicles on mount
-  useEffect(() => {
+  const fetchVehicles = () => {
     if (!user?.id) return;
     setIsLoadingVehicles(true);
     vehicleService.getUserVehicles(user.id)
-      .then(res => setVehicles(res.vehicles || []))
+      .then(res => {
+        const list = (res.vehicles || []).map(v => ({
+          ...v,
+          id: v.id || v._id,
+          registrationNumber: v.registrationNumber || v.registration_number || v.license_plate || v.licensePlate,
+          vehicleType: v.vehicleType || v.vehicle_type,
+          vehicleYear: v.vehicleYear || v.vehicle_year,
+          isDefault: v.isDefault ?? v.is_default ?? false,
+        }));
+        setVehicles(list);
+      })
       .catch(() => setVehicles([]))
       .finally(() => setIsLoadingVehicles(false));
+  };
+
+  // Load vehicles on mount
+  useEffect(() => {
+    fetchVehicles();
   }, [user?.id]);
 
   // Load booking stats on mount
@@ -243,21 +257,27 @@ const ProfilePage = ({ navigation }) => {
     }
     setVehicleSaving(true);
     try {
+      const reg = registrationNumber.trim().toUpperCase();
       const payload = {
         make,
         model,
+        vehicle_type: vehicleTypeMap[type],
         vehicleType: vehicleTypeMap[type],
-        vehicleSize: vehicleSizeMap[type],
-        licensePlate: registrationNumber.trim().toUpperCase(),
+        vehicle_size: vehicleSizeMap[type] || 'medium',
+        vehicleSize: vehicleSizeMap[type] || 'medium',
+        license_plate: reg,
+        licensePlate: reg,
+        registration_number: reg,
+        registrationNumber: reg,
+        vehicle_year: vehicleForm.year ? parseInt(vehicleForm.year, 10) : undefined,
         vehicleYear: vehicleForm.year ? parseInt(vehicleForm.year, 10) : undefined,
       };
       if (editingVehicle) {
-        await vehicleService.updateVehicle(editingVehicle.id, payload);
+        await vehicleService.updateVehicle(editingVehicle.id || editingVehicle._id, payload);
       } else {
         await vehicleService.addVehicle(user.id, payload);
       }
-      const res = await vehicleService.getUserVehicles(user.id);
-      setVehicles(res.vehicles || []);
+      fetchVehicles();
       setShowVehicleModal(false);
       showSuccessMessage();
     } catch (err) {
@@ -280,7 +300,7 @@ const ProfilePage = ({ navigation }) => {
           onPress: async () => {
             try {
               await vehicleService.deleteVehicle(vehicleId);
-              setVehicles(prev => prev.filter(v => v.id !== vehicleId));
+              setVehicles(prev => prev.filter(v => (v.id || v._id) !== vehicleId));
             } catch {
               AppAlert.alert('Error', 'Could not remove vehicle.');
             }
@@ -294,9 +314,8 @@ const ProfilePage = ({ navigation }) => {
   const handleSetDefault = async () => {
     if (!editingVehicle) return;
     try {
-      await vehicleService.setDefaultVehicle(editingVehicle.id);
-      const res = await vehicleService.getUserVehicles(user.id);
-      setVehicles(res.vehicles || []);
+      await vehicleService.setDefaultVehicle(editingVehicle.id || editingVehicle._id);
+      fetchVehicles();
       setShowVehicleModal(false);
     } catch {
       AppAlert.alert('Error', 'Could not set default vehicle.');
@@ -876,6 +895,11 @@ const ProfilePage = ({ navigation }) => {
     showVehicleModal ? (
 
       <View style={styles.modalOverlay}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={() => setShowVehicleModal(false)}
+        />
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>

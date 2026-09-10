@@ -7,6 +7,44 @@ const UserVehicle = require('../models/UserVehicle');
 const { success, error } = require('../utils/responseHelper');
 const errorCodes = require('../utils/errorCodes');
 
+const formatVehicle = (v) => {
+  if (!v) return v;
+  const doc = v.toObject ? v.toObject() : v;
+  const id = doc._id?.toString() || doc.id;
+  const regNumber = doc.registration_number || doc.registrationNumber || doc.license_plate || doc.licensePlate || '';
+  const vType = doc.vehicle_type || doc.vehicleType || 'car';
+  const vSize = doc.vehicle_size || doc.vehicleSize || 'medium';
+  const vYear = doc.vehicle_year !== undefined ? doc.vehicle_year : doc.vehicleYear;
+  const isDef = doc.is_default !== undefined ? doc.is_default : (doc.isDefault !== undefined ? doc.isDefault : false);
+  const isElec = doc.is_electric !== undefined ? doc.is_electric : (doc.isElectric !== undefined ? doc.isElectric : false);
+  const vMake = doc.make || doc.vehicle_make || doc.vehicleMake || '';
+  const vModel = doc.model || doc.vehicle_model || doc.vehicleModel || '';
+
+  return {
+    ...doc,
+    id,
+    _id: id,
+    vehicle_type: vType,
+    vehicleType: vType,
+    vehicle_size: vSize,
+    vehicleSize: vSize,
+    registration_number: regNumber,
+    registrationNumber: regNumber,
+    license_plate: regNumber,
+    licensePlate: regNumber,
+    make: vMake,
+    vehicle_make: vMake,
+    model: vModel,
+    vehicle_model: vModel,
+    vehicle_year: vYear,
+    vehicleYear: vYear,
+    is_default: isDef,
+    isDefault: isDef,
+    is_electric: isElec,
+    isElectric: isElec,
+  };
+};
+
 /**
  * @desc    Get all vehicles for a user
  * @route   GET /api/users/:userId/vehicles
@@ -24,7 +62,7 @@ exports.getUserVehicles = async (req, res, next) => {
     const vehicles = await UserVehicle.find({ user_id: userId })
       .sort({ is_default: -1, created_at: -1 });
 
-    return success(res, { vehicles, total: vehicles.length }, null, 200);
+    return success(res, { vehicles: vehicles.map(formatVehicle), total: vehicles.length }, null, 200);
   } catch (err) {
     console.error('Get user vehicles error:', err);
     return error(res, errorCodes.SERVER_ERROR, 500, 'Error fetching vehicles');
@@ -51,7 +89,7 @@ exports.getVehicleById = async (req, res, next) => {
       return error(res, errorCodes.AUTH_FORBIDDEN, 403, 'Not authorized to view this vehicle');
     }
 
-    return success(res, { vehicle }, null, 200);
+    return success(res, { vehicle: formatVehicle(vehicle) }, null, 200);
   } catch (err) {
     console.error('Get vehicle by ID error:', err);
     return error(res, errorCodes.SERVER_ERROR, 500, 'Error fetching vehicle');
@@ -66,49 +104,51 @@ exports.getVehicleById = async (req, res, next) => {
 exports.addVehicle = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const {
-      vehicle_type,
-      vehicle_size,
-      registration_number,
-      license_plate,
-      make,
-      model,
-      vehicle_make,
-      vehicle_model,
-      vehicle_year,
-      is_electric,
-      is_default
-    } = req.body;
 
     // Authorization check: Only the user themselves can add vehicles
     if (req.user._id.toString() !== userId) {
       return error(res, errorCodes.AUTH_FORBIDDEN, 403, 'Not authorized to add vehicles for this user');
     }
 
-    // Validate vehicle_type
+    const vehicle_type = (req.body.vehicle_type || req.body.vehicleType || '').toLowerCase();
     const validVehicleTypes = ['car', 'suv', 'truck', 'van', 'motorcycle', 'bicycle', 'rv', 'trailer'];
     if (!validVehicleTypes.includes(vehicle_type)) {
       return error(res, errorCodes.BIZ_VALIDATION, 400, 'Invalid vehicle type');
     }
 
-    // Validate vehicle_size
+    const defaultSizeForType = {
+      motorcycle: 'small',
+      bicycle: 'small',
+      car: 'medium',
+      suv: 'large',
+      van: 'large',
+      truck: 'extra_large',
+      rv: 'extra_large',
+      trailer: 'extra_large',
+    };
+    const vehicle_size = req.body.vehicle_size || req.body.vehicleSize || defaultSizeForType[vehicle_type] || 'medium';
     const validVehicleSizes = ['small', 'medium', 'large', 'extra_large'];
-    if (!vehicle_size || !validVehicleSizes.includes(vehicle_size)) {
-      return error(res, errorCodes.BIZ_VALIDATION, 400, 'Invalid or missing vehicle size');
+    if (!validVehicleSizes.includes(vehicle_size)) {
+      return error(res, errorCodes.BIZ_VALIDATION, 400, 'Invalid vehicle size');
     }
+
+    const regNumber = (req.body.registration_number || req.body.registrationNumber || req.body.license_plate || req.body.licensePlate || '').trim();
+    if (!regNumber) {
+      return error(res, errorCodes.BIZ_VALIDATION, 400, 'Registration number or license plate is required');
+    }
+
+    const make = req.body.make || req.body.vehicle_make || req.body.vehicleMake || regNumber;
+    const model = req.body.model || req.body.vehicle_model || req.body.vehicleModel || vehicle_type;
+    const vehicle_year = req.body.vehicle_year !== undefined ? req.body.vehicle_year : req.body.vehicleYear;
+    const is_default = req.body.is_default !== undefined ? req.body.is_default : (req.body.isDefault !== undefined ? req.body.isDefault : false);
+    const is_electric = req.body.is_electric !== undefined ? req.body.is_electric : (req.body.isElectric !== undefined ? req.body.isElectric : false);
 
     // Validate year if provided
     if (vehicle_year) {
-      const year = parseInt(vehicle_year);
+      const year = parseInt(vehicle_year, 10);
       if (year < 1900 || year > 2100) {
         return error(res, errorCodes.BIZ_VALIDATION, 400, 'Invalid vehicle year. Must be between 1900 and 2100');
       }
-    }
-
-    // Use license_plate or registration_number (they're aliases)
-    const regNumber = registration_number || license_plate;
-    if (!regNumber) {
-      return error(res, errorCodes.BIZ_VALIDATION, 400, 'Registration number or license plate is required');
     }
 
     // If setting as default, unset other defaults
@@ -129,16 +169,16 @@ exports.addVehicle = async (req, res, next) => {
       vehicle_size,
       registration_number: regNumber.toUpperCase(),
       license_plate: regNumber.toUpperCase(),
-      make: vehicle_make || make,
-      model: vehicle_model || model,
-      vehicle_make: vehicle_make || make,
-      vehicle_model: vehicle_model || model,
+      make,
+      model,
+      vehicle_make: make,
+      vehicle_model: model,
       vehicle_year: vehicle_year || null,
       is_electric: is_electric || false,
       is_default: shouldBeDefault
     });
 
-    return success(res, { vehicle }, null, 201);
+    return success(res, { vehicle: formatVehicle(vehicle) }, null, 201);
   } catch (err) {
     console.error('Add vehicle error:', err);
     return error(res, errorCodes.SERVER_ERROR, 500, 'Error adding vehicle');
@@ -242,7 +282,7 @@ exports.updateVehicle = async (req, res, next) => {
 
     await vehicle.save();
 
-    return success(res, { vehicle }, null, 200);
+    return success(res, { vehicle: formatVehicle(vehicle) }, null, 200);
   } catch (err) {
     console.error('Update vehicle error:', err);
     return error(res, errorCodes.SERVER_ERROR, 500, 'Error updating vehicle');
@@ -314,7 +354,7 @@ exports.setDefaultVehicle = async (req, res, next) => {
 
     // If already default, no action needed
     if (vehicle.is_default) {
-      return success(res, { vehicle, message: 'Vehicle is already the default' }, null, 200);
+      return success(res, { vehicle: formatVehicle(vehicle), message: 'Vehicle is already the default' }, null, 200);
     }
 
     // Unset all other defaults for this user
@@ -327,7 +367,7 @@ exports.setDefaultVehicle = async (req, res, next) => {
     vehicle.is_default = true;
     await vehicle.save();
 
-    return success(res, { vehicle, message: 'Default vehicle updated' }, null, 200);
+    return success(res, { vehicle: formatVehicle(vehicle), message: 'Default vehicle updated' }, null, 200);
   } catch (err) {
     console.error('Set default vehicle error:', err);
     return error(res, errorCodes.SERVER_ERROR, 500, 'Error setting default vehicle');

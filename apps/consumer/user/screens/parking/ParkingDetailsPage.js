@@ -176,8 +176,17 @@ const ParkingDetailsPage = ({ navigation, route }) => {
   useEffect(() => {
     const userId = auth?.user?.id;
     if (!userId) return;
-    bookingService.getUserVehicles(userId)
-      .then((res) => setUserVehicles(res.vehicles || []))
+    vehicleService.getUserVehicles(userId)
+      .then((res) => {
+        const list = (res.vehicles || []).map((v) => ({
+          ...v,
+          id: v.id || v._id,
+          registrationNumber: v.registrationNumber || v.registration_number || v.license_plate || v.licensePlate,
+          vehicleType: v.vehicleType || v.vehicle_type,
+          isDefault: v.isDefault ?? v.is_default ?? false,
+        }));
+        setUserVehicles(list);
+      })
       .catch(() => setUserVehicles([]));
   }, [auth?.user?.id]);
 
@@ -496,7 +505,7 @@ const ParkingDetailsPage = ({ navigation, route }) => {
         spaceId,
         startTime,
         endTime,
-        vehicle.id,
+        vehicle.id || vehicle._id,
         selectedPaymentMethod,
       );
       setShowOnlineConfirmModal(false);
@@ -573,14 +582,27 @@ const ParkingDetailsPage = ({ navigation, route }) => {
     try {
       const reg = addVehicleReg.trim().toUpperCase();
       await vehicleService.addVehicle(userId, {
+        license_plate: reg,
         licensePlate: reg,
+        registration_number: reg,
+        registrationNumber: reg,
+        vehicle_type: addVehicleType,
         vehicleType: addVehicleType,
+        vehicle_size: 'medium',
+        vehicleSize: 'medium',
         make: reg,
         model: addVehicleType,
+        is_default: true,
         isDefault: true,
       });
       const res = await vehicleService.getUserVehicles(userId);
-      const vehicles = res.vehicles || [];
+      const vehicles = (res.vehicles || []).map((v) => ({
+        ...v,
+        id: v.id || v._id,
+        registrationNumber: v.registrationNumber || v.registration_number || v.license_plate || v.licensePlate,
+        vehicleType: v.vehicleType || v.vehicle_type,
+        isDefault: v.isDefault ?? v.is_default ?? false,
+      }));
       setUserVehicles(vehicles);
       setShowAddVehicleModal(false);
       const vehicle = vehicles.find((v) => v.isDefault) || vehicles[0];
@@ -1401,11 +1423,19 @@ const ParkingDetailsPage = ({ navigation, route }) => {
       {showAddVehicleModal ? (
 
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowAddVehicleModal(false)}
+          />
           <View style={styles.addVehicleModalContent}>
             <View style={styles.addVehicleHeader}>
               <Text style={styles.addVehicleTitle}>Add a Vehicle</Text>
-              <TouchableOpacity onPress={() => setShowAddVehicleModal(false)}>
-                <Icon name="x" size={24} color="#FFFFFF" />
+              <TouchableOpacity
+                onPress={() => setShowAddVehicleModal(false)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Icon name="x" size={24} color={palette.text} />
               </TouchableOpacity>
             </View>
             <Text style={styles.addVehicleSubtitle}>

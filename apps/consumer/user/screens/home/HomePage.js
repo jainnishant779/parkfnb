@@ -848,8 +848,18 @@ const HomePage = ({ navigation }) => {
       }
 
       // Filter by vehicle type
-      if (selectedCategory !== 'all' && spot.type !== selectedCategory) {
-        return false;
+      if (selectedCategory !== 'all') {
+        const types = spot.allowedVehicleTypes || [];
+        const matchesCategory =
+          (selectedCategory === 'car' && (types.length === 0 || types.includes('car') || types.includes('suv'))) ||
+          (selectedCategory === 'bike' && types.some(t => ['motorcycle', 'bicycle'].includes(t))) ||
+          (selectedCategory === 'bus' && types.includes('van')) ||
+          (selectedCategory === 'truck' && types.some(t => ['truck', 'rv', 'trailer'].includes(t))) ||
+          spot.type === selectedCategory;
+
+        if (!matchesCategory) {
+          return false;
+        }
       }
 
       // Filter by price range
