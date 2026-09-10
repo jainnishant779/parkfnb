@@ -25,7 +25,8 @@ export type HeaderIconName =
   | 'share'
   | 'help'
   | 'refresh'
-  | 'trash';
+  | 'trash'
+  | 'history';
 
 export interface HeaderActionProps {
   icon: HeaderIconName;
@@ -56,6 +57,7 @@ const ICON_MAP: Record<HeaderIconName, string> = {
   help: 'help-circle-outline',
   refresh: 'refresh',
   trash: 'trash-outline',
+  history: 'time-outline',
 };
 
 // Spring config for animations

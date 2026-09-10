@@ -9,6 +9,7 @@ import {
   Platform,
   Modal,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';

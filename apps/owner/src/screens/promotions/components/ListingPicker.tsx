@@ -149,7 +149,7 @@ function ListingPicker({
 
   // Filter listings by search
   // TODO: replace mockPromoListings with real listings fetched from API
-  const filteredListings = useMemo(() => {
+  const filteredListings = useMemo<PromoListing[]>(() => {
     return []; // mockPromoListings filtered by searchText
     // const source = mockPromoListings;
     // if (!searchText.trim()) return source;

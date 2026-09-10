@@ -205,7 +205,7 @@ export default function FleetManagementScreen() {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
 
   // TODO: replace MOCK_FLEET with fleet data fetched from API
-  const filteredFleet = useMemo(() => {
+  const filteredFleet = useMemo<FleetVehicle[]>(() => {
     // return MOCK_FLEET.filter(vehicle => {
     //   const matchesSearch = ...
     //   const matchesFilter = !filterStatus || vehicle.status === filterStatus;

@@ -263,8 +263,13 @@ const UserOnboarding = ({ navigation }) => {
     </View>
   );
 
-  const renderVehicleModal = () =>
-    vehicleModalVisible ? (
+  const renderVehicleModal = () => (
+    <Modal
+      visible={vehicleModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setVehicleModalVisible(false)}
+    >
       <View style={styles.modalOverlay}>
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
@@ -307,10 +312,16 @@ const UserOnboarding = ({ navigation }) => {
           />
         </View>
       </View>
-    ) : null;
+    </Modal>
+  );
 
-  const renderImagePickerModal = () =>
-    imageModalVisible ? (
+  const renderImagePickerModal = () => (
+    <Modal
+      visible={imageModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setImageModalVisible(false)}
+    >
       <View style={styles.modalOverlay}>
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
@@ -332,7 +343,8 @@ const UserOnboarding = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
-    ) : null;
+    </Modal>
+  );
 
   // ─── Main render ───────────────────────────────────────────────────────────
   return (

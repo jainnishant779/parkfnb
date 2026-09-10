@@ -619,7 +619,7 @@ export default function PayoutsScreen() {
       date: d.toISOString(),
       expectedAmount: liveEarnings?.earningsSummary.pendingEarnings ?? 0,
       status: 'scheduled' as const,
-      currentStep: 0 as const,
+      currentStep: 0 as number,
     };
   }, [liveEarnings]);
 
@@ -2062,5 +2062,32 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium as any,
+  },
+  circleTopRight: {
+    position: 'absolute',
+    top: -30,
+    right: -30,
+    width: 130,
+    height: 130,
+    borderRadius: 70,
+    backgroundColor: '#EBF4FF',
+  },
+  circleTopRightInner: {
+    position: 'absolute',
+    top: 50,
+    right: 70,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1E6FE8',
+  },
+  circleBottomLeft: {
+    position: 'absolute',
+    bottom: -60,
+    left: -60,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: '#EBF4FF',
   },
 });

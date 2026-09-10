@@ -20,6 +20,7 @@ import {
   UIManager,
   Keyboard,
   Linking,
+  DimensionValue,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -845,7 +846,7 @@ interface BottomSheetModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  maxHeight?: string | number;
+  maxHeight?: DimensionValue;
 }
 
 const BottomSheetModal: React.FC<BottomSheetModalProps> = ({

@@ -12,7 +12,21 @@ import { API_BASE_URL } from '../config/api';
  */
 export function resolveImageUri(uri: string | undefined | null): string {
   if (!uri || typeof uri !== 'string') return '';
-  const trimmed = uri.trim();
+  let trimmed = uri.trim();
+
+  // Rewrite legacy local dev URLs (localhost / 127.0.0.1 / 10.0.2.2) to current API_BASE_URL
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?(\/.*)$/i.test(trimmed)) {
+    const match = trimmed.match(/^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?(\/.*)$/i);
+    if (match && match[3]) {
+      return `${API_BASE_URL}${match[3]}`;
+    }
+  }
+
+  // Upgrade insecure http to https for Render to satisfy Android Cleartext traffic restrictions
+  if (trimmed.startsWith('http://parkfnb.onrender.com')) {
+    trimmed = trimmed.replace('http://', 'https://');
+  }
+
   if (
     trimmed.startsWith('http://') ||
     trimmed.startsWith('https://') ||

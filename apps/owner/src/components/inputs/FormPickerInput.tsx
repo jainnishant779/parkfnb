@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
+  TouchableOpacity,
   Platform,
   ViewStyle,
   TextInput,
@@ -119,7 +120,7 @@ export default function FormPickerInput({
       </View>
 
       {/* Picker Trigger Button */}
-      <Pressable
+      <TouchableOpacity
         style={[
           styles.pickerButton,
           {
@@ -132,6 +133,7 @@ export default function FormPickerInput({
         ]}
         onPress={handleToggle}
         disabled={disabled}
+        activeOpacity={0.7}
         accessibilityRole="combobox"
         accessibilityLabel={`${label}${required ? ', required' : ''}`}
         accessibilityHint={`Current value: ${displayValue || 'None selected'}. Tap to select.`}
@@ -152,7 +154,7 @@ export default function FormPickerInput({
           size={20}
           color={disabled ? pickerTheme.textDisabled : (isOpen ? pickerTheme.borderFocused : pickerTheme.text)}
         />
-      </Pressable>
+      </TouchableOpacity>
 
       {/* Inline Dropdown Options */}
       {isOpen && (
@@ -196,7 +198,7 @@ export default function FormPickerInput({
               filteredOptions.map((item, index) => {
                 const isSelected = item.value === value;
                 return (
-                  <Pressable
+                  <TouchableOpacity
                     key={item.value}
                     style={[
                       styles.option,
@@ -204,6 +206,7 @@ export default function FormPickerInput({
                       index < filteredOptions.length - 1 && styles.optionBorder,
                     ]}
                     onPress={() => handleSelect(item.value)}
+                    activeOpacity={0.7}
                     accessibilityRole="menuitem"
                     accessibilityState={{ selected: isSelected }}
                   >
@@ -222,7 +225,7 @@ export default function FormPickerInput({
                         color={pickerTheme.optionSelectedText}
                       />
                     )}
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })
             )}
@@ -360,7 +363,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   dropdownScroll: {
-    flexGrow: 0,
+    maxHeight: 220,
   },
   option: {
     flexDirection: 'row',

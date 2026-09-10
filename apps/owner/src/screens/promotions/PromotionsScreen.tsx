@@ -23,7 +23,7 @@ import { spacing, borderRadius } from '../../theme/spacing';
 import { fontSize, fontWeight } from '../../theme/typography';
 import AppHeader from '../../components/headers/AppHeader';
 import SegmentedControl from '../../components/dashboard/SegmentedControl';
-import type { Promo, PromoStatus, PromoSortOption, PromoTabCounts } from '../../types/promo';
+import type { Promo, PromoStatus, PromoSortOption, PromoTabCounts, PromoListing } from '../../types/promo';
 import {
   loadAllPromosData,
   filterAndSortPromos,
@@ -343,7 +343,7 @@ export default function PromotionsScreen() {
   }, []);
 
   // Get listings for viewing sheet
-  const viewingListings = useMemo(() => {
+  const viewingListings = useMemo<PromoListing[]>(() => {
     if (!viewingPromoListings) return [];
     // TODO: replace with real listings from API
     // if (viewingPromoListings.applyToAllListings) return mockPromoListings;

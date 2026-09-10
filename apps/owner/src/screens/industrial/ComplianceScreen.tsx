@@ -880,7 +880,7 @@ export default function ComplianceScreen() {
         subtitle="Track driver, permit, and insurance requirements."
         rightActions={[
           {
-            icon: 'time-outline',
+            icon: 'history',
             label: 'History',
             onPress: () => setShowHistoryModal(true),
           },
