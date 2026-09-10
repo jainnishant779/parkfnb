@@ -27,6 +27,7 @@ import { spacing, borderRadius } from '../../theme/spacing';
 import { fontSize, fontWeight } from '../../theme/typography';
 import { strings } from '../../constants/strings';
 import { pickAndUploadImage, handleMediaUploadError, type PickSource } from '../../utils/mediaUpload';
+import { resolveImageUri } from '../../utils/imageUri';
 import {
   indianStates,
   languages,
@@ -536,7 +537,7 @@ export default function ProfileSetupScreen({
                 <View style={styles.avatarContainer}>
                   {formData.profilePhotoUri ? (
                     <Image
-                      source={{ uri: formData.profilePhotoUri }}
+                      source={{ uri: resolveImageUri(formData.profilePhotoUri) }}
                       style={styles.avatarImage}
                     />
                   ) : (

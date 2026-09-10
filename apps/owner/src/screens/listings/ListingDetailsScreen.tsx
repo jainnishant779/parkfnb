@@ -14,6 +14,24 @@ import { resolveImageUri, isPlaceholderUrl } from '../../utils/imageUri';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function SpacePhoto({ uri }: { uri: string }) {
+  const [failed, setFailed] = useState(false);
+  if (isPlaceholderUrl(uri) || failed) {
+    return (
+      <View style={styles.photoPlaceholder}>
+        <Ionicons name="image-outline" size={40} color="#9CA3AF" />
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri: resolveImageUri(uri) }}
+      style={styles.photoImg}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export default function ListingDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -134,13 +152,7 @@ export default function ListingDetailsScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow}>
             {space.spaceImages.map((uri, i) => (
               <View key={i} style={styles.photo}>
-                {isPlaceholderUrl(uri) ? (
-                  <View style={styles.photoPlaceholder}>
-                    <Ionicons name="image-outline" size={40} color="#9CA3AF" />
-                  </View>
-                ) : (
-                  <Image source={{ uri: resolveImageUri(uri) }} style={styles.photoImg} />
-                )}
+                <SpacePhoto uri={uri} />
               </View>
             ))}
           </ScrollView>

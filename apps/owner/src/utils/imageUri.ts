@@ -11,10 +11,21 @@ import { API_BASE_URL } from '../config/api';
  * - anything else → as-is
  */
 export function resolveImageUri(uri: string | undefined | null): string {
-  if (!uri) return '';
-  if (uri.startsWith('http://') || uri.startsWith('https://')) return uri;
-  if (uri.startsWith('/uploads/')) return `${API_BASE_URL}${uri}`;
-  return uri;
+  if (!uri || typeof uri !== 'string') return '';
+  const trimmed = uri.trim();
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('file://') ||
+    trimmed.startsWith('content://') ||
+    trimmed.startsWith('data:')
+  ) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/uploads/')) return `${API_BASE_URL}${trimmed}`;
+  if (trimmed.startsWith('uploads/')) return `${API_BASE_URL}/${trimmed}`;
+  if (trimmed.startsWith('/')) return `${API_BASE_URL}${trimmed}`;
+  return trimmed;
 }
 
 /** Is this a sample/mock URI that should render as a placeholder? */

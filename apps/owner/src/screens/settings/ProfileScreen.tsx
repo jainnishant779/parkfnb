@@ -34,6 +34,7 @@ import { pickAndUploadImage, handleMediaUploadError, type PickSource } from '../
 import FormPickerInput from '../../components/inputs/FormPickerInput';
 import { indianStates } from '../../constants/mockData';
 import { useAuth } from '../../context/AuthContext';
+import { resolveImageUri } from '../../utils/imageUri';
 
 // Storage keys
 const PROFILE_DATA_KEY = 'owners:profile_data';
@@ -700,7 +701,7 @@ export default function ProfileScreen() {
               <Pressable onPress={handleEditProfileImage} style={styles.profileImageWrapper}>
                 {profile.profileImage ? (
                   <Image
-                    source={{ uri: profile.profileImage }}
+                    source={{ uri: resolveImageUri(profile.profileImage) }}
                     style={styles.profileImage}
                   />
                 ) : (

@@ -25,6 +25,7 @@ import { useAuth } from '../../context/AuthContext';
 import * as bookingService from '../../services/bookingService';
 import { palette, radii, spacing, fontStacks } from '../../theme';
 import { VehicleIcon } from '../../components/glass/VehicleIcons';
+import { resolveImageUri } from '../../utils/imageUri';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -84,11 +85,16 @@ const getSpaceProperty = (booking) => {
 const getSpaceImage = (booking) => {
   const s = booking?.spaceId;
   const prop = getSpaceProperty(booking);
-  const candidates = [s?.spaceImages, prop?.propertyImages];
+  const candidates = [
+    s?.spaceImages,
+    s?.space_images,
+    prop?.propertyImages,
+    prop?.property_images,
+  ];
   for (const arr of candidates) {
     if (Array.isArray(arr)) {
-      const hit = arr.find((u) => typeof u === 'string' && u.length > 0);
-      if (hit) return hit;
+      const hit = arr.find((u) => typeof u === 'string' && u.trim().length > 0);
+      if (hit) return resolveImageUri(hit);
     }
   }
   return null;
@@ -902,7 +908,7 @@ const BookingManagementPage = ({ navigation }) => {
                   <View style={styles.infoCard}>
                     <View style={styles.parkingRow}>
                       {image ? (
-                        <Image source={{ uri: image }} style={styles.parkingThumb} resizeMode="cover" />
+                        <Image source={{ uri: resolveImageUri(image) }} style={styles.parkingThumb} resizeMode="cover" />
                       ) : (
                         <View style={[styles.parkingThumb, styles.parkingThumbEmpty]}>
                           <MaterialIcon name="parking" size={30} color={palette.primary} />

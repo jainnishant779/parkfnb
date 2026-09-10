@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   Switch,
+  Image,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -15,6 +16,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
 import { spacing, borderRadius } from '../../theme/spacing';
 import { fontSize, fontWeight } from '../../theme/typography';
+import { resolveImageUri } from '../../utils/imageUri';
 
 export interface ListingRowProps {
   id: string;
@@ -86,12 +88,20 @@ function ListingRow({
         ]}
       >
         {/* Thumbnail */}
-        <View style={[styles.thumbnail, { backgroundColor: theme.borderLight }]}>
-          <Ionicons
-            name="car-outline"
-            size={24}
-            color={theme.textMuted}
-          />
+        <View style={[styles.thumbnail, { backgroundColor: theme.borderLight, overflow: 'hidden' }]}>
+          {photoUri ? (
+            <Image
+              source={{ uri: resolveImageUri(photoUri) }}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+            />
+          ) : (
+            <Ionicons
+              name="car-outline"
+              size={24}
+              color={theme.textMuted}
+            />
+          )}
         </View>
 
         {/* Content */}

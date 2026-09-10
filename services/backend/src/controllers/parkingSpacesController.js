@@ -59,7 +59,7 @@ exports.getAllSpaces = async (req, res, next) => {
 
     // Get spaces with populated property for location filtering
     let query = ParkingSpace.find(filter)
-      .populate('property_id', 'property_name address city state location_lat location_lng')
+      .populate('property_id', 'property_name address city state postal_code location_lat location_lng property_images')
       .populate('owner_id', 'business_name user_id')
       .sort({ created_at: -1 })
       .skip((validPage - 1) * validLimit)
@@ -142,7 +142,8 @@ exports.getSpacesByProperty = async (req, res, next) => {
         property_name: property.property_name,
         address: property.address,
         city: property.city,
-        state: property.state
+        state: property.state,
+        property_images: property.property_images || []
       },
       spaces
     });
@@ -432,7 +433,7 @@ exports.searchSpaces = async (req, res, next) => {
 
     // Get all matching spaces with property data
     let spaces = await ParkingSpace.find(filter)
-      .populate('property_id', 'property_name address city state postal_code location_lat location_lng')
+      .populate('property_id', 'property_name address city state postal_code location_lat location_lng property_images')
       .populate('owner_id', 'business_name average_rating');
 
     // Location-based filtering

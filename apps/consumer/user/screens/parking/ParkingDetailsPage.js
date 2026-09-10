@@ -22,6 +22,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import MapView, { Marker } from 'react-native-maps';
 import { palette, radii, fontStacks, shadow } from '../../theme';
+import { resolveImageUri } from '../../utils/imageUri';
 
 const { width } = Dimensions.get('window');
 
@@ -228,12 +229,17 @@ const ParkingDetailsPage = ({ navigation, route }) => {
   const resolvedImages = useMemo(() => {
     const candidates = [
       selectedSpace?.spaceImages,
+      selectedSpace?.space_images,
       parkingData?.spaceImages,
+      parkingData?.space_images,
       parkingData?.propertyImages,
+      parkingData?.property_images,
       parkingData?.images,
     ];
     const hit = candidates.find((arr) => Array.isArray(arr) && arr.length > 0);
-    return (hit || []).filter((u) => typeof u === 'string' && u.length > 0);
+    return (hit || [])
+      .filter((u) => typeof u === 'string' && u.trim().length > 0)
+      .map(resolveImageUri);
   }, [selectedSpace, parkingData]);
 
   // Stable identity key for the image list, so `parking` below only changes
@@ -778,7 +784,7 @@ const ParkingDetailsPage = ({ navigation, route }) => {
                   ]}
                   onPress={() => setSelectedImageIndex(index)}
                 >
-                  <Image source={{ uri }} style={styles.thumbnailImage} resizeMode="cover" />
+                  <Image source={{ uri: resolveImageUri(uri) }} style={styles.thumbnailImage} resizeMode="cover" />
                 </TouchableOpacity>
               ))}
             </ScrollView>

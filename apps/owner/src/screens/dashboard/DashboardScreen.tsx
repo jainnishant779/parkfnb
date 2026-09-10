@@ -31,6 +31,7 @@ import {
 import { getTheme } from '../../theme/colors';
 import { spacing, borderRadius } from '../../theme/spacing';
 import { fontSize, fontWeight } from '../../theme/typography';
+import { resolveImageUri } from '../../utils/imageUri';
 import {
   formatCurrency,
   formatCurrencyCompact,
@@ -135,7 +136,7 @@ function transformApiPropertyToListing(p: ApiProperty): DashboardListing {
     location:     `${p.city}${p.state ? ', ' + p.state : ''}`,
     capacity:     p.totalSpaces ?? 1,
     isLive:       p.isActive,
-    photoUri:     p.propertyImages?.[0],
+    photoUri:     resolveImageUri(p.propertyImages?.[0]),
     pricePerHour: 0, // price lives on spaces, not property
   };
 }

@@ -22,6 +22,7 @@ import * as vehicleService from '../../services/vehicleService';
 import * as userService from '../../services/userService';
 import * as bookingService from '../../services/bookingService';
 import { palette, fontStacks } from '../../theme';
+import { resolveImageUri } from '../../utils/imageUri';
 
 // Payment methods — stays mock (no backend support)
 const initialPaymentMethods = [
@@ -386,7 +387,7 @@ const ProfilePage = ({ navigation }) => {
         <View style={styles.heroAvatarWrap}>
           <View style={styles.heroAvatar}>
             {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.heroAvatarImage} />
+              <Image source={{ uri: resolveImageUri(avatarUri) }} style={styles.heroAvatarImage} />
             ) : (
               <Text style={styles.heroAvatarInitials}>{initials}</Text>
             )}

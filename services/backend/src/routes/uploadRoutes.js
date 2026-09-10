@@ -80,10 +80,16 @@ router.post('/', protect, (req, res) => {
         'No file was uploaded (send it as the "file" field)');
     }
 
-    const url = `/uploads/${req.file.filename}`;
+    const filename = req.file.filename;
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.get('host') || 'parkfnb.onrender.com';
+    const fullUrl = `${protocol}://${host}/uploads/${filename}`;
+    const url = `/uploads/${filename}`;
+
     return success(res, {
       url,
-      public_id: req.file.filename,
+      full_url: fullUrl,
+      public_id: filename,
       format: path.extname(req.file.filename).replace('.', ''),
       // Dimensions would need an image library; the apps only read them for
       // display hints and tolerate zero.

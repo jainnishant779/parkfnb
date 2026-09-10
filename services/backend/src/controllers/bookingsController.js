@@ -223,10 +223,10 @@ exports.getBookingById = async (req, res, next) => {
       .populate('owner_id', 'user_id business_name')
       .populate({
         path: 'space_id',
-        select: 'space_number space_type property_id hourly_rate daily_rate',
+        select: 'space_number space_type property_id hourly_rate daily_rate space_images',
         // Without this the apps get a bare ObjectId and show
         // "Unknown Property" on the booking detail screen.
-        populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
+        populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
       .populate('vehicle_id', 'vehicle_make vehicle_model vehicle_year license_plate');
 
@@ -276,8 +276,8 @@ exports.getUserBookings = async (req, res, next) => {
     const bookings = await Booking.find(filter)
       .populate({
         path: 'space_id',
-        select: 'space_number space_type hourly_rate property_id',
-        populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
+        select: 'space_number space_type hourly_rate property_id space_images',
+        populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
       .populate('vehicle_id', 'vehicle_make vehicle_model license_plate')
       .sort({ created_at: -1 })
@@ -319,8 +319,8 @@ exports.getOwnerBookings = async (req, res, next) => {
       .populate('user_id', 'email first_name last_name phone')
       .populate({
         path: 'space_id',
-        select: 'space_number space_type property_id',
-        populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
+        select: 'space_number space_type property_id space_images',
+        populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
       .populate('vehicle_id', 'vehicle_make vehicle_model license_plate')
       .sort({ created_at: -1 })
@@ -481,7 +481,11 @@ exports.createBooking = async (req, res, next) => {
     const populatedBooking = await Booking.findById(booking._id)
       .populate('user_id', 'email first_name last_name phone')
       .populate('owner_id', 'business_name')
-      .populate('space_id', 'space_number space_type hourly_rate daily_rate monthly_rate')
+      .populate({
+        path: 'space_id',
+        select: 'space_number space_type hourly_rate daily_rate monthly_rate space_images property_id',
+        populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
+      })
       .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
 
     return success(res, { booking: populatedBooking }, null, 201);
@@ -582,7 +586,11 @@ exports.updateBooking = async (req, res, next) => {
     const updatedBooking = await Booking.findById(id)
       .populate('user_id', 'email first_name last_name phone')
       .populate('owner_id', 'business_name')
-      .populate('space_id', 'space_number space_type hourly_rate daily_rate monthly_rate')
+      .populate({
+        path: 'space_id',
+        select: 'space_number space_type hourly_rate daily_rate monthly_rate space_images property_id',
+        populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
+      })
       .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
 
     return success(res, { booking: updatedBooking });
@@ -1072,7 +1080,11 @@ exports.extendBooking = async (req, res, next) => {
     const extendedBooking = await Booking.findById(id)
       .populate('user_id', 'email first_name last_name phone')
       .populate('owner_id', 'business_name')
-      .populate('space_id', 'space_number space_type hourly_rate daily_rate monthly_rate')
+      .populate({
+        path: 'space_id',
+        select: 'space_number space_type hourly_rate daily_rate monthly_rate space_images property_id',
+        populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
+      })
       .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
 
     return success(res, {

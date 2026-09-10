@@ -24,6 +24,7 @@ import { useAuth } from '../../context/AuthContext';
 import * as userService from '../../services/userService';
 import * as api from '../../services/api';
 import { palette } from '../../theme';
+import { resolveImageUri } from '../../utils/imageUri';
 
 const DRAFT_KEY = STORAGE_KEYS.ONBOARDING_DRAFT;
 const AUTOSAVE_DELAY = 800; // ms
@@ -357,7 +358,7 @@ const UserOnboarding = ({ navigation }) => {
         <View style={styles.profileSection}>
           <TouchableOpacity style={styles.profileImageContainer} onPress={() => setImageModalVisible(true)}>
             {profileImage ? (
-              <Image source={{ uri: profileImage }} style={styles.profileImage} />
+              <Image source={{ uri: resolveImageUri(profileImage) }} style={styles.profileImage} />
             ) : (
               <View style={styles.profilePlaceholder}>
                 <Icon name="user" size={40} color="#9CA3AF" />

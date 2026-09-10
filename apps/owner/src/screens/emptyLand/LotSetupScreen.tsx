@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Image as RNImage } from 'react-native';
+import { resolveImageUri } from '../../utils/imageUri';
 import { pickAndUploadImage, handleMediaUploadError } from '../../utils/mediaUpload';
 import MediaPickerSheet from '../../components/common/MediaPickerSheet';
 import { DateField, TimeField } from '../../components/inputs/DateField';
@@ -1091,7 +1092,7 @@ function InspectionModal({ visible, onClose, onSave }: InspectionModalProps) {
         disabled={uploading}
       >
         {photoUrl ? (
-          <RNImage source={{ uri: photoUrl }} style={{ width: '100%', height: 140, borderRadius: 8 }} />
+          <RNImage source={{ uri: resolveImageUri(photoUrl) }} style={{ width: '100%', height: 140, borderRadius: 8 }} />
         ) : (
           <>
             <Ionicons name="camera-outline" size={32} color={theme.textMuted} />

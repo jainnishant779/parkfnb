@@ -23,6 +23,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as parkingService from '../../services/parkingService';
 import { palette, fontStacks, radii, spacing } from '../../theme';
 import { VehicleIcon } from '../../components/glass/VehicleIcons';
+import { resolveImageUri } from '../../utils/imageUri';
 
 const { height } = Dimensions.get('window');
 
@@ -78,9 +79,9 @@ const mapSpaceToResult = (space, userLat, userLng) => {
   if (space.spaceType === 'outdoor' || space.spaceType === 'street') amenities.push('Open Air');
 
   const images = [
-    ...(Array.isArray(prop.propertyImages) ? prop.propertyImages : []),
-    ...(Array.isArray(space.spaceImages) ? space.spaceImages : []),
-  ].filter(u => typeof u === 'string' && u.length > 0);
+    ...(Array.isArray(prop.propertyImages) ? prop.propertyImages : (Array.isArray(prop.property_images) ? prop.property_images : [])),
+    ...(Array.isArray(space.spaceImages) ? space.spaceImages : (Array.isArray(space.space_images) ? space.space_images : [])),
+  ].filter(u => typeof u === 'string' && u.trim().length > 0).map(resolveImageUri);
 
   const totalSpots = space.totalSpots || 1;
   const available = Math.max(0, totalSpots - (space.activeBookingCount || 0));
@@ -711,7 +712,7 @@ const SearchPage = ({ navigation, route }) => {
       >
         <View style={styles.resultThumbWrap}>
           {item.images.length > 0 ? (
-            <Image source={{ uri: item.images[0] }} style={styles.resultThumb} />
+            <Image source={{ uri: resolveImageUri(item.images[0]) }} style={styles.resultThumb} />
           ) : (
             <View style={[styles.resultThumb, styles.resultThumbEmpty]}>
               <Icon name="image" size={22} color={palette.textSubtle} />

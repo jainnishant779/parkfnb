@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Pressable, RefreshControl,
-  ActivityIndicator, Modal, StatusBar,
+  ActivityIndicator, Modal, StatusBar, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';
@@ -11,6 +11,7 @@ import { listingService } from '../../services/listingService';
 import { ApiRequestError } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import type { ApiProperty } from '../../types/api';
+import { resolveImageUri } from '../../utils/imageUri';
 
 export default function MyListingsScreen() {
   const navigation = useNavigation<any>();
@@ -101,8 +102,16 @@ export default function MyListingsScreen() {
         onPress={() => navigation.navigate('PropertySpaces', { propertyId: item.id })}
       >
         <View style={styles.cardHeader}>
-          <View style={styles.thumb}>
-            <Ionicons name="business-outline" size={24} color="#0D7377" />
+          <View style={[styles.thumb, { overflow: 'hidden' }]}>
+            {item.propertyImages && item.propertyImages.length > 0 ? (
+              <Image
+                source={{ uri: resolveImageUri(item.propertyImages[0]) }}
+                style={StyleSheet.absoluteFillObject}
+                resizeMode="cover"
+              />
+            ) : (
+              <Ionicons name="business-outline" size={24} color="#0D7377" />
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.title} numberOfLines={1}>{item.propertyName}</Text>

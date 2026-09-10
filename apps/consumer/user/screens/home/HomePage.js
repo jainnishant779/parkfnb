@@ -37,6 +37,7 @@ import * as parkingService from '../../services/parkingService';
 import { useAuth } from '../../context/AuthContext';
 import { palette, radii, fontStacks } from '../../theme';
 import { VehicleIcon, ParkingPinIcon } from '../../components/glass/VehicleIcons';
+import { resolveImageUri } from '../../utils/imageUri';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -138,7 +139,9 @@ const groupSpacesByProperty = (spaces, userLat, userLng) => {
         longitude: lng,
         distance: distText,
         distanceKm: distKm ?? 999,
-        propertyImages: Array.isArray(prop.propertyImages) ? prop.propertyImages : [],
+        propertyImages: (Array.isArray(prop.propertyImages) ? prop.propertyImages : (Array.isArray(prop.property_images) ? prop.property_images : []))
+          .filter(u => typeof u === 'string' && u.trim().length > 0)
+          .map(resolveImageUri),
         spaces: [],
       };
     }
@@ -178,9 +181,10 @@ const groupSpacesByProperty = (spaces, userLat, userLng) => {
 
     // Aggregate every space image so the home modal and details page have a
     // gallery to render even when the property itself has no top-level images.
-    const spaceImages = groupSpaces.flatMap(s =>
-      Array.isArray(s.spaceImages) ? s.spaceImages : []
-    );
+    const spaceImages = groupSpaces.flatMap(s => {
+      const list = Array.isArray(s.spaceImages) ? s.spaceImages : (Array.isArray(s.space_images) ? s.space_images : []);
+      return list.filter(u => typeof u === 'string' && u.trim().length > 0).map(resolveImageUri);
+    });
 
     return {
       ...group,
@@ -200,9 +204,7 @@ const groupSpacesByProperty = (spaces, userLat, userLng) => {
       duration,
       // Combine property and space images for previews (modal + details page).
       spaceImages,
-      images: [...(group.propertyImages || []), ...spaceImages].filter(
-        u => typeof u === 'string' && u.length > 0,
-      ),
+      images: [...(group.propertyImages || []), ...spaceImages],
       // Pass all spaces so ParkingDetailsPage can show the space selector
       spaces: groupSpaces,
     };
@@ -924,7 +926,7 @@ const HomePage = ({ navigation }) => {
       >
         <View style={styles.recommendationImageLeft}>
           {thumbnail ? (
-            <Image source={{ uri: thumbnail }} style={styles.recommendationThumbnail} />
+            <Image source={{ uri: resolveImageUri(thumbnail) }} style={styles.recommendationThumbnail} />
           ) : (
             <ParkingPinIcon size={28} color={palette.primary} />
           )}
@@ -1680,7 +1682,7 @@ const HomePage = ({ navigation }) => {
                     {Array.isArray(selectedParkingData.images) && selectedParkingData.images.length > 0 ? (
                       selectedParkingData.images.length === 1 ? (
                         <Image
-                          source={{ uri: selectedParkingData.images[0] }}
+                          source={{ uri: resolveImageUri(selectedParkingData.images[0]) }}
                           style={styles.parkingImage}
                           resizeMode="cover"
                         />
@@ -1694,7 +1696,7 @@ const HomePage = ({ navigation }) => {
                           {selectedParkingData.images.map((uri, idx) => (
                             <Image
                               key={`${uri}-${idx}`}
-                              source={{ uri }}
+                              source={{ uri: resolveImageUri(uri) }}
                               style={styles.parkingImage}
                               resizeMode="cover"
                             />

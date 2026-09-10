@@ -30,7 +30,9 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
 // The admin panel runs both locally and deployed, and both need to reach the
 // API from a browser. A single origin would mean choosing one; FRONTEND_URL
 // takes a comma-separated list so the deployed panel can be added without
@@ -153,7 +155,11 @@ app.get('/health', (req, res) => {
 
 // Uploaded KYC documents and listing photos. Both apps store the URL this
 // serves and render it directly, so the folder has to be reachable.
-app.use('/uploads', express.static(require('path').join(__dirname, '../uploads')));
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(require('path').join(__dirname, '../uploads')));
 
 // API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
