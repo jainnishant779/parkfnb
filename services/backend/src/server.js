@@ -182,6 +182,8 @@ app.use('/api/support-tickets', require('./routes/supportTicketRoutes'));
 app.use('/api/admins', require('./routes/adminRoutes'));
 app.use('/api/settings', require('./routes/platformSettingRoutes'));
 app.use('/api/uploads', require('./routes/uploadRoutes'));
+app.use('/api/v1/ota', require('./routes/otaRoutes'));
+app.use('/api/ota', require('./routes/otaRoutes'));
 
 // 404 handler - must be after all routes
 app.use((req, res) => {

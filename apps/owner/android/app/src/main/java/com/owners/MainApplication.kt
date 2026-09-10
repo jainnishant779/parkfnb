@@ -9,16 +9,29 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
 
+import com.owners.ota.OtaPackage
+import java.io.File
+
 class MainApplication : Application(), ReactApplication {
+
+  private val otaBundlePath: String?
+    get() {
+      val bundleFile = File(filesDir, "ota/index.android.bundle")
+      return if (bundleFile.exists() && bundleFile.length() > 0) {
+        bundleFile.absolutePath
+      } else {
+        null
+      }
+    }
 
   override val reactHost: ReactHost by lazy {
     getDefaultReactHost(
       context = applicationContext,
       packageList =
         PackageList(this).packages.apply {
-          // Packages that cannot be autolinked yet can be added manually here, for example:
-          // add(MyReactNativePackage())
+          add(OtaPackage())
         },
+      jsBundleFilePath = otaBundlePath,
     )
   }
 

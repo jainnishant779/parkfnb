@@ -139,6 +139,8 @@ function RootNavigator() {
   );
 }
 
+import { OtaUpdateBanner } from './user/components/OtaUpdateBanner';
+
 function App() {
   return (
     <SafeAreaProvider style={{ backgroundColor: palette.bg }}>
@@ -146,6 +148,7 @@ function App() {
         <AuthProvider>
           <NavigationContainer theme={navigationTheme}>
             <RootNavigator />
+            <OtaUpdateBanner />
           </NavigationContainer>
         </AuthProvider>
       </AppAlertProvider>

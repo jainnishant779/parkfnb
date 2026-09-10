@@ -7,7 +7,8 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "ota:publish": "node ../../scripts/publish-ota.js --app owner"
   },
   "dependencies": {
     "@msg91comm/sendotp-react-native": "^2.1.0",

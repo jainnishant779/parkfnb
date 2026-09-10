@@ -1,0 +1,10 @@
+{
+  "name": "parkbnb-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "ota:publish": "node scripts/publish-ota.js",
+    "ota:consumer": "node scripts/publish-ota.js --app consumer",
+    "ota:owner": "node scripts/publish-ota.js --app owner"
+  }
+}

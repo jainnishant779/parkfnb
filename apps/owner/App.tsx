@@ -7,17 +7,14 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { initializeMsg91 } from './src/services/msg91Service';
 import { AppAlertProvider } from './src/components/common/AppAlert';
 
+import { OtaUpdateBanner } from './src/components/common/OtaUpdateBanner';
+
 // Initialize the MSG91 OTP SDK at module load (before first render).
 // Idempotent — safe even though msg91Service guards calls with the same init.
 initializeMsg91();
 
 export default function App() {
   return (
-    // SafeAreaProvider must wrap everything that consumes safe-area
-    // insets (status bar, notch, home indicator). Without it,
-    // `useSafeAreaInsets()` and `<SafeAreaView edges={...}>` from
-    // react-native-safe-area-context fall back to zero insets, which
-    // is why screens were rendering under the status bar.
     <SafeAreaProvider>
       <AppAlertProvider>
         <AuthProvider>
@@ -28,6 +25,7 @@ export default function App() {
             }
           >
             <RootNavigator />
+            <OtaUpdateBanner />
           </NavigationContainer>
         </AuthProvider>
       </AppAlertProvider>
