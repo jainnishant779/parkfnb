@@ -6,4 +6,11 @@
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     </style>
 
+    <!-- UCrop Inset Fix: Prevents Toolbar (Cross & Tick buttons) from hiding under status bar/notch -->
+    <style name="UCropCustomTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:fitsSystemWindows">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">#0D7377</item>
+    </style>
+
 </resources>

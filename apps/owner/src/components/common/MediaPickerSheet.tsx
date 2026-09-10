@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import type { PickSource } from '../../utils/mediaUpload';
 
@@ -20,10 +21,15 @@ export default function MediaPickerSheet({
   showRemove,
   onRemove,
 }: Props) {
+  const insets = useSafeAreaInsets();
+
   return visible ? (
 
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={[styles.sheet, { paddingBottom: Math.max(28, insets.bottom + 16) }]}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View style={styles.handle} />
           <Text style={styles.title}>{title}</Text>
 

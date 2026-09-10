@@ -94,9 +94,12 @@ async function pickAndCrop(options: PickAndUploadOptions): Promise<CroppedImage>
     includeBase64: false,
     cropperToolbarTitle: 'Crop image',
     cropperActiveWidgetColor: '#0D7377',
-    cropperStatusBarColor: '#0D7377',
-    cropperToolbarColor: '#FFFFFF',
-    cropperToolbarWidgetColor: '#1F2937',
+    cropperStatusBarColor: '#0A5C5F',
+    cropperToolbarColor: '#0D7377',
+    cropperToolbarWidgetColor: '#FFFFFF',
+    showCropGuidelines: true,
+    showCropFrame: true,
+    hideBottomControls: false,
   };
 
   // Camera path on Android requires the runtime CAMERA permission.

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
   primaryLabel: string;
@@ -20,8 +21,10 @@ export default function WizardFooter({
   onSecondary,
   errorText,
 }: Props) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { paddingBottom: Math.max(12, insets.bottom + 8) }]}>
       {errorText ? <Text style={styles.error}>{errorText}</Text> : null}
       {secondaryLabel && onSecondary ? (
         <Pressable style={styles.secondary} onPress={onSecondary} disabled={loading}>
