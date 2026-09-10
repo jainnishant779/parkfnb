@@ -94,4 +94,9 @@ router.put(
   bookingsController.extendBooking
 );
 
+// IoT Smart Barrier Access Control
+const bookingAccessController = require('../controllers/bookingAccessController');
+router.post('/:id/unlock', protect, validateObjectId('id'), bookingAccessController.unlockBarrier);
+router.post('/:id/lock', protect, validateObjectId('id'), bookingAccessController.lockBarrier);
+
 module.exports = router;

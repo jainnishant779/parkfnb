@@ -184,6 +184,12 @@ app.use('/api/settings', require('./routes/platformSettingRoutes'));
 app.use('/api/uploads', require('./routes/uploadRoutes'));
 app.use('/api/v1/ota', require('./routes/otaRoutes'));
 app.use('/api/ota', require('./routes/otaRoutes'));
+app.use('/api/v1/devices', require('./routes/deviceRoutes'));
+app.use('/api/devices', require('./routes/deviceRoutes'));
+
+// Initialize IoT MQTT Service
+const mqttService = require('./services/mqttService');
+mqttService.initMqtt();
 
 // 404 handler - must be after all routes
 app.use((req, res) => {

@@ -57,11 +57,20 @@ export const cancelBooking = (bookingId, reason) =>
 export const extendBooking = (bookingId, additionalHours) =>
   api.put(`/api/bookings/${bookingId}/extend`, { additionalHours });
 
-/**
- * Get vehicles registered to a user.
- * GET /api/vehicles/users/:userId/vehicles (private)
- *
- * @returns {Promise<{ vehicles: object[], total: number }>}
- */
 export const getUserVehicles = (userId) =>
   api.get(`/api/vehicles/users/${userId}/vehicles`);
+
+/**
+ * Unlock smart parking barrier for an active booking.
+ * POST /api/bookings/:id/unlock (private)
+ */
+export const unlockBarrier = (bookingId) =>
+  api.post(`/api/bookings/${bookingId}/unlock`);
+
+/**
+ * Lock smart parking barrier manually.
+ * POST /api/bookings/:id/lock (private)
+ */
+export const lockBarrier = (bookingId) =>
+  api.post(`/api/bookings/${bookingId}/lock`);
+

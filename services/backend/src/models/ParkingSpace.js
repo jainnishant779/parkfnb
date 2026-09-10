@@ -94,6 +94,15 @@ const parkingSpaceSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  device_id: {
+    type: String,
+    default: null,
+    trim: true,
+  },
+  has_smart_barrier: {
+    type: Boolean,
+    default: false,
+  },
   is_available: {
     type: Boolean,
     default: true

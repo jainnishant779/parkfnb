@@ -32,6 +32,8 @@ import { getTheme } from '../../theme/colors';
 import { spacing, borderRadius } from '../../theme/spacing';
 import { fontSize, fontWeight } from '../../theme/typography';
 import AppHeader from '../../components/headers/AppHeader';
+import { iotService, type IoTDevice } from '../../services/iotService';
+import { AppAlert } from '../../components/common/AppAlert';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -545,6 +547,83 @@ function InfoModal({ visible, onClose, theme }: InfoModalProps) {
     ) : null;
 }
 
+// Pair Smart Barrier Modal
+interface PairDeviceModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onPair: () => void;
+  deviceId: string;
+  setDeviceId: (val: string) => void;
+  deviceName: string;
+  setDeviceName: (val: string) => void;
+  theme: ReturnType<typeof getTheme>;
+}
+
+function PairDeviceModal({
+  visible,
+  onClose,
+  onPair,
+  deviceId,
+  setDeviceId,
+  deviceName,
+  setDeviceName,
+  theme,
+}: PairDeviceModalProps) {
+  return visible ? (
+    <View style={styles.modalOverlay}>
+      <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+        <View style={styles.modalHeader}>
+          <Text style={[styles.modalTitle, { color: theme.text }]}>Pair Smart Barrier (ESP32)</Text>
+          <Pressable onPress={onClose} accessibilityLabel="Close" accessibilityRole="button">
+            <Ionicons name="close" size={24} color={theme.textMuted} />
+          </Pressable>
+        </View>
+        <Text style={[styles.pairModalSubtitle, { color: theme.textSecondary }]}>
+          Enter the Device ID configured in your ESP32 firmware (e.g. pb-001).
+        </Text>
+
+        <Text style={[styles.inputLabel, { color: theme.text }]}>Device ID *</Text>
+        <TextInput
+          style={[styles.pairInput, { color: theme.text, borderColor: theme.border }]}
+          placeholder="e.g. pb-001"
+          placeholderTextColor={theme.textMuted}
+          value={deviceId}
+          onChangeText={setDeviceId}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <Text style={[styles.inputLabel, { color: theme.text, marginTop: spacing[3] }]}>
+          Barrier Label (Optional)
+        </Text>
+        <TextInput
+          style={[styles.pairInput, { color: theme.text, borderColor: theme.border }]}
+          placeholder="e.g. Main Gate Barrier"
+          placeholderTextColor={theme.textMuted}
+          value={deviceName}
+          onChangeText={setDeviceName}
+        />
+
+        <View style={styles.pairModalActions}>
+          <Pressable
+            style={[styles.pairCancelBtn, { borderColor: theme.border }]}
+            onPress={onClose}
+          >
+            <Text style={[styles.pairCancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.pairSubmitBtn, { backgroundColor: '#0D7377' }]}
+            onPress={onPair}
+          >
+            <Ionicons name="link" size={16} color="#FFFFFF" />
+            <Text style={styles.pairSubmitBtnText}>Pair Hardware</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  ) : null;
+}
+
 // Main Screen Component
 export default function IoTIntegrationsScreen() {
   const navigation = useNavigation();
@@ -565,8 +644,75 @@ export default function IoTIntegrationsScreen() {
     type: 'info',
   });
 
+  // Real IoT Smart Barriers state
+  const [realDevices, setRealDevices] = useState<IoTDevice[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  const [showPairModal, setShowPairModal] = useState(false);
+  const [newDeviceId, setNewDeviceId] = useState('');
+  const [newDeviceName, setNewDeviceName] = useState('');
+  const [commandingDeviceId, setCommandingDeviceId] = useState<string | null>(null);
+
   // Original data for comparison
   const [originalData, setOriginalData] = useState<Integration[]>([]);
+
+  const loadRealDevices = useCallback(async () => {
+    setLoadingDevices(true);
+    try {
+      const res = await iotService.getMyDevices();
+      setRealDevices(res.devices || []);
+    } catch (err: any) {
+      console.warn('Failed to load real IoT devices:', err?.message);
+    } finally {
+      setLoadingDevices(false);
+    }
+  }, []);
+
+  const handleDeviceCommand = async (deviceId: string, cmd: 'open' | 'close' | 'stop' | 'cal') => {
+    setCommandingDeviceId(deviceId);
+    try {
+      const res = await iotService.sendCommand(deviceId, cmd);
+      setSnackbar({
+        visible: true,
+        message: res.message || `Command '${cmd}' sent`,
+        type: 'success',
+      });
+      setTimeout(loadRealDevices, 1200);
+    } catch (err: any) {
+      AppAlert.alert('Command Failed', err?.message || 'Could not send command to barrier');
+    } finally {
+      setCommandingDeviceId(null);
+    }
+  };
+
+  const handlePairDevice = async () => {
+    if (!newDeviceId.trim()) {
+      AppAlert.alert('Missing ID', 'Please enter a device ID (e.g. pb-001)');
+      return;
+    }
+    try {
+      await iotService.pairDevice({
+        device_id: newDeviceId.trim(),
+        name: newDeviceName.trim() || undefined,
+      });
+      setShowPairModal(false);
+      setNewDeviceId('');
+      setNewDeviceName('');
+      setSnackbar({ visible: true, message: 'Smart barrier paired successfully!', type: 'success' });
+      loadRealDevices();
+    } catch (err: any) {
+      AppAlert.alert('Pairing Failed', err?.message || 'Could not pair device');
+    }
+  };
+
+  const handleUnpairDevice = async (deviceId: string) => {
+    try {
+      await iotService.unpairDevice(deviceId);
+      setSnackbar({ visible: true, message: 'Device unpaired', type: 'info' });
+      loadRealDevices();
+    } catch (err: any) {
+      AppAlert.alert('Unpair Failed', err?.message || 'Could not unpair device');
+    }
+  };
 
   // Load integrations from AsyncStorage
   const loadIntegrations = useCallback(async () => {
@@ -601,7 +747,8 @@ export default function IoTIntegrationsScreen() {
   // Initial load
   useEffect(() => {
     loadIntegrations();
-  }, [loadIntegrations]);
+    loadRealDevices();
+  }, [loadIntegrations, loadRealDevices]);
 
   // Check for changes
   useEffect(() => {
@@ -751,6 +898,154 @@ export default function IoTIntegrationsScreen() {
           </Text>
         </View>
 
+        {/* Smart Barriers (ESP32 Hardware) Section */}
+        <View style={styles.section}>
+          <View style={styles.hardwareHeaderRow}>
+            <View style={styles.hardwareHeaderLeft}>
+              <MaterialCommunityIcons name="boom-gate" size={22} color="#0D7377" />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Smart Barriers (ESP32)</Text>
+              <View style={[styles.hardwareCountBadge, { backgroundColor: realDevices.length > 0 ? '#E0F2F1' : '#F1F5F9' }]}>
+                <Text style={[styles.hardwareCountBadgeText, { color: realDevices.length > 0 ? '#0D7377' : '#64748B' }]}>
+                  {realDevices.length}
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              style={styles.pairHardwareSmallBtn}
+              onPress={() => setShowPairModal(true)}
+              accessibilityLabel="Pair ESP32 barrier"
+              accessibilityRole="button"
+            >
+              <Ionicons name="add" size={16} color="#FFFFFF" />
+              <Text style={styles.pairHardwareSmallBtnText}>Pair Barrier</Text>
+            </Pressable>
+          </View>
+
+          {loadingDevices ? (
+            <ActivityIndicator size="small" color="#0D7377" style={{ marginVertical: spacing[4] }} />
+          ) : realDevices.length === 0 ? (
+            <View style={[styles.hardwareEmptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <MaterialCommunityIcons name="boom-gate-outline" size={36} color={theme.textMuted} />
+              <Text style={[styles.hardwareEmptyTitle, { color: theme.text }]}>No Smart Barriers Paired</Text>
+              <Text style={[styles.hardwareEmptyText, { color: theme.textMuted }]}>
+                Connect physical ESP32 barrier controllers to automate vehicle entry and spot locking.
+              </Text>
+              <Pressable
+                style={[styles.pairHardwareSmallBtn, { alignSelf: 'center', marginTop: spacing[2] }]}
+                onPress={() => setShowPairModal(true)}
+              >
+                <Ionicons name="link" size={16} color="#FFFFFF" />
+                <Text style={styles.pairHardwareSmallBtnText}>Pair ESP32 Controller</Text>
+              </Pressable>
+            </View>
+          ) : (
+            realDevices.map(device => {
+              const isOnline = device.status === 'online';
+              const isCommanding = commandingDeviceId === device.device_id;
+              const angle = device.last_state?.angle !== undefined ? `${device.last_state.angle}°` : (isOnline ? '0°' : '--');
+              const isUpright = device.last_state?.angle !== undefined && device.last_state.angle > 45;
+              const rssi = device.last_state?.rssi ? `${device.last_state.rssi} dBm` : '-60 dBm';
+              const battery = device.last_state?.battery_level !== undefined ? `${device.last_state.battery_level}%` : '100%';
+              const fw = device.last_state?.fw_version || '1.0.0';
+
+              return (
+                <View
+                  key={device._id || device.device_id}
+                  style={[styles.deviceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                >
+                  <View style={styles.deviceCardHeader}>
+                    <View style={styles.deviceCardTitleRow}>
+                      <View style={[styles.deviceIconBox, { backgroundColor: isOnline ? '#E0F2F1' : '#F1F5F9' }]}>
+                        <MaterialCommunityIcons
+                          name={isUpright ? 'boom-gate-up' : 'boom-gate-down'}
+                          size={24}
+                          color={isOnline ? '#0D7377' : '#64748B'}
+                        />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: spacing[3] }}>
+                        <Text style={[styles.deviceTitle, { color: theme.text }]}>
+                          {device.name || device.device_id}
+                        </Text>
+                        <Text style={[styles.deviceIdText, { color: theme.textMuted }]}>
+                          ID: {device.device_id} • FW: v{fw}
+                        </Text>
+                      </View>
+                      <View style={isOnline ? styles.onlineBadge : styles.offlineBadge}>
+                        <View style={isOnline ? styles.onlineBadgeDot : styles.offlineBadgeDot} />
+                        <Text style={isOnline ? styles.onlineBadgeText : styles.offlineBadgeText}>
+                          {isOnline ? 'Online' : 'Offline'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Telemetry row */}
+                  <View style={[styles.deviceTelemetryGrid, { borderColor: theme.borderLight }]}>
+                    <View style={styles.telemetryItem}>
+                      <Text style={[styles.telemetryLabel, { color: theme.textMuted }]}>Barrier Arm</Text>
+                      <Text style={[styles.telemetryValue, { color: theme.text }]}>{angle}</Text>
+                    </View>
+                    <View style={styles.telemetryItem}>
+                      <Text style={[styles.telemetryLabel, { color: theme.textMuted }]}>Signal (WiFi)</Text>
+                      <Text style={[styles.telemetryValue, { color: theme.text }]}>{rssi}</Text>
+                    </View>
+                    <View style={styles.telemetryItem}>
+                      <Text style={[styles.telemetryLabel, { color: theme.textMuted }]}>Battery</Text>
+                      <Text style={[styles.telemetryValue, { color: theme.text }]}>{battery}</Text>
+                    </View>
+                  </View>
+
+                  {/* Manual Controls */}
+                  <View style={styles.deviceActionsRow}>
+                    <Pressable
+                      style={[styles.cmdBtnOpen, isCommanding && { opacity: 0.5 }]}
+                      onPress={() => handleDeviceCommand(device.device_id, 'open')}
+                      disabled={isCommanding}
+                    >
+                      <Ionicons name="arrow-down-circle" size={16} color="#FFFFFF" />
+                      <Text style={styles.cmdBtnText}>Open (0°)</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={[styles.cmdBtnClose, isCommanding && { opacity: 0.5 }]}
+                      onPress={() => handleDeviceCommand(device.device_id, 'close')}
+                      disabled={isCommanding}
+                    >
+                      <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" />
+                      <Text style={styles.cmdBtnText}>Secure (90°)</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={[styles.cmdBtnStop, isCommanding && { opacity: 0.5 }]}
+                      onPress={() => handleDeviceCommand(device.device_id, 'stop')}
+                      disabled={isCommanding}
+                    >
+                      <Ionicons name="stop-circle" size={16} color="#475569" />
+                      <Text style={[styles.cmdBtnText, { color: '#475569' }]}>Stop</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={styles.cmdBtnUnpair}
+                      onPress={() => {
+                        AppAlert.alert(
+                          'Unpair Barrier?',
+                          `Disconnect device ${device.device_id}? Drivers will not be able to auto-unlock this bay.`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Unpair', style: 'destructive', onPress: () => handleUnpairDevice(device.device_id) },
+                          ]
+                        );
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+
         {/* Empty State */}
         {integrations.length === 0 ? (
           <View style={styles.emptyState}>
@@ -879,6 +1174,16 @@ export default function IoTIntegrationsScreen() {
       <InfoModal
         visible={showInfoModal}
         onClose={() => setShowInfoModal(false)}
+        theme={theme}
+      />
+      <PairDeviceModal
+        visible={showPairModal}
+        onClose={() => setShowPairModal(false)}
+        onPair={handlePairDevice}
+        deviceId={newDeviceId}
+        setDeviceId={setNewDeviceId}
+        deviceName={newDeviceName}
+        setDeviceName={setNewDeviceName}
         theme={theme}
       />
 
@@ -1361,6 +1666,256 @@ const styles = StyleSheet.create({
   infoButtonText: {
     color: '#FFFFFF',
     fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold as any,
+  },
+
+  // Smart Barriers (ESP32) Styles
+  hardwareHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing[3],
+  },
+  hardwareHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  hardwareCountBadge: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    marginLeft: spacing[1],
+  },
+  hardwareCountBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold as any,
+  },
+  pairHardwareSmallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0D7377',
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.lg,
+    gap: spacing[1],
+  },
+  pairHardwareSmallBtnText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold as any,
+  },
+  hardwareEmptyCard: {
+    padding: spacing[6],
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  hardwareEmptyTitle: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold as any,
+    marginTop: spacing[2],
+  },
+  hardwareEmptyText: {
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 280,
+  },
+  deviceCard: {
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    padding: spacing[4],
+    marginBottom: spacing[3],
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  deviceCardHeader: {
+    marginBottom: spacing[3],
+  },
+  deviceCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deviceIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deviceTitle: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold as any,
+  },
+  deviceIdText: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
+  },
+  onlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    gap: 5,
+  },
+  onlineBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
+  },
+  onlineBadgeText: {
+    color: '#16A34A',
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold as any,
+  },
+  offlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    gap: 5,
+  },
+  offlineBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+  },
+  offlineBadgeText: {
+    color: '#64748B',
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold as any,
+  },
+  deviceTelemetryGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[3],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing[3],
+  },
+  telemetryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  telemetryLabel: {
+    fontSize: fontSize.xs,
+    marginBottom: 2,
+  },
+  telemetryValue: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold as any,
+  },
+  deviceActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  cmdBtnOpen: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+    paddingVertical: 10,
+    borderRadius: borderRadius.lg,
+    gap: spacing[1],
+  },
+  cmdBtnClose: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0D7377',
+    paddingVertical: 10,
+    borderRadius: borderRadius.lg,
+    gap: spacing[1],
+  },
+  cmdBtnStop: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: 10,
+    backgroundColor: '#E2E8F0',
+    borderRadius: borderRadius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cmdBtnUnpair: {
+    padding: 10,
+    borderRadius: borderRadius.lg,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cmdBtnText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold as any,
+  },
+
+  // Pair Modal Extra Styles
+  pairModalSubtitle: {
+    fontSize: fontSize.xs,
+    lineHeight: 18,
+    marginBottom: spacing[4],
+  },
+  inputLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium as any,
+    marginBottom: spacing[1],
+  },
+  pairInput: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing[3],
+    paddingVertical: 10,
+    fontSize: fontSize.sm,
+  },
+  pairModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing[3],
+    marginTop: spacing[5],
+    marginBottom: spacing[2],
+  },
+  pairCancelBtn: {
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: spacing[4],
+    borderRadius: borderRadius.lg,
+  },
+  pairCancelBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium as any,
+  },
+  pairSubmitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: spacing[4],
+    borderRadius: borderRadius.lg,
+    gap: 6,
+  },
+  pairSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold as any,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -268,6 +268,57 @@ const BookingManagementPage = ({ navigation }) => {
   const [reviewText, setReviewText] = useState('');
   // local review ratings stored per booking id
   const [localRatings, setLocalRatings] = useState({});
+
+  // IoT Smart Barrier states
+  const [unlockingBookingId, setUnlockingBookingId] = useState(null);
+  const [activeBarrierCountdown, setActiveBarrierCountdown] = useState({}); // { [bookingId]: seconds }
+
+  useEffect(() => {
+    const activeIds = Object.keys(activeBarrierCountdown).filter((id) => activeBarrierCountdown[id] > 0);
+    if (activeIds.length === 0) return;
+
+    const timer = setInterval(() => {
+      setActiveBarrierCountdown((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        activeIds.forEach((id) => {
+          if (next[id] > 1) {
+            next[id] -= 1;
+            changed = true;
+          } else {
+            delete next[id];
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeBarrierCountdown]);
+
+  const handleUnlockBarrier = async (booking) => {
+    const bookingId = booking?.id || booking?._id;
+    if (!bookingId) return;
+    setUnlockingBookingId(bookingId);
+    try {
+      const res = await bookingService.unlockBarrier(bookingId);
+      const countdownSecs = res?.data?.auto_close_in_seconds || 60;
+      setActiveBarrierCountdown((prev) => ({ ...prev, [bookingId]: countdownSecs }));
+      AppAlert.alert(
+        'Barrier Unlocked',
+        res?.data?.message || 'Smart Barrier is opening! Please enter your spot. Auto-closing in 60s.',
+        [{ text: 'OK' }]
+      );
+      fetchBookings(false);
+    } catch (err) {
+      console.error('Unlock barrier error:', err);
+      const msg = err.response?.data?.error?.message || err.message || 'Could not unlock smart barrier.';
+      AppAlert.alert('Barrier Unlock Failed', msg);
+    } finally {
+      setUnlockingBookingId(null);
+    }
+  };
 
   const tabIndicatorAnim = useRef(new Animated.Value(0)).current;
 
@@ -549,6 +600,35 @@ const BookingManagementPage = ({ navigation }) => {
 
         {/* Card Actions */}
         <View style={styles.cardActions}>
+          {(item.status === 'confirmed' || item.status === 'active') && (
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                styles.unlockBarrierButton,
+                activeBarrierCountdown[item.id] ? styles.barrierOpenButton : null,
+              ]}
+              onPress={() => handleUnlockBarrier(item)}
+              disabled={unlockingBookingId === item.id}
+              activeOpacity={0.8}
+            >
+              {unlockingBookingId === item.id ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <MaterialIcon
+                    name={activeBarrierCountdown[item.id] ? 'lock-open-variant' : 'boom-gate-up'}
+                    size={18}
+                    color="#FFFFFF"
+                  />
+                  <Text style={[styles.actionButtonText, styles.unlockBarrierText]}>
+                    {activeBarrierCountdown[item.id]
+                      ? `Open (${activeBarrierCountdown[item.id]}s)`
+                      : 'Unlock'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
           {item.status === 'active' && (
             <>
               <TouchableOpacity style={styles.actionButton}>
@@ -1183,6 +1263,36 @@ const BookingManagementPage = ({ navigation }) => {
             {/* ── Sticky footer ── */}
             {selectedBooking && (
               <View style={styles.stickyFooter}>
+                {['confirmed', 'active'].includes(selectedBooking.status) && (
+                  <TouchableOpacity
+                    style={[
+                      styles.footerPrimaryButton,
+                      { backgroundColor: '#0D7377', flex: 1.2 },
+                      activeBarrierCountdown[selectedBooking.id || selectedBooking._id] && { backgroundColor: '#10B981' },
+                    ]}
+                    onPress={() => handleUnlockBarrier(selectedBooking)}
+                    disabled={unlockingBookingId === (selectedBooking.id || selectedBooking._id)}
+                    activeOpacity={0.85}
+                  >
+                    {unlockingBookingId === (selectedBooking.id || selectedBooking._id) ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialIcon
+                          name={activeBarrierCountdown[selectedBooking.id || selectedBooking._id] ? 'lock-open-variant' : 'boom-gate-up'}
+                          size={18}
+                          color="#FFFFFF"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text style={styles.footerPrimaryText}>
+                          {activeBarrierCountdown[selectedBooking.id || selectedBooking._id]
+                            ? `Open (${activeBarrierCountdown[selectedBooking.id || selectedBooking._id]}s)`
+                            : 'Unlock Barrier'}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
                 {['pending', 'confirmed'].includes(selectedBooking.status) && (
                   <TouchableOpacity
                     style={styles.footerCancelButton}
@@ -2685,6 +2795,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#A1A1AA',
+  },
+  // IoT Smart Barrier styles
+  unlockBarrierButton: {
+    backgroundColor: '#0D7377',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    borderWidth: 0,
+  },
+  barrierOpenButton: {
+    backgroundColor: '#10B981',
+  },
+  unlockBarrierText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });
 
