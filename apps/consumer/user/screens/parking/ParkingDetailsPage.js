@@ -706,7 +706,7 @@ const ParkingDetailsPage = ({ navigation, route }) => {
           style={styles.headerButton}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-left" size={22} color={palette.text} />
+          <Icon name="arrow-left" size={20} color={palette.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>PARK</Text>
         <View style={styles.headerActions}>
@@ -716,12 +716,12 @@ const ParkingDetailsPage = ({ navigation, route }) => {
           >
             <MaterialIcon
               name={isFavorite ? 'heart' : 'heart-outline'}
-              size={22}
+              size={20}
               color={isFavorite ? palette.danger : palette.text}
             />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton} onPress={handleShare}>
-            <Icon name="share-2" size={22} color={palette.text} />
+            <Icon name="share-2" size={20} color={palette.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -1566,22 +1566,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: 'transparent',
   },
   headerButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: fontStacks.regular,
+    fontFamily: fontStacks.medium,
     fontSize: 20,
-    fontWeight: '400',
-    letterSpacing: 4,
+    fontWeight: '700',
+    letterSpacing: -0.3,
     color: palette.text,
   },
   headerActions: {

@@ -244,17 +244,16 @@ const SubscriptionPage = ({ navigation }) => {
         style={styles.backButton}
         onPress={() => navigation.goBack()}
       >
-        <Icon name="arrow-left" size={24} color="#FFFFFF" />
+        <Icon name="arrow-left" size={20} color={palette.text} />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>Premium Features</Text>
-        <Text style={styles.headerSubtitle}>Unlock exclusive parking benefits</Text>
+        <Text style={styles.headerTitle}>Premium</Text>
       </View>
       <TouchableOpacity
         style={styles.helpButton}
         onPress={() => {}}
       >
-        <Icon name="help-circle" size={24} color="#A1A1AA" />
+        <Icon name="help-circle" size={20} color={palette.text} />
       </TouchableOpacity>
     </View>
   );
@@ -956,17 +955,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: 'transparent',
   },
   backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: palette.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(0, 0, 0, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -975,23 +974,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: fontStacks.regular,
-    fontSize: 22,
-    fontWeight: '300',
-    letterSpacing: -0.4,
+    fontFamily: fontStacks.medium,
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
     color: palette.text,
   },
-  headerSubtitle: {
-    fontFamily: fontStacks.regular,
-    fontSize: 12,
-    color: palette.textMuted,
-    marginTop: 2,
-    letterSpacing: 0.2,
-  },
   helpButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },

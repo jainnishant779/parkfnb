@@ -653,13 +653,13 @@ const BookingManagementPage = ({ navigation }) => {
               style={styles.headerButton}
               onPress={() => setShowSearch(!showSearch)}
             >
-              <Icon name="search" size={20} color="#FFFFFF" />
+              <Icon name="search" size={18} color={palette.text} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.headerButton}
               onPress={() => setShowFilterModal(true)}
             >
-              <Icon name="sliders" size={20} color="#FFFFFF" />
+              <Icon name="sliders" size={18} color={palette.text} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1441,20 +1441,20 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: 'transparent',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: 8,
   },
   headerTitle: {
-    fontFamily: fontStacks.regular,
-    fontSize: 28,
-    fontWeight: '300',
-    letterSpacing: -0.5,
+    fontFamily: fontStacks.medium,
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
     color: palette.text,
   },
   headerActions: {
@@ -1462,12 +1462,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: palette.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(0,0,0,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -446,7 +446,7 @@ const SearchPage = ({ navigation, route }) => {
         onPress={() => navigation.goBack()}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Icon name="chevron-left" size={26} color={palette.text} />
+        <Icon name="arrow-left" size={20} color={palette.text} />
       </TouchableOpacity>
 
       <Text style={styles.wordmark}>PARK</Text>
@@ -954,33 +954,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 56,
+    height: 44,
   },
   backButton: {
     width: 36,
     height: 36,
-    alignItems: 'flex-start',
+    borderRadius: 18,
+    backgroundColor: palette.surface,
+    alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   wordmark: {
     fontFamily: fontStacks.medium,
-    fontSize: 22,
-    fontWeight: '500',
-    letterSpacing: 6,
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
     color: palette.text,
   },
   filtersPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    height: 44,
-    borderRadius: radii.pill,
+    gap: spacing.xs,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   filtersPillText: {
     fontFamily: fontStacks.medium,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '500',
     color: palette.text,
   },

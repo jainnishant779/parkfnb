@@ -1289,41 +1289,12 @@ const HomePage = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Greeting + headline, with the eco promo card alongside */}
+        {/* Compact Greeting */}
         <View style={styles.greetingSection}>
-          <View style={styles.greetingTextBlock}>
-            <Text style={styles.greetingLabel} numberOfLines={1}>
-              {greeting}{firstName ? `, ${firstName}` : ''} 👋
-            </Text>
-            <Text style={styles.greetingSubtitle}>Find. Book. Park. Stress Free.</Text>
-            <Text style={styles.greetingHeadline}>
-              A Smarter{'\n'}
-              <Text style={styles.greetingHeadlineAccent}>Way to Park</Text>
-            </Text>
-          </View>
-          {/* Decorative — there is no sustainability screen to route to yet. */}
-          <View style={styles.ecoCard}>
-            <MaterialIcon name="leaf" size={22} color={palette.primary} />
-            <View style={styles.ecoCardText}>
-              <Text style={styles.ecoCardTitle}>A cleaner city</Text>
-              <Text style={styles.ecoCardSubtitle}>starts with you.</Text>
-            </View>
-            <Icon name="chevron-right" size={18} color={palette.primary} />
-          </View>
-        </View>
-
-        {/* Three-step explainer. Dividers render between items rather than
-            after each, so the row has no trailing rule on the right. */}
-        <View style={styles.journeyRow}>
-          {journeySteps.map((step, index) => (
-            <React.Fragment key={step.id}>
-              {index > 0 && <View style={styles.journeyDivider} />}
-              <View style={styles.journeyStep}>
-                <MaterialIcon name={step.icon} size={20} color={palette.primary} />
-                <Text style={styles.journeyStepLabel}>{step.label}</Text>
-              </View>
-            </React.Fragment>
-          ))}
+          <Text style={styles.greetingLabel} numberOfLines={1}>
+            {greeting}{firstName ? `, ${firstName}` : ''} 👋
+          </Text>
+          <Text style={styles.greetingSubtitle}>Find & book parking spots near you</Text>
         </View>
 
         {/* Search Section */}
@@ -1934,7 +1905,7 @@ const styles = StyleSheet.create({
   },
   headerPanel: {
     backgroundColor: 'transparent',
-    paddingBottom: 12,
+    paddingBottom: 8,
     zIndex: 10,
   },
   header: {
@@ -1942,74 +1913,60 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    // Trimmed from 10 to buy back part of the height the three-step row
-    // below costs — the map has to stay reachable above the fold.
-    paddingVertical: 6,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   brandLockup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   brandMark: {
-    width: 34,
-    height: 34,
+    width: 28,
+    height: 28,
   },
   brandWordmark: {
     fontFamily: fontStacks.medium,
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
-    // Tracking is what makes the letters read as a wordmark rather than a
-    // word. Tighter than the mark-less version was: the logo now carries
-    // the brand, so the type doesn't have to shout to do it alone.
-    letterSpacing: 3,
+    letterSpacing: 2,
     color: palette.text,
   },
   brandTagline: {
-    fontFamily: fontStacks.medium,
-    // Small letter-spaced caps — reads as a strapline under the wordmark,
-    // not as body copy competing with the greeting below it.
-    fontSize: 8,
-    fontWeight: '600',
-    letterSpacing: 1.4,
-    color: palette.textMuted,
-    marginTop: 3,
+    display: 'none',
   },
   avatarButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: palette.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
   },
   avatarInitial: {
     fontFamily: fontStacks.medium,
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: palette.primary,
   },
   greetingSection: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     paddingHorizontal: 16,
-    marginTop: 8,
-    gap: 12,
-  },
-  greetingTextBlock: {
-    flex: 1,
+    marginTop: 4,
+    marginBottom: 6,
   },
   greetingLabel: {
     fontFamily: fontStacks.medium,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: palette.text,
   },
   greetingSubtitle: {
     fontFamily: fontStacks.regular,
     fontSize: 12,
     color: palette.textMuted,
-    marginTop: 2,
+    marginTop: 1,
   },
   greetingHeadline: {
     fontFamily: fontStacks.medium,
@@ -2155,12 +2112,14 @@ const styles = StyleSheet.create({
   },
   notificationButton: {
     position: 'relative',
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: palette.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
   },
   notificationBadge: {
     position: 'absolute',
