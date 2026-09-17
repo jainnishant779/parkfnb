@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ParkFNB — Gate Camera</title>
+<style>
+  :root {
+    --bg: #0f1216;
+    --panel: #171b21;
+    --line: #262c35;
+    --ink: #e8ecf1;
+    --muted: #8b97a6;
+    --ok: #2fbf5b;
+    --no: #e5484d;
+    --wait: #f5a524;
+    --accent: #3b82f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    padding: 18px 24px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 14px;
+  }
+  header h1 { margin: 0; font-size: 19px; letter-spacing: .2px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--ok); box-shadow: 0 0 0 3px rgba(47,191,91,.18); }
+  .dot.off { background: var(--no); }
+
+  main {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    padding: 20px; max-width: 1400px; margin: 0 auto;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px;
+  }
+  .panel h2 {
+    margin: 0 0 14px; font-size: 13px; text-transform: uppercase;
+    letter-spacing: .09em; color: var(--muted); font-weight: 600;
+  }
+
+  .drop {
+    border: 2px dashed var(--line); border-radius: 10px;
+    padding: 34px 18px; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: #1b2029; }
+  .drop p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+
+  img.preview { width: 100%; border-radius: 9px; display: block; margin-top: 14px; }
+
+  .row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  button {
+    flex: 1; min-width: 150px; padding: 12px 16px; border: 0; border-radius: 9px;
+    font-size: 14px; font-weight: 600; cursor: pointer; color: #fff;
+    background: var(--accent);
+  }
+  button.ghost { background: #2a313b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  .verdict {
+    border-radius: 12px; padding: 26px; text-align: center;
+    border: 2px solid var(--line); background: #12161c;
+  }
+  .verdict .word { font-size: 46px; font-weight: 800; letter-spacing: .04em; }
+  .verdict .msg { color: var(--muted); margin-top: 8px; font-size: 14px; }
+  .verdict.allow { border-color: var(--ok); background: rgba(47,191,91,.09); }
+  .verdict.allow .word { color: var(--ok); }
+  .verdict.deny { border-color: var(--no); background: rgba(229,72,77,.09); }
+  .verdict.deny .word { color: var(--no); }
+  .verdict.wait { border-color: var(--wait); }
+  .verdict.wait .word { color: var(--wait); font-size: 26px; }
+
+  .plate {
+    margin: 18px auto 4px; display: inline-block;
+    font-family: "Consolas", monospace; font-size: 34px; font-weight: 700;
+    letter-spacing: .13em; padding: 12px 22px; border-radius: 9px;
+    background: #f4f6f8; color: #14181d; border: 3px solid #cbd3dc;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13.5px; }
+  td { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  td:first-child { color: var(--muted); width: 45%; }
+  td:last-child { text-align: right; font-family: Consolas, monospace; }
+
+  .note {
+    margin-top: 16px; padding: 12px 14px; border-radius: 9px;
+    background: #14181e; border-left: 3px solid var(--accent);
+    color: var(--muted); font-size: 12.5px;
+  }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="dot" id="dot"></span>
+  <div>
+    <h1>ParkFNB — Gate Camera</h1>
+    <div class="sub" id="status">checking service…</div>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Camera input</h2>
+
+    <div class="drop" id="drop">
+      <strong>Drop a photo, or click to choose</strong>
+      <p>A vehicle with a visible number plate</p>
+    </div>
+    <input type="file" id="file" accept="image/*" class="hidden">
+
+    <img id="preview" class="preview hidden" alt="">
+
+    <div class="row">
+      <button id="go" disabled>Open the gate</button>
+      <button id="detectOnly" class="ghost" disabled>Read only</button>
+    </div>
+
+    <div class="row">
+      <input id="device" value="pb-001"
+             style="flex:1;padding:11px 13px;border-radius:9px;border:1px solid var(--line);background:#12161c;color:var(--ink);font-family:Consolas,monospace">
+    </div>
+
+    <div class="note">
+      The camera is only an input. This page sends the plate to the backend,
+      which checks the booking, the payment and the time window. It never
+      decides access by itself.
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Decision</h2>
+
+    <div class="verdict" id="verdict">
+      <div class="word" style="color:var(--muted);font-size:26px">Waiting</div>
+      <div class="msg">Choose an image to begin</div>
+    </div>
+
+    <div style="text-align:center">
+      <div class="plate hidden" id="plate">—</div>
+    </div>
+
+    <table id="detail" class="hidden">
+      <tr><td>Valid Indian format</td><td id="d-valid">—</td></tr>
+      <tr><td>Raw OCR text</td><td id="d-raw">—</td></tr>
+      <tr><td>Detection confidence</td><td id="d-det">—</td></tr>
+      <tr><td>OCR confidence</td><td id="d-ocr">—</td></tr>
+      <tr><td>Vehicles in frame</td><td id="d-veh">—</td></tr>
+      <tr><td>Inference</td><td id="d-ms">—</td></tr>
+      <tr><td>End to end</td><td id="d-total">—</td></tr>
+    </table>
+
+    <img id="annotated" class="preview hidden" alt="">
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let chosen = null;
+
+fetch("/health").then(r => r.json()).then(h => {
+  $("dot").className = "dot " + (h.model_loaded ? "on" : "off");
+  $("status").textContent = h.model_loaded
+    ? `model ready · OCR ${h.ocr} · backend ${h.backend}`
+    : "model failed to load";
+}).catch(() => {
+  $("dot").className = "dot off";
+  $("status").textContent = "service unreachable";
+});
+
+$("drop").onclick = () => $("file").click();
+$("drop").ondragover = e => { e.preventDefault(); $("drop").classList.add("over"); };
+$("drop").ondragleave = () => $("drop").classList.remove("over");
+$("drop").ondrop = e => {
+  e.preventDefault();
+  $("drop").classList.remove("over");
+  if (e.dataTransfer.files[0]) pick(e.dataTransfer.files[0]);
+};
+$("file").onchange = e => { if (e.target.files[0]) pick(e.target.files[0]); };
+
+function pick(f) {
+  chosen = f;
+  const url = URL.createObjectURL(f);
+  $("preview").src = url;
+  $("preview").classList.remove("hidden");
+  $("go").disabled = false;
+  $("detectOnly").disabled = false;
+  $("annotated").classList.add("hidden");
+  setVerdict("wait", "Ready", f.name);
+}
+
+function setVerdict(kind, word, msg) {
+  const v = $("verdict");
+  v.className = "verdict " + kind;
+  v.querySelector(".word").textContent = word;
+  v.querySelector(".word").style.cssText =
+    kind === "wait" ? "" : "font-size:46px";
+  v.querySelector(".msg").textContent = msg || "";
+}
+
+async function send(endpoint) {
+  if (!chosen) return;
+  $("go").disabled = $("detectOnly").disabled = true;
+  setVerdict("wait", "Reading…", "running detection and OCR");
+
+  const fd = new FormData();
+  fd.append("image", chosen);
+  fd.append("device_id", $("device").value.trim() || "pb-001");
+
+  try {
+    const r = await fetch(endpoint, { method: "POST", body: fd });
+    const d = await r.json();
+
+    $("plate").textContent = d.plate || "no plate";
+    $("plate").classList.remove("hidden");
+
+    $("d-valid").textContent = d.valid_format ? "yes" : "no";
+    $("d-raw").textContent = d.raw_text || "—";
+    $("d-det").textContent = d.det_conf ? d.det_conf.toFixed(3) : "—";
+    $("d-ocr").textContent = d.ocr_conf ? d.ocr_conf.toFixed(3) : "—";
+    $("d-veh").textContent = d.vehicles ?? "—";
+    $("d-ms").textContent = d.ms ? Math.round(d.ms) + " ms" : "—";
+    $("d-total").textContent = d.total_ms ? d.total_ms + " ms" : "—";
+    $("detail").classList.remove("hidden");
+
+    if (d.annotated) {
+      $("annotated").src = d.annotated;
+      $("annotated").classList.remove("hidden");
+    }
+
+    if (endpoint === "/detect") {
+      setVerdict("wait", "Read only", "no decision was requested");
+    } else if (d.decision === "allow") {
+      setVerdict("allow", "ALLOW", d.message || "Barrier opening");
+    } else if (d.decision === "deny") {
+      setVerdict("deny", "DENY", d.message || "No valid booking");
+    } else if (d.decision === "no_plate") {
+      setVerdict("deny", "NO PLATE", d.message);
+    } else {
+      setVerdict("deny", "ERROR", d.message || "Something went wrong");
+    }
+  } catch (e) {
+    setVerdict("deny", "ERROR", String(e));
+  } finally {
+    $("go").disabled = $("detectOnly").disabled = false;
+  }
+}
+
+$("go").onclick = () => send("/gate-event");
+$("detectOnly").onclick = () => send("/detect");
+</script>
+</body>
+</html>

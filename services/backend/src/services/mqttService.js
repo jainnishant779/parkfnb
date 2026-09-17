@@ -1,6 +1,7 @@
 const mqtt = require('mqtt');
 const Device = require('../models/Device');
 const AccessAuditLog = require('../models/AccessAuditLog');
+const firebaseBarrier = require('./firebaseBarrierService');
 
 let client = null;
 let isConnected = false;
@@ -178,27 +179,59 @@ async function sendDeviceCommand(deviceId, command, params = {}, context = {}) {
 
   const topic = `parkbnb/${deviceId}/cmd`;
 
+  // The physical arch-lock prototype polls Firebase, not MQTT. Mirror every
+  // open/close there so the real barrier and the simulator both react.
+  // Fire it first and in parallel — the device polls every 2s, so the sooner
+  // the node is written the sooner it moves.
+  const firebaseResult = (command === 'open' || command === 'close')
+    ? firebaseBarrier.sendCommand(deviceId, command)
+    : Promise.resolve({ sent: false, skipped: 'not an open/close command' });
+
   return new Promise((resolve, reject) => {
     if (!client || !isConnected) {
-      // Record audit attempt even if broker is not currently connected
-      AccessAuditLog.create({
-        device_id: deviceId,
-        parking_space_id: device.parking_space_id,
-        booking_id: context.bookingId || null,
-        user_id: context.userId,
-        user_role: context.userRole || 'renter',
-        action: command === 'open' ? 'unlock' : command === 'close' ? 'lock' : command,
-        command_n: commandN,
-        success: false,
-        error_message: 'MQTT Broker not connected',
-        ip_address: context.ipAddress || null,
-      }).catch(() => {});
+      // Firebase may still have carried the command through, so this is only
+      // a hard failure when nothing at all was delivered.
+      firebaseResult.then(async (fb) => {
+        await AccessAuditLog.create({
+          device_id: deviceId,
+          parking_space_id: device.parking_space_id,
+          booking_id: context.bookingId || null,
+          user_id: context.userId,
+          user_role: context.userRole || 'renter',
+          action: command === 'open' ? 'unlock' : command === 'close' ? 'lock' : command,
+          command_n: commandN,
+          success: Boolean(fb.sent),
+          error_message: fb.sent
+            ? 'MQTT broker unavailable; delivered over Firebase'
+            : `MQTT broker not connected; Firebase: ${fb.error || fb.skipped}`,
+          ip_address: context.ipAddress || null,
+        }).catch(() => {});
 
-      return reject(new Error('MQTT Broker not connected. Please ensure IoT broker is reachable.'));
+        if (fb.sent) {
+          console.log(`[MQTT] broker down — ${command} delivered via Firebase to ${deviceId}`);
+          return resolve({
+            success: true,
+            deviceId,
+            command,
+            n: commandN,
+            transport: 'firebase',
+            firebase: fb,
+            timestamp: new Date(),
+          });
+        }
+
+        return reject(new Error(
+          'Neither transport reached the barrier: MQTT broker not connected'
+          + (fb.error ? `, Firebase: ${fb.error}` : ''),
+        ));
+      }).catch(reject);
+
+      return;
     }
 
     client.publish(topic, JSON.stringify(payload), { qos: 1 }, async (err) => {
-      const isSuccess = !err;
+      const fb = await firebaseResult.catch((e) => ({ sent: false, error: e.message }));
+      const isSuccess = !err || Boolean(fb.sent);
 
       // Create Audit Log entry
       await AccessAuditLog.create({
@@ -214,17 +247,20 @@ async function sendDeviceCommand(deviceId, command, params = {}, context = {}) {
         ip_address: context.ipAddress || null,
       }).catch(() => {});
 
-      if (err) {
+      if (err && !fb.sent) {
         console.error(`[MQTT] Failed to publish to ${topic}:`, err.message);
         return reject(err);
       }
 
-      console.log(`[MQTT] Published ${command} (n=${commandN}) to ${topic}`);
+      if (!err) console.log(`[MQTT] Published ${command} (n=${commandN}) to ${topic}`);
+
       resolve({
         success: true,
         deviceId,
         command,
         n: commandN,
+        transport: err ? 'firebase' : (fb.sent ? 'mqtt+firebase' : 'mqtt'),
+        firebase: fb,
         timestamp: new Date(),
       });
     });

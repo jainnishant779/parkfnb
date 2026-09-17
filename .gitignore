@@ -57,3 +57,12 @@ yarn-error.log*
 # ---- Metro / RN ---------------------------------------------------------
 .metro-health-check*
 **/.expo/
+
+# Backups that can carry secrets
+*.env.bak
+.env.bak
+
+# Rendered videos and big exports — keep them out of git
+*.mp4
+temp_audio/
+temp_hindi_audio/

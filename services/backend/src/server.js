@@ -186,6 +186,7 @@ app.use('/api/v1/ota', require('./routes/otaRoutes'));
 app.use('/api/ota', require('./routes/otaRoutes'));
 app.use('/api/v1/devices', require('./routes/deviceRoutes'));
 app.use('/api/devices', require('./routes/deviceRoutes'));
+app.use('/api/access', require('./routes/accessRoutes'));
 
 // Initialize IoT MQTT Service
 const mqttService = require('./services/mqttService');

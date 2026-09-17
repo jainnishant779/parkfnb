@@ -53,5 +53,17 @@ module.exports = {
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
 
   // Idempotency
-  IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT'
+  IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT',
+
+  // Aliases used across the IoT, device and ANPR controllers.
+  // Without these the codes resolved to undefined, JSON.stringify dropped the
+  // key, and clients received an error object with no `code` to branch on.
+  AUTH_INSUFFICIENT_PERMISSIONS: 'AUTH_FORBIDDEN',
+  RES_NOT_FOUND: 'NOT_FOUND',
+  RES_CONFLICT: 'REQ_CONFLICT',
+  VALIDATION_ERROR: 'REQ_VALIDATION',
+  BIZ_VALIDATION: 'REQ_VALIDATION',
+  BIZ_CONFLICT: 'REQ_CONFLICT',
+  BIZ_UNAVAILABLE: 'BIZ_OPERATION_NOT_ALLOWED',
+  SRV_INTERNAL: 'SERVER_ERROR'
 };
