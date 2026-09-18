@@ -66,3 +66,6 @@ yarn-error.log*
 *.mp4
 temp_audio/
 temp_hindi_audio/
+
+# Holds live credentials for the deploy — never commit
+docs/status/RENDER_ENV.md
