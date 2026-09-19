@@ -3,23 +3,112 @@
  * Handles system configuration and feature flags
  */
 
-const PlatformSettings = require('../models/PlatformSettings');
-const { success, error } = require('../utils/responseHelper');
-const errorCodes = require('../utils/errorCodes');
+const PlatformSettings = require("../models/PlatformSettings");
+const { success, error } = require("../utils/responseHelper");
+const errorCodes = require("../utils/errorCodes");
 
 // Default platform settings
 const DEFAULT_SETTINGS = {
-  'platform.name': { value: 'ParkingBNB', description: 'Platform name', is_public: true },
-  'platform.version': { value: '1.0.0', description: 'Platform version', is_public: true },
-  'platform.commission_rate': { value: 0.15, description: 'Platform commission rate (15%)', is_public: false },
-  'feature.instant_booking': { value: true, description: 'Enable instant booking', is_public: true },
-  'feature.promo_codes': { value: true, description: 'Enable promo codes', is_public: true },
-  'maintenance.mode': { value: false, description: 'Maintenance mode', is_public: true },
-  'payment.min_amount': { value: 5, description: 'Minimum payment amount', is_public: true },
-  'payment.max_amount': { value: 10000, description: 'Maximum payment amount', is_public: true },
-  'booking.min_hours': { value: 1, description: 'Minimum booking duration in hours', is_public: true },
-  'booking.max_days': { value: 30, description: 'Maximum booking duration in days', is_public: true },
-  'booking.cancellation_hours': { value: 24, description: 'Hours before booking to cancel', is_public: true }
+  "platform.name": {
+    value: "ParkingBNB",
+    description: "Platform name",
+    is_public: true,
+  },
+  "platform.version": {
+    value: "1.0.0",
+    description: "Platform version",
+    is_public: true,
+  },
+  "platform.commission_rate": {
+    value: 0.15,
+    description: "Platform commission rate (15%)",
+    is_public: false,
+  },
+  "feature.instant_booking": {
+    value: true,
+    description: "Enable instant booking",
+    is_public: true,
+  },
+  "feature.promo_codes": {
+    value: true,
+    description: "Enable promo codes",
+    is_public: true,
+  },
+  "maintenance.mode": {
+    value: false,
+    description: "Maintenance mode",
+    is_public: true,
+  },
+  "payment.min_amount": {
+    value: 5,
+    description: "Minimum payment amount",
+    is_public: true,
+  },
+  "payment.max_amount": {
+    value: 10000,
+    description: "Maximum payment amount",
+    is_public: true,
+  },
+  "booking.min_hours": {
+    value: 1,
+    description: "Minimum booking duration in hours",
+    is_public: true,
+  },
+  "booking.max_days": {
+    value: 30,
+    description: "Maximum booking duration in days",
+    is_public: true,
+  },
+  "booking.cancellation_hours": {
+    value: 24,
+    description: "Hours before booking to cancel",
+    is_public: true,
+  },
+  "sms.provider": {
+    value: "mock",
+    description: "SMS gateway provider (mock, fast2sms, twilio, msg91)",
+    is_public: false,
+  },
+  "sms.api_key": {
+    value: "",
+    description: "SMS provider API key / auth token",
+    is_public: false,
+  },
+  "sms.sender_id": {
+    value: "PRKFNB",
+    description: "SMS Sender ID or Twilio Phone Number",
+    is_public: false,
+  },
+  "sms.template": {
+    value: "Your ParkFNB verification code is {code}. Valid for 5 minutes.",
+    description: "SMS OTP message template",
+    is_public: false,
+  },
+  "otp.ttl_seconds": {
+    value: 300,
+    description: "OTP expiry time in seconds (default 300s)",
+    is_public: false,
+  },
+  "otp.resend_cooldown": {
+    value: 30,
+    description: "OTP resend cooldown in seconds (default 30s)",
+    is_public: false,
+  },
+  "otp.test_code": {
+    value: "123456",
+    description: "Test OTP code for demo/dev",
+    is_public: false,
+  },
+  "otp.test_enabled": {
+    value: true,
+    description: "Allow demo/test OTP bypass",
+    is_public: false,
+  },
+  "otp.allow_dev_otp": {
+    value: true,
+    description: "Return dev_code in response outside production",
+    is_public: false,
+  },
 };
 
 /**
@@ -30,29 +119,42 @@ const DEFAULT_SETTINGS = {
 exports.getAllSettings = async (req, res, next) => {
   try {
     // Admin check
-    if (req.user.user_type !== 'admin') {
-      return error(res, errorCodes.AUTH_FORBIDDEN, 403, 'Only admins can view all settings');
+    if (req.user.user_type !== "admin") {
+      return error(
+        res,
+        errorCodes.AUTH_FORBIDDEN,
+        403,
+        "Only admins can view all settings",
+      );
     }
 
     const settings = await PlatformSettings.find().sort({ setting_key: 1 });
 
-    // Convert to key-value object for easier consumption
+    // Populate with defaults first so unset keys are still visible to admin
     const settingsObject = {};
-    settings.forEach(setting => {
+    Object.keys(DEFAULT_SETTINGS).forEach((key) => {
+      settingsObject[key] = {
+        value: DEFAULT_SETTINGS[key].value,
+        description: DEFAULT_SETTINGS[key].description,
+        updated_at: null,
+      };
+    });
+
+    settings.forEach((setting) => {
       settingsObject[setting.setting_key] = {
         value: setting.setting_value,
         description: setting.description,
-        updated_at: setting.updated_at
+        updated_at: setting.updated_at,
       };
     });
 
     return success(res, {
       settings: settingsObject,
-      count: settings.length
+      count: Object.keys(settingsObject).length,
     });
   } catch (err) {
-    console.error('Get all settings error:', err);
-    return error(res, errorCodes.SERVER_ERROR, 500, 'Error fetching settings');
+    console.error("Get all settings error:", err);
+    return error(res, errorCodes.SERVER_ERROR, 500, "Error fetching settings");
   }
 };
 
@@ -64,8 +166,13 @@ exports.getAllSettings = async (req, res, next) => {
 exports.getSettingByKey = async (req, res, next) => {
   try {
     // Admin check
-    if (req.user.user_type !== 'admin') {
-      return error(res, errorCodes.AUTH_FORBIDDEN, 403, 'Only admins can view settings');
+    if (req.user.user_type !== "admin") {
+      return error(
+        res,
+        errorCodes.AUTH_FORBIDDEN,
+        403,
+        "Only admins can view settings",
+      );
     }
 
     const { key } = req.params;
@@ -73,13 +180,13 @@ exports.getSettingByKey = async (req, res, next) => {
     const setting = await PlatformSettings.findOne({ setting_key: key });
 
     if (!setting) {
-      return error(res, errorCodes.NOT_FOUND, 404, 'Setting not found');
+      return error(res, errorCodes.NOT_FOUND, 404, "Setting not found");
     }
 
     return success(res, { setting });
   } catch (err) {
-    console.error('Get setting by key error:', err);
-    return error(res, errorCodes.SERVER_ERROR, 500, 'Error fetching setting');
+    console.error("Get setting by key error:", err);
+    return error(res, errorCodes.SERVER_ERROR, 500, "Error fetching setting");
   }
 };
 
@@ -95,15 +202,16 @@ exports.getPublicSettings = async (req, res, next) => {
 
     const publicSettings = {};
 
-    settings.forEach(setting => {
+    settings.forEach((setting) => {
       // Consider settings as public if key starts with certain prefixes or is specifically marked
-      const isPublicKey = setting.setting_key.startsWith('feature.') ||
-                         setting.setting_key.startsWith('platform.name') ||
-                         setting.setting_key.startsWith('platform.version') ||
-                         setting.setting_key.startsWith('maintenance.') ||
-                         setting.setting_key.includes('min_') ||
-                         setting.setting_key.includes('max_') ||
-                         setting.setting_key.includes('cancellation');
+      const isPublicKey =
+        setting.setting_key.startsWith("feature.") ||
+        setting.setting_key.startsWith("platform.name") ||
+        setting.setting_key.startsWith("platform.version") ||
+        setting.setting_key.startsWith("maintenance.") ||
+        setting.setting_key.includes("min_") ||
+        setting.setting_key.includes("max_") ||
+        setting.setting_key.includes("cancellation");
 
       if (isPublicKey) {
         publicSettings[setting.setting_key] = setting.setting_value;
@@ -112,7 +220,7 @@ exports.getPublicSettings = async (req, res, next) => {
 
     // Add default public settings if not in database
     if (Object.keys(publicSettings).length === 0) {
-      Object.keys(DEFAULT_SETTINGS).forEach(key => {
+      Object.keys(DEFAULT_SETTINGS).forEach((key) => {
         if (DEFAULT_SETTINGS[key].is_public) {
           publicSettings[key] = DEFAULT_SETTINGS[key].value;
         }
@@ -121,8 +229,13 @@ exports.getPublicSettings = async (req, res, next) => {
 
     return success(res, { settings: publicSettings });
   } catch (err) {
-    console.error('Get public settings error:', err);
-    return error(res, errorCodes.SERVER_ERROR, 500, 'Error fetching public settings');
+    console.error("Get public settings error:", err);
+    return error(
+      res,
+      errorCodes.SERVER_ERROR,
+      500,
+      "Error fetching public settings",
+    );
   }
 };
 
@@ -134,15 +247,25 @@ exports.getPublicSettings = async (req, res, next) => {
 exports.upsertSetting = async (req, res, next) => {
   try {
     // Admin check
-    if (req.user.user_type !== 'admin') {
-      return error(res, errorCodes.AUTH_FORBIDDEN, 403, 'Only admins can update settings');
+    if (req.user.user_type !== "admin") {
+      return error(
+        res,
+        errorCodes.AUTH_FORBIDDEN,
+        403,
+        "Only admins can update settings",
+      );
     }
 
     const { key } = req.params;
     const { value, description } = req.body;
 
     if (value === undefined) {
-      return error(res, errorCodes.REQ_VALIDATION, 400, 'Setting value is required');
+      return error(
+        res,
+        errorCodes.REQ_VALIDATION,
+        400,
+        "Setting value is required",
+      );
     }
 
     // Upsert the setting
@@ -152,22 +275,22 @@ exports.upsertSetting = async (req, res, next) => {
         setting_key: key,
         setting_value: value,
         description: description || `Setting for ${key}`,
-        updated_at: new Date()
+        updated_at: new Date(),
       },
       {
         new: true,
         upsert: true,
-        runValidators: true
-      }
+        runValidators: true,
+      },
     );
 
     return success(res, {
-      message: 'Setting updated successfully',
-      setting
+      message: "Setting updated successfully",
+      setting,
     });
   } catch (err) {
-    console.error('Upsert setting error:', err);
-    return error(res, errorCodes.SERVER_ERROR, 500, 'Error updating setting');
+    console.error("Upsert setting error:", err);
+    return error(res, errorCodes.SERVER_ERROR, 500, "Error updating setting");
   }
 };
 
@@ -179,36 +302,48 @@ exports.upsertSetting = async (req, res, next) => {
 exports.deleteSetting = async (req, res, next) => {
   try {
     // Admin check
-    if (req.user.user_type !== 'admin') {
-      return error(res, errorCodes.AUTH_FORBIDDEN, 403, 'Only admins can delete settings');
+    if (req.user.user_type !== "admin") {
+      return error(
+        res,
+        errorCodes.AUTH_FORBIDDEN,
+        403,
+        "Only admins can delete settings",
+      );
     }
 
     const { key } = req.params;
 
     // Prevent deletion of critical settings
     const criticalSettings = [
-      'platform.name',
-      'platform.version',
-      'platform.commission_rate'
+      "platform.name",
+      "platform.version",
+      "platform.commission_rate",
     ];
 
     if (criticalSettings.includes(key)) {
-      return error(res, errorCodes.BIZ_CONFLICT, 409, 'Cannot delete critical platform settings');
+      return error(
+        res,
+        errorCodes.BIZ_CONFLICT,
+        409,
+        "Cannot delete critical platform settings",
+      );
     }
 
-    const setting = await PlatformSettings.findOneAndDelete({ setting_key: key });
+    const setting = await PlatformSettings.findOneAndDelete({
+      setting_key: key,
+    });
 
     if (!setting) {
-      return error(res, errorCodes.NOT_FOUND, 404, 'Setting not found');
+      return error(res, errorCodes.NOT_FOUND, 404, "Setting not found");
     }
 
     return success(res, {
-      message: 'Setting deleted successfully',
-      deleted_setting: setting.setting_key
+      message: "Setting deleted successfully",
+      deleted_setting: setting.setting_key,
     });
   } catch (err) {
-    console.error('Delete setting error:', err);
-    return error(res, errorCodes.SERVER_ERROR, 500, 'Error deleting setting');
+    console.error("Delete setting error:", err);
+    return error(res, errorCodes.SERVER_ERROR, 500, "Error deleting setting");
   }
 };
 
@@ -220,36 +355,47 @@ exports.deleteSetting = async (req, res, next) => {
 exports.bulkUpdateSettings = async (req, res, next) => {
   try {
     // Admin check
-    if (req.user.user_type !== 'admin') {
-      return error(res, errorCodes.AUTH_FORBIDDEN, 403, 'Only admins can update settings');
+    if (req.user.user_type !== "admin") {
+      return error(
+        res,
+        errorCodes.AUTH_FORBIDDEN,
+        403,
+        "Only admins can update settings",
+      );
     }
 
     const { settings } = req.body;
 
-    if (!settings || typeof settings !== 'object') {
-      return error(res, errorCodes.REQ_VALIDATION, 400, 'Settings object is required');
+    if (!settings || typeof settings !== "object") {
+      return error(
+        res,
+        errorCodes.REQ_VALIDATION,
+        400,
+        "Settings object is required",
+      );
     }
 
     const updatePromises = [];
     const updatedKeys = [];
 
     // Update each setting
-    Object.keys(settings).forEach(key => {
+    Object.keys(settings).forEach((key) => {
       const settingData = settings[key];
 
       const updatePromise = PlatformSettings.findOneAndUpdate(
         { setting_key: key },
         {
           setting_key: key,
-          setting_value: settingData.value !== undefined ? settingData.value : settingData,
+          setting_value:
+            settingData.value !== undefined ? settingData.value : settingData,
           description: settingData.description || `Setting for ${key}`,
-          updated_at: new Date()
+          updated_at: new Date(),
         },
         {
           new: true,
           upsert: true,
-          runValidators: true
-        }
+          runValidators: true,
+        },
       );
 
       updatePromises.push(updatePromise);
@@ -259,13 +405,13 @@ exports.bulkUpdateSettings = async (req, res, next) => {
     await Promise.all(updatePromises);
 
     return success(res, {
-      message: 'Settings updated successfully',
+      message: "Settings updated successfully",
       updated_count: updatedKeys.length,
-      updated_keys: updatedKeys
+      updated_keys: updatedKeys,
     });
   } catch (err) {
-    console.error('Bulk update settings error:', err);
-    return error(res, errorCodes.SERVER_ERROR, 500, 'Error updating settings');
+    console.error("Bulk update settings error:", err);
+    return error(res, errorCodes.SERVER_ERROR, 500, "Error updating settings");
   }
 };
 
@@ -277,29 +423,34 @@ exports.bulkUpdateSettings = async (req, res, next) => {
 exports.resetToDefault = async (req, res, next) => {
   try {
     // Admin check
-    if (req.user.user_type !== 'admin') {
-      return error(res, errorCodes.AUTH_FORBIDDEN, 403, 'Only admins can reset settings');
+    if (req.user.user_type !== "admin") {
+      return error(
+        res,
+        errorCodes.AUTH_FORBIDDEN,
+        403,
+        "Only admins can reset settings",
+      );
     }
 
     // Delete all existing settings
     await PlatformSettings.deleteMany({});
 
     // Insert default settings
-    const defaultSettingsArray = Object.keys(DEFAULT_SETTINGS).map(key => ({
+    const defaultSettingsArray = Object.keys(DEFAULT_SETTINGS).map((key) => ({
       setting_key: key,
       setting_value: DEFAULT_SETTINGS[key].value,
       description: DEFAULT_SETTINGS[key].description,
-      updated_at: new Date()
+      updated_at: new Date(),
     }));
 
     await PlatformSettings.insertMany(defaultSettingsArray);
 
     return success(res, {
-      message: 'Settings reset to default successfully',
-      settings_count: defaultSettingsArray.length
+      message: "Settings reset to default successfully",
+      settings_count: defaultSettingsArray.length,
     });
   } catch (err) {
-    console.error('Reset settings error:', err);
-    return error(res, errorCodes.SERVER_ERROR, 500, 'Error resetting settings');
+    console.error("Reset settings error:", err);
+    return error(res, errorCodes.SERVER_ERROR, 500, "Error resetting settings");
   }
 };

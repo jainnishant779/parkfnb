@@ -3,73 +3,79 @@
  * Handles user registration, login, password management
  */
 
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const authController = require('../controllers/authController');
-const otpController = require('../controllers/otpController');
-const { protect } = require('../middleware/auth');
+const authController = require("../controllers/authController");
+const otpController = require("../controllers/otpController");
+const { protect } = require("../middleware/auth");
 // const { authLimiter } = require('../middleware/rateLimit');
-const { validateRequired, validateEmail, validatePassword, sanitize } = require('../middleware/validation');
+const {
+  validateRequired,
+  validateEmail,
+  validatePassword,
+  sanitize,
+} = require("../middleware/validation");
 
 // Public routes
 router.post(
-  '/register',
+  "/register",
   // authLimiter,
   sanitize,
-  validateRequired(['email', 'phone', 'password', 'first_name', 'last_name']),
+  validateRequired(["email", "phone", "password", "first_name", "last_name"]),
   validateEmail,
   validatePassword,
-  authController.register
+  authController.register,
 );
 
 router.post(
-  '/login',
+  "/login",
   // authLimiter,
   sanitize,
-  validateRequired(['email', 'password']),
+  validateRequired(["email", "password"]),
   validateEmail,
-  authController.login
+  authController.login,
 );
 
-router.get('/verify/:token', authController.verifyEmail);
+router.get("/verify/:token", authController.verifyEmail);
 
 router.post(
-  '/forgot-password',
+  "/forgot-password",
   // authLimiter,
   sanitize,
-  validateRequired(['email']),
+  validateRequired(["email"]),
   validateEmail,
-  authController.forgotPassword
+  authController.forgotPassword,
 );
 
 router.put(
-  '/reset-password/:token',
+  "/reset-password/:token",
   // authLimiter,
   sanitize,
-  validateRequired(['password']),
+  validateRequired(["password"]),
   validatePassword,
-  authController.resetPassword
+  authController.resetPassword,
 );
 
 // ── OTP sign-in (both mobile apps) ──────────────────────────────────────────
-router.post('/otp/send', sanitize, otpController.sendOtp);
-router.post('/otp/resend', sanitize, otpController.resendOtp);
-router.post('/otp/verify', sanitize, otpController.verifyOtp);
-router.get('/onboarding-status', protect, otpController.getOnboardingStatus);
+router.post("/otp/send", sanitize, otpController.sendOtp);
+router.post("/otp/resend", sanitize, otpController.resendOtp);
+router.post("/otp/verify", sanitize, otpController.verifyOtp);
+router.post("/otp/test-send", protect, otpController.testSendOtp);
+router.get("/onboarding-status", protect, otpController.getOnboardingStatus);
 
-router.post('/refresh-token', authController.refreshToken);
+router.post("/refresh-token", authController.refreshToken);
 
 // Protected routes
-router.post('/logout', protect, authController.logout);
-router.get('/me', protect, authController.getMe);
-router.post('/resend-verification', protect, authController.resendVerification);
+router.post("/logout", protect, authController.logout);
+router.get("/me", protect, authController.getMe);
+router.post("/resend-verification", protect, authController.resendVerification);
 router.put(
-  '/change-password',
+  "/change-password",
   protect,
   sanitize,
-  validateRequired(['currentPassword', 'newPassword']),
+  validateRequired(["currentPassword", "newPassword"]),
   validatePassword,
-  authController.changePassword
+  authController.changePassword,
 );
 
 module.exports = router;

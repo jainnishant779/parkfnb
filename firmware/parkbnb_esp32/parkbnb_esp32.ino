@@ -17,6 +17,8 @@
 #include <Preferences.h>
 #include <Wire.h>
 #include <math.h>
+#include <ArduinoOTA.h>
+#include <HTTPUpdate.h>
 
 #include "config.h"
 
@@ -256,6 +258,45 @@ void onCommand(char* topic, byte* payload, unsigned int len) {
     publishEvent("calibrated", nullptr);
     publishState();
   }
+  else if (!strcmp(cmd, "ota")) {
+    const char* otaUrl = d["url"] | "";
+    if (!otaUrl || strlen(otaUrl) == 0) {
+      publishEvent("rejected", "missing_ota_url");
+      return;
+    }
+    motorStop();
+    state = ST_IDLE;
+    publishEvent("ota_start", otaUrl);
+    Serial.printf("[OTA] Starting remote update from: %s\n", otaUrl);
+
+    httpUpdate.onProgress([](size_t current, size_t total) {
+      if (total > 0) {
+        int pct = (int)((current * 100) / total);
+        if (pct % 20 == 0) {
+          char pBuf[16];
+          snprintf(pBuf, sizeof(pBuf), "%d%%", pct);
+          publishEvent("ota_progress", pBuf);
+        }
+      }
+    });
+
+    t_httpUpdate_return ret = httpUpdate.update(netClient, otaUrl);
+    switch (ret) {
+      case HTTP_UPDATE_FAILED:
+        Serial.printf("[OTA] Failed Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+        publishEvent("ota_failed", httpUpdate.getLastErrorString().c_str());
+        publishState();
+        break;
+      case HTTP_UPDATE_NO_UPDATES:
+        publishEvent("ota_no_update", nullptr);
+        break;
+      case HTTP_UPDATE_OK:
+        publishEvent("ota_success", "rebooting");
+        delay(500);
+        ESP.restart();
+        break;
+    }
+  }
   else publishEvent("rejected", "unknown_cmd");
 }
 
@@ -323,10 +364,38 @@ void setup() {
   ensureWifi();
   Serial.printf("Parkbnb %s fw %s  ip=%s\n", DEVICE_ID, FW_VERSION,
                 WiFi.localIP().toString().c_str());
+
+#if OTA_ENABLED
+  ArduinoOTA.setPort(OTA_PORT);
+  ArduinoOTA.setHostname((String("parkbnb-") + DEVICE_ID).c_str());
+  ArduinoOTA.setPassword(OTA_PASS);
+  ArduinoOTA.onStart([]() {
+    motorStop();
+    state = ST_IDLE;
+    String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
+    Serial.println("[OTA] Local update started: " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\n[OTA] Local update completed.");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    if (total > 0) {
+      Serial.printf("[OTA] Local Progress: %u%%\r", (progress / (total / 100)));
+    }
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("[OTA] Error[%u]: ", error);
+  });
+  ArduinoOTA.begin();
+  Serial.printf("[OTA] Local ArduinoOTA listening on port %d\n", OTA_PORT);
+#endif
 }
 
 void loop() {
   ensureWifi();
+#if OTA_ENABLED
+  ArduinoOTA.handle();
+#endif
   ensureMqtt();
   mqtt.loop();
 

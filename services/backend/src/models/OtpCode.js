@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
 /**
  * One-time codes for phone/email sign-in.
@@ -8,49 +8,56 @@ const bcrypt = require('bcryptjs');
  * way a password is handled. Documents expire on their own via a TTL index, so
  * nothing has to sweep them.
  */
-const otpCodeSchema = new mongoose.Schema({
-  // Phone number or email the code was sent to
-  identifier: {
-    type: String,
-    required: true,
-    lowercase: true,
-    trim: true,
-    index: true
+const otpCodeSchema = new mongoose.Schema(
+  {
+    // Phone number or email the code was sent to
+    identifier: {
+      type: String,
+      required: true,
+      lowercase: true,
+      trim: true,
+      index: true,
+    },
+    code_hash: {
+      type: String,
+      required: true,
+      select: false,
+    },
+    channel: {
+      type: String,
+      required: true,
+      enum: ["sms", "email"],
+      default: "sms",
+    },
+    // Wrong guesses so far — the code dies after MAX_ATTEMPTS
+    attempts: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    // How many times a fresh code was requested for this identifier in the window
+    sends: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+    consumed_at: {
+      type: Date,
+      default: null,
+    },
+    req_id: {
+      type: String,
+      default: null,
+    },
+    expires_at: {
+      type: Date,
+      required: true,
+    },
   },
-  code_hash: {
-    type: String,
-    required: true,
-    select: false
+  {
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
   },
-  channel: {
-    type: String,
-    required: true,
-    enum: ['sms', 'email'],
-    default: 'sms'
-  },
-  // Wrong guesses so far — the code dies after MAX_ATTEMPTS
-  attempts: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  // How many times a fresh code was requested for this identifier in the window
-  sends: {
-    type: Number,
-    default: 1,
-    min: 1
-  },
-  consumed_at: {
-    type: Date,
-    default: null
-  },
-  expires_at: {
-    type: Date,
-    required: true
-  }
-}, {
-  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
-});
+);
 
 // Mongo removes the document once expires_at passes.
 otpCodeSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
@@ -65,4 +72,4 @@ otpCodeSchema.methods.matches = async function (code) {
   return bcrypt.compare(String(code), this.code_hash);
 };
 
-module.exports = mongoose.model('OtpCode', otpCodeSchema);
+module.exports = mongoose.model("OtpCode", otpCodeSchema);

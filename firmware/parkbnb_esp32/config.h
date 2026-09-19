@@ -60,3 +60,9 @@
 // ---------- Named positions ----------
 #define ANGLE_OPEN       0.0f     // barrier flat  (car can pass)
 #define ANGLE_SECURE     90.0f    // barrier up    (space locked)
+
+// ---------- Over-The-Air (OTA) Updates ----------
+#define OTA_ENABLED      true
+#define OTA_PORT         3232
+#define OTA_PASS         "parkbnb-ota-2026"
+
