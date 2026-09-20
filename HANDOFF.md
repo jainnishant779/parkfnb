@@ -1,16 +1,16 @@
 # Parkfnb — developer handoff
 
-Written 2026-09-20 at the end of a long end-to-end test-and-fix session on the two Android apps
-(`apps/consumer`, `apps/owner`) and the backend (`services/backend`). It is meant to let you pick the
-work up cold. Everything here was either verified during the session or is explicitly marked
-**(unverified)**. Read section 1 and section 5 first.
+Last updated 2026-09-20 after a full QA pass (API, consumer app, owner app) and a fix round.
+It is meant to let you pick the work up cold. Everything here was either **verified during the
+session** or is explicitly marked **(unverified)**. Read sections 1, 4 and 5 first.
 
-Companion files in this folder tree:
+Companion files:
 
 | File | What it is |
 |---|---|
-| `docs/handoff/pending-changes.patch` | Five files of fixes that exist **only as a patch**, not committed. Section 3. |
-| `docs/handoff/adb_ui.py` | Small adb/uiautomator driver used for all on-device testing. Section 7. |
+| `docs/handoff/QA_REPORT.md` | The test matrix: every check that was run, pass/fail, and evidence. |
+| `docs/handoff/adb_ui.py` | Small adb/uiautomator driver used for all on-device testing (section 7). |
+| `services/backend/tests/pricing.unit.js` | Unit test for the new price rule (`node tests/pricing.unit.js`). |
 | `docs/api-contract.md`, `docs/system-design.md` | Existing design docs. |
 | `CLAUDE.md`, `README.md` | Existing orientation docs. **Partly stale**, see section 2. |
 
@@ -20,125 +20,126 @@ Companion files in this folder tree:
 
 | Area | State |
 |---|---|
-| Owner app: sign-in → add property → add space (5 steps) → publish | Works against the live backend. |
-| Consumer app: discover → book (cash) → owner approves → booking confirmed | Works end to end. |
-| Cross-app sync (owner listing shows up in consumer search, booking shows up in owner requests) | Works. |
-| Crashes | None in the `logcat -b crash` buffer, checked after the emulator flows and after launching the consumer app on the phone. Not monitored continuously. |
-| **SMS OTP (MSG91)** | **Not delivering on the live server.** MSG91 itself works. Cause not yet confirmed. Section 4. |
-| Security | Two open problems: MSG91 token in git history, and a default-on `123456` OTP bypass. Section 5, P0. |
-| Fixes pushed to `main` | 4 commits (`e4fd473`, `ec4837b`, `8588fe1`, `aaa8580`), on both remotes. |
-| Fixes NOT pushed | 5 files, in `docs/handoff/pending-changes.patch`. Not run on a device yet. |
-| APKs | The APKs on the original dev machine are **stale** (built before these fixes). Rebuild. Section 8. |
+| Owner: sign-in → add property → add space (5 steps) → publish → edit price → pause/resume | Works. |
+| Consumer: discover → book (cash) → owner approves/rejects → confirmed/rejected → cancel | Works. |
+| Cross-app sync (listing, price edit, pause, booking, approval) | Works, verified against the live backend. |
+| Consumer OTP screen, "Complete Your Profile" (Continue / Skip) | Rewritten and verified on the final build. |
+| **Backend fixes in this repo (pricing, id validation)** | **Merged to `main` but NOT deployed to Render.** The live server still has the old behaviour. Section 3.3. |
+| **SMS OTP (MSG91)** | **Not delivering on the live server.** MSG91 itself works. Cause not confirmed. Section 4. |
+| **Security** | **The `123456` test code signs anyone in on the live server (verified).** Section 5, P0. |
+| Release APKs | Signed with the **debug keystore** — testing builds only. Section 8. |
+| Not tested | Online payment, check-in/QR/ANPR/barrier, extend booking, refunds, KYC approval, promo codes, reviews, messaging, staff, admin app, firmware, iOS. |
 
 ---
 
 ## 2. Repository facts (and what the existing docs get wrong)
 
-- **It is one git repo**, not three. `git rev-parse` at the root works and there are no nested `.git`
-  directories. `README.md` and `CLAUDE.md` both say the opposite ("three separate repos, never `git init`
-  the root"). Ignore that. Commit from the root.
-- Remotes: `origin` = `github.com/jainnishant779/parkfnb`, `soojal` = `github.com/Soojal2005/parkfnb`.
-  Both track `main`. `soojal/main` and `origin/main` were fast-forwarded to the same commit; keep them in step.
-- `apps/admin` exists now (the README says it is empty; an admin UI landed in commit `56cad7c`).
+- **One git repo**, not three. There are no nested `.git` directories. `README.md` and `CLAUDE.md` say
+  otherwise ("three separate repos, never `git init` the root"); ignore that and commit from the root.
+- Remotes: `origin` = `github.com/jainnishant779/parkfnb`, `soojal` = `github.com/Soojal2005/parkfnb`,
+  both on `main`. Keep them in step.
+- `apps/admin` exists now (the README says it is empty).
 - `CLAUDE.md` says `bookings/:id/approve|reject|noshow` are missing. **They exist**
-  (`services/backend/src/routes/bookingRoutes.js:62-64`). Owner approval works.
-- `CLAUDE.md` says the Render deployment does not respond. It responds:
-  `https://parkfnb.onrender.com` is live, and `PUT /api/users/me/profile`, `GET /api/auth/me`,
-  `PUT /api/owners/me/profile`, `GET /api/auth/onboarding-status`, `POST /api/auth/otp/verify` all exist
-  (401/400 without a token). Free-tier cold start is 30–60 s on the first request.
-- Both apps hardcode that URL: `apps/consumer/user/utils/constants.js:10` and `apps/owner/src/config/api.ts:4`.
-- Backend is CommonJS (`require`), Express 5 + Mongoose, snake_case fields; both apps camelCase↔snake_case
-  via `caseTransform`. Responses go through `src/utils/responseHelper.js` (`{success, data}` /
-  `{success:false, error:{code,http,message,traceId}}`). Keep to these conventions.
+  (`services/backend/src/routes/bookingRoutes.js:62-64`) and were exercised end to end.
+- `CLAUDE.md` says Render does not respond. It does: `https://parkfnb.onrender.com` (30–60 s cold start).
+- Both apps hardcode that URL: `apps/consumer/user/utils/constants.js:10`, `apps/owner/src/config/api.ts:4`.
+- Backend: CommonJS, Express 5 + Mongoose, snake_case fields; the apps camelCase↔snake_case through
+  `caseTransform`. Responses go through `src/utils/responseHelper.js`. Keep to these conventions.
+- The API layer **camel-cases keys and unwraps `data`**, so a backend `{ stats: { total_revenue } }`
+  reaches an app service as `{ stats: { totalRevenue } }`. Several bugs below were shape mismatches.
 
 ---
 
-## 3. What was changed, and the one thing that is only a patch
+## 3. What changed
 
-### 3.1 Pushed to `main`
+### 3.1 Earlier commits (already on both remotes)
 
-| Commit | Change |
+`e4fd473` OTP delivery failures → 502 and MSG91 credentials out of source · `ec4837b` consumer booking screen
+(dimensions, end time, bottom bar inset, "Booking Requested") · `8588fe1` owner shows renter phone ·
+`aaa8580` consumer Gradle x86_64 ABI · `3b2b669` first handoff.
+
+### 3.2 This round's fixes (in `main`)
+
+**Consumer**
+
+| Fix | Files |
 |---|---|
-| `e4fd473` | **Backend OTP:** a real SMS provider that fails now returns HTTP 502 instead of "Code sent". MSG91 widget ID/token removed from source; read from `sms.api_key`/`SMS_API_KEY` (`<widgetId>:<tokenAuth>`) or `MSG91_WIDGET_ID` + `MSG91_TOKEN_AUTH`. `.env.example` documents `SMS_PROVIDER`/`SMS_API_KEY`. |
-| `ec4837b` | **Consumer booking screen** (`ParkingDetailsPage.js`): real dimensions (was hardcoded 8.5×18×7 ft for every space); default end time = start + 1 h (was a fixed `10:00`, which sat before the start time and left "Book Now" disabled); bottom "Book Now" bar now clears the Android nav bar (safe-area inset); success popup says "Booking Requested" when status is `pending`. |
-| `8588fe1` | **Owner app:** booking cards show `+91 <phone>` instead of "Unknown Renter" for OTP sign-ups with no name. |
-| `aaa8580` | **Consumer Gradle:** adds `x86_64` ABI so release builds run on emulators. |
+| OTP screen: **one** hidden input + six display cells (was six inputs passing focus, which dropped digits and flickered); countdown isolated so the screen no longer re-renders every second; fixed-height error slot; autofill hints; visible empty cells | `user/screens/auth/OTPVerification.js` |
+| "Complete Your Profile": Continue is always tappable and says what is missing (name → vehicle → reg no. → Terms); Skip skips immediately (no modal) | `user/screens/onboarding/UserOnboarding.js` |
+| `KeyboardAvoidingView` no longer double-adjusts on Android (`windowSoftInputMode` is already `adjustResize`) | `SignIn.js`, `SignUp.js`, `UserOnboarding.js`, owner `OwnerWelcomeAuthScreen.tsx` |
+| Popups: the tint moved off the elevated overlay onto a child backdrop (elevation shadow bled through as a lighter strip); bottom sheets padded above the tab bar / nav bar; stale booking error clears when the selection changes | `ParkingDetailsPage.js`, `BookingManagementPage.js`, `ProfilePage.js` |
+| Bookings tab "+" button no longer clipped by the tab bar | `BookingManagementPage.js` |
+| Removed the Home bell (no handler, permanent fake "unread" dot; `NotificationCenter.js` is an **empty file**) | `HomePage.js` |
 
-### 3.2 NOT committed — `docs/handoff/pending-changes.patch`
+**Owner**
 
-These were written last and are **unbuilt and unverified on a device** (they parse with the RN Babel
-preset, lint with 0 errors; the owner app typechecks). Apply and test them yourself:
+| Fix | Files |
+|---|---|
+| **Payouts screen crashed the whole app** (`Cannot read property 'totalRevenue' of undefined`) and the **Dashboard stats were stuck at zero**: the backend returns `{stats: {flat snake_case}}` but the app read `revenueStats.totalRevenue`. `getOwnerStats` now adapts the payload; Payouts null-safe | `services/earningsService.ts`, `screens/earnings/PayoutsScreen.tsx` |
+| **Profile screen showed "John Doe / john.doe@example.com"** for every owner (hardcoded default, saved to storage, never read the signed-in account). Now seeded from the signed-in user and stored per account | `screens/settings/ProfileScreen.tsx` |
+| More → Notifications showed a hardcoded "3" unread badge | `screens/more/MoreScreen.tsx` |
+| Renter shown as `+91 <phone>` instead of "Unknown Renter" | `bookingTransform.ts`, `DashboardScreen.tsx` |
 
-```bash
-git apply --whitespace=nowarn docs/handoff/pending-changes.patch   # verified to apply cleanly on aaa8580
-```
+**Backend** (`services/backend`)
 
-| File | Change | Why |
-|---|---|---|
-| `apps/consumer/user/screens/auth/OTPVerification.js` | Six separate `TextInput`s replaced by **one** hidden input over six display cells; resend countdown moved into a memoised `ResendRow` (was re-rendering the whole screen every second); fixed-height error slot; `keyboardDidShow` scroll instead of a `scrollToEnd` per digit; visible empty-cell contrast; `textContentType="oneTimeCode"` / `autoComplete="sms-otp"` for autofill. | User reported the Verify button/page **flickering**. Also on the emulator, typing `123456` into the six boxes dropped digits (`2` and `6`). |
-| `apps/consumer/user/screens/onboarding/UserOnboarding.js` | "Continue" is always tappable and shows what is missing (name → vehicle → reg no. → **Terms checkbox**); "Skip for now" skips immediately (no `AppAlert` modal); `KeyboardAvoidingView` `undefined` on Android. | User reported Continue and Skip "not working" on a real phone. Could not reproduce on the phone; this is reasoning from code, see section 5 P1. |
-| `apps/consumer/user/screens/auth/SignIn.js`, `SignUp.js` | `KeyboardAvoidingView behavior` → `undefined` on Android. | `windowSoftInputMode` is already `adjustResize`; a second `'height'` adjustment fights it. The owner app already does this. |
-| `apps/owner/src/screens/auth/OwnerWelcomeAuthScreen.tsx` | Same `KeyboardAvoidingView` change. | Same. |
+| Fix | Files |
+|---|---|
+| **Pricing:** price *dropped* as a stay got longer (24 h = ₹960 but 25 h = ₹600 on a ₹40/h, ₹300/day space); a blank daily/monthly rate turned 31+ day totals into `null`. New rule = cheapest applicable tier, rounded up per unit; 17 unit tests | `src/utils/pricing.js`, `tests/pricing.unit.js`, `bookingsController.js` |
+| Malformed `space_id`/`vehicle_id` returned HTTP 500; now 400 | `bookingsController.js` (`createBooking`, `quoteBooking`) |
 
-**First job:** apply the patch, build consumer, install on a device, and confirm the OTP screen no
-longer flickers and Continue/Skip work. If they do, commit it.
+### 3.3 Backend deployment — action required
+
+Nothing in 3.2 "Backend" is live until Render redeploys `main`. Until then the live API still returns
+₹960 for a 24 h booking, and the consumer "Daily" chip shows ₹960 for a ₹300/day space. Confirm that Render
+builds from a repo containing these commits (Render → Settings → Build & Deploy: repo, branch `main`, root
+`services/backend`), redeploy, then re-run the checks in `QA_REPORT.md` §API.
 
 ---
 
 ## 4. OTP / MSG91 — full picture
 
-### 4.1 How it works (backend `src/controllers/otpController.js`)
+### 4.1 How it works (`services/backend/src/controllers/otpController.js`)
 
-- `POST /api/auth/otp/send` → `issueCode` → `sendCode`. The provider is decided by `getOtpSmsConfig()`:
+- `POST /api/auth/otp/send` → `issueCode` → `sendCode`. The provider comes from `getOtpSmsConfig()`:
   **DB `PlatformSettings` (`sms.provider`, `sms.api_key`, `otp.test_enabled`, `otp.allow_dev_otp`) first,
   then env (`SMS_PROVIDER`, `SMS_API_KEY`, `DISABLE_TEST_OTP`, `ALLOW_DEV_OTP`), then defaults.**
-  Default provider is `mock`, which only logs the code and sends nothing.
-- With `msg91`, the backend calls MSG91's **widget** `sendOtpMobile`. The widget generates and owns the
-  code; the backend stores the returned request id (`req_id`) on the `OtpCode` row. On verify, because the
-  backend's own hashed code never matches the widget's code, it calls the widget's `verifyOtp` with that
-  `reqId` (`otp.req_id` fallback path).
-- MSG91 widget codes are **4 digits** (observed). The backend accepts 4–8 digits
-  (`/^\d{4,8}$/`), but **both apps hard-require exactly 6** (`OTP_LENGTH = 6` in
-  `apps/consumer/.../OTPVerification.js` and `apps/owner/src/screens/auth/OtpVerifyScreen.tsx`).
-  So even with SMS working, a 4-digit code cannot be entered. Fix: set the widget OTP length to 6 in the
-  MSG91 dashboard (preferred), or change the apps to accept 4–6.
-- `POST /api/auth/otp/verify` also accepts a **test code** (default `123456`, any phone number) when
-  `otp.test_enabled` (DB) is true or `DISABLE_TEST_OTP !== "true"` (env). See P0.
+  The default provider is `mock`: it only logs the code and sends nothing.
+- With `msg91` the backend calls MSG91's **widget** `sendOtpMobile`; the widget owns the code and the backend
+  stores the returned request id (`req_id`). On verify the backend calls the widget's `verifyOtp` with it.
+- MSG91 widget codes are **4 digits** (observed). The backend accepts 4–8, but **both apps hard-require 6**
+  (`OTP_LENGTH = 6`). Fix: set the widget OTP length to 6 in the MSG91 dashboard, or change the apps.
+- Since `e4fd473` a real provider that fails returns **502** instead of "Code sent", and credentials come only
+  from `sms.api_key`/`SMS_API_KEY` (`<widgetId>:<tokenAuth>`) or `MSG91_WIDGET_ID` + `MSG91_TOKEN_AUTH`.
 
 ### 4.2 What was proven
 
-- MSG91 accepts the project's widget ID/token and sends a real SMS; `verifyOtp` with that request id
-  returned `type: "success"`. (Tested directly against MSG91's API, from a developer machine.)
-- The live backend's `POST /api/auth/otp/send` returned "Code sent via sms" and **no SMS arrived**. The
-  same code path before this session reported success even on failure.
-- The live response contained no `dev_code` (good).
+- MSG91 accepts the widget ID/token, sends a real SMS, and `verifyOtp` with the request id succeeds
+  (tested directly against MSG91 from a developer machine).
+- The live backend's `/otp/send` answers "Code sent via sms" and **no SMS arrives**.
+- The live response contains no `dev_code`.
+- **The test code works on live:** `POST /otp/verify {code:"123456"}` for a never-seen number returned 200,
+  created the account and issued a token. (This is also how the QA accounts were created.)
 
 ### 4.3 Why no SMS arrives — two candidates, undiagnosed
 
-1. The live provider is `mock` (default; nothing selected `msg91`). Note the DB overrides env, so if
-   anyone ever saved the admin Settings page or used "Reset to default", `sms.provider = "mock"` is stored
-   and `SMS_PROVIDER` is ignored.
-2. The provider is `msg91` but MSG91 rejected Render's request (e.g. IP whitelisting on the widget
-   token — it worked from a developer's IP). The pre-`e4fd473` code swallowed that and said "sent".
+1. Live provider is `mock` (the default). The DB overrides env, so if anyone saved the admin Settings page or
+   used "Reset to default", `sms.provider="mock"` is stored and `SMS_PROVIDER` is ignored.
+2. Provider is `msg91` but MSG91 rejected Render's request (e.g. IP whitelisting on the widget token). Old
+   code hid that and said "sent".
 
-**Definitive check:** Render → service → Logs, request a code from the app, look for the line
-`[otp] [<provider>] sms -> <number> : <code>`. `[mock]` = candidate 1. `[msg91]` followed by
-`[otp] MSG91 rejected the send:` = candidate 2 (that log line was added in `e4fd473`; it only exists once
-that commit is deployed).
+**Check:** Render → Logs, request a code, look for `[otp] [<provider>] sms -> <number> : <code>`.
+`[mock]` = candidate 1; `[msg91]` then `[otp] MSG91 rejected the send:` = candidate 2 (that log line exists
+only once `e4fd473` is deployed).
 
 ### 4.4 Go-live checklist
 
-1. Confirm Render deploys from a repo containing `e4fd473` (Render → Settings → Build & Deploy: repo,
-   branch `main`, root dir `services/backend`).
-2. Render env: `SMS_PROVIDER=msg91`, `SMS_API_KEY=<widgetId>:<tokenAuth>` (or the split
-   `MSG91_WIDGET_ID` / `MSG91_TOKEN_AUTH`). If `e4fd473` is *not* deployed yet, only `SMS_PROVIDER` is
-   needed (old code falls back to the hardcoded pair), but setting both works on either version.
-3. If the DB has overrides, set admin Settings instead: `sms.provider=msg91`, `sms.api_key=<id>:<token>`.
-4. MSG91 dashboard → OTP widget: **length 6**; check IP whitelisting; confirm sender/DLT template.
-5. Request a code in the app; verify the SMS arrives and the 6-digit code signs in.
-6. Then lock down: `DISABLE_TEST_OTP=true` (and DB `otp.test_enabled` off), `NODE_ENV=production`,
-   `ALLOW_DEV_OTP` unset / `otp.allow_dev_otp` off.
-7. **Rotate the MSG91 widget token** (P0) and update Render.
+1. Render env: `SMS_PROVIDER=msg91`, `SMS_API_KEY=<widgetId>:<tokenAuth>`. If the DB has overrides, set admin
+   Settings instead (`sms.provider`, `sms.api_key`).
+2. MSG91 dashboard: widget OTP length **6**; check IP whitelisting; sender/DLT template.
+3. Request a code in the app; confirm the SMS and that the 6-digit code signs in.
+4. **Then** lock down: `DISABLE_TEST_OTP=true` (and DB `otp.test_enabled` off), `NODE_ENV=production`,
+   `ALLOW_DEV_OTP` unset.
+5. **Rotate the MSG91 widget token** (P0 #1).
 
 ---
 
@@ -146,184 +147,148 @@ that commit is deployed).
 
 ### P0 — security / production
 
-1. **MSG91 widget ID + token are in git history and on GitHub.** Removed from backend source in
-   `e4fd473`, but still in earlier commits, and still hardcoded in
-   `apps/consumer/user/services/msg91Service.js:21-22` and `apps/owner/src/services/msg91Service.ts:21-22`
-   (they only call `OTPWidget.initializeWidget`; sign-in itself goes through the backend, so the apps do
-   not need them — remove that init from `App.tsx` in both apps if nothing else uses the SDK).
-   Anyone who can read the repo can send SMS on your MSG91 account. **Rotate**, then keep the new value in
-   env only. If the repo is public, treat the old token as burned. (History rewrite is optional and
-   does not undo exposure.)
-2. **Test-OTP bypass defaults ON.** `123456` (or `TEST_OTP`) is accepted for **any phone number** and
-   skips the code check entirely, unless `DISABLE_TEST_OTP=true` / `otp.test_enabled=false`. If live has it
-   on, anyone can sign in as any user, including owners. During the session one attempt of `123456` on the
-   live server was rejected ("Incorrect code. 4 attempts left") but that entry may have been mistyped
-   **(unverified)** — test it properly and switch it off. Consider making the default *off* when
-   `NODE_ENV=production`. Also `DEFAULT_SETTINGS` in `platformSettingsController.js` seeds
-   `otp.test_enabled: true` and `otp.allow_dev_otp: true`, which a "Reset to default" writes to the DB.
-3. **Release APKs are signed with the debug keystore** (`signingConfig signingConfigs.debug` for
-   `release` in both `android/app/build.gradle`). Fine for testing, not shippable. Create a real
-   keystore and keep it out of the repo.
+1. **MSG91 widget ID + token are in git history and on GitHub.** Removed from backend source in `e4fd473`
+   but still in earlier commits and hardcoded in `apps/consumer/user/services/msg91Service.js:21-22` and
+   `apps/owner/src/services/msg91Service.ts:21-22` (only used for `OTPWidget.initializeWidget`; sign-in goes
+   through the backend, so the apps do not need them). **Rotate** the token, keep the new one in env only.
+2. **The `123456` bypass is live** (verified, §4.2). It is accepted for any number, skips the code check, and
+   creates accounts. Disable it (`DISABLE_TEST_OTP=true` + DB `otp.test_enabled=false`) as soon as SMS works;
+   consider making the default *off* when `NODE_ENV=production`. Note `platformSettingsController.js`
+   `DEFAULT_SETTINGS` seeds `otp.test_enabled: true` and `otp.allow_dev_otp: true`.
+3. **Release APKs use the debug keystore** (`signingConfig signingConfigs.debug` for `release` in both
+   `android/app/build.gradle`). Create a real keystore; keep it out of the repo.
+4. **Test data on the live DB** — section 9.
 
 ### P1 — functional
 
-4. **SMS not delivered on live** — section 4.
-5. **OTP length mismatch (4 vs 6)** — section 4.1.
-6. **Consumer "Complete Your Profile": Continue and Skip reported dead on a real phone** (Infinix X671,
-   Android 12). Not reproduced (the phone was in use when we tried). Two facts from code: Continue was
-   disabled until name (letters only) + vehicle + registration + **Terms checkbox** were all set, and the
-   checkbox has no error line; Skip went through `AppAlert`, which is a React Native `<Modal>`, and a
-   code comment in `ParkingDetailsPage.js` says `<Modal>` "does not present on this build". The patch
-   addresses both, but **the real cause is unconfirmed** — reproduce on the phone with the patched build.
-   If Skip still fails, look for a touch-blocking overlay or a stale `KeyboardAvoidingView` height after the
-   keyboard closes.
-7. **`booking_mode: instant` is ignored by the backend.** `createBooking`
-   (`bookingsController.js:475`) always writes `status: 'pending'`; only `approveBooking` (`:670`) or a
-   successful payment (`paymentsController.js:233,291,368`) makes it `confirmed`. So an "Instant" space
-   still needs owner approval. Product decision: should instant + cash auto-confirm?
-8. **Booking conflicts.** From `CLAUDE.md`, **not re-verified**: `hasBookingConflict` treats `pending` as a
-   conflict with no TTL, so an abandoned pending booking blocks the slot forever; `checkIn` only checks
-   `status === 'confirmed'`, not payment. Check-in was **not** tested (it needs a booking starting soon).
-9. **Currency default is `'USD'`** on `Booking` (`models/Booking.js:64`) and `Payment`
-   (`models/Payment.js:28`) while both apps show ₹. Verified still true.
-10. **Commission / platform fee.** Owner Earnings shows "8% of gross"
-    (`apps/owner/src/screens/earnings/components/EarningsSummaryCard.tsx:73`) but the backend has no
-    commission field (`CLAUDE.md`; no `commission`/`platform_fee` in `ownersController.js`). The screen
-    shows `-₹0`. Either implement the fee or remove the label.
+5. SMS not delivered on live (§4) and the **4-vs-6 digit** mismatch.
+6. **Backend not redeployed** (§3.3) — pricing and id-validation fixes are not live.
+7. **`booking_mode: instant` is ignored by the backend.** `createBooking` (`bookingsController.js` ~line 470)
+   always writes `status:'pending'`; only `approveBooking` or a successful payment makes it `confirmed`
+   (`paymentsController.js`). An "Instant" space still needs owner approval. Product decision needed.
+8. **Cancellation policy is stated three different ways.** The consumer UI says "Free cancellation up to 2
+   hours before"; the backend refunds by tier (>48 h 100 %, 24–48 h 50 %, <24 h 0 %) in `cancelBooking`.
+9. **Owner app still shows seeded/mock data in places.** `utils/storage.ts` falls back to `seedFullListings`,
+   `seedFullBookings`, `seedEarningsTransactions`, `seedOwnerProfile` when nothing is stored;
+   `PayoutsScreen.tsx` imports `constants/mockPayoutsData`; Help Center tickets come from
+   `INITIAL_MOCK_TICKETS`. Promotions ("Active 2 / Scheduled 1 / Expired 1") and Reviews ("5 reviews, 3.0")
+   showed data for a brand-new owner — **(unverified whether they are live or seeded)**. Audit every owner
+   screen for mock imports before calling the app production-ready.
+10. **Owner profile edits are stored on the device only** ("Profile saved successfully" never calls the API).
+11. **Commission / platform fee.** Owner Earnings shows "8% of gross"
+    (`EarningsSummaryCard.tsx:73`) and `-₹0`; the backend has no commission field.
+12. **Currency default is `'USD'`** on `Booking` (`models/Booking.js:64`) and `Payment` (`models/Payment.js:28`)
+    while the apps show ₹ (the quote endpoint does return `INR`, so check what the created booking stores).
+13. From `CLAUDE.md`, **not re-verified**: `hasBookingConflict` counts `pending` with no TTL (an abandoned
+    pending booking blocks the slot); `checkIn` does not check payment. Check-in is owner/admin only and
+    needs a booking within its window — not tested.
 
 ### P2 — UI / UX
 
-11. **Booking success popup** on the consumer booking screen dims the screen unevenly (a lighter vertical
-    strip). `styles.modalOverlay` is an absolute view with `elevation: 24` and a translucent background;
-    suspect the Android elevation shadow bleeding through. **Unconfirmed**; try a transparent overlay
-    with the tint on a non-elevated child, or hide the sticky bar while the popup is open.
-12. **Consumer Profile stats** showed "0 Bookings / 0h / Total Spent" while the account had bookings
-    (pending/confirmed) — maybe it counts only completed bookings. **Unverified whether intended.**
-13. **Owner dashboard "Requests 0"** while the Bookings tab showed 1 pending request — likely a stale
-    dashboard fetch that only refreshes on remount. Observed once.
-14. **Owner `OtpVerifyScreen.tsx` re-renders the whole screen every second** (countdown in screen state).
-    Same pattern that caused the consumer flicker; the layout is simpler so it was left alone. Extract the
-    timer if it flickers on a device. Its button says "Next", not "Verify".
-15. **Owner add-property "Next" fails silently** when no map pin is placed
-    (`StepLocationScreen.tsx` `validate()` sets `errors.locationLat`, rendered far down the scroll). Scroll to
-    the error or disable with a hint.
-16. **Owner add-property address prefill:** "Use my profile address" prefilled "123 MG Road"; typing over
-    it appended instead of replacing. Test-data quirk, but the field could select-on-focus.
-17. **Consumer `defaultParkingData`** in `ParkingDetailsPage.js` contains invented fallback data
-    ("Central Parking", a New Jersey address, fake owner "ParkSmart LLC", 4.8 rating). Real data now
-    overrides it, but a missing field silently shows fiction. Remove the fake defaults.
-18. **Map tiles** in the owner property picker were blank grey on the emulator (Leaflet in a WebView,
-    OpenStreetMap tiles) although the pin and coordinates worked — likely emulator networking, but check
-    on a device.
+14. **Same overlay pattern in other consumer screens is unpatched:** `HomePage.js`, `SearchPage.js`,
+    `SubscriptionPage.js`, `HelpSupportPage.js` (and `UserOnboarding.js`'s modal) use an absolute overlay with
+    `elevation: 24` and a translucent background — the same lighter-strip artifact — and bottom sheets that the
+    tab bar / nav bar can cover. Apply the pattern used in `ProfilePage.js` (transparent overlay + backdrop
+    child + bottom padding).
+15. **Edge-to-edge.** `targetSdk 36` draws edge-to-edge on Android 15+ (the API 36 emulator); the test phone is
+    Android 12. Anything anchored to the bottom needs `useSafeAreaInsets()`.
+16. Consumer **Bookings** screen uses a red accent (tabs, Cancel, "+") unlike the teal used elsewhere.
+17. Owner booking cards show the **end** date for overnight bookings ("10:00 PM – 12:00 AM, Sep 22" for a
+    booking that starts Sep 21).
+18. Consumer Profile stats show "0 Bookings / 0h / Total Spent" although bookings exist — probably counts only
+    completed ones **(unverified whether intended)**.
+19. Owner add-property "Next" fails silently when no map pin is placed (`StepLocationScreen.tsx`); the error
+    is rendered far down the page. Typing over the prefilled address appends instead of replacing.
+20. Consumer `defaultParkingData` (`ParkingDetailsPage.js`) contains invented fallbacks ("Central Parking", a
+    New Jersey address, "ParkSmart LLC", 4.8 rating). Real data overrides it; remove the fiction.
+21. Owner `OtpVerifyScreen.tsx` re-renders the whole screen every second (same pattern that flickered the
+    consumer OTP screen). Its button says "Next".
+22. `GET /api/parking-spaces/search?lat=abc` returns 200 with everything instead of 400.
 
-### P3 — tech debt / housekeeping
+### P3 — tech debt
 
-19. Consumer release APK now includes `x86_64` (72 MB, was arm64-only). For phone-only distribution set
-    `abiFilters "arm64-v8a"` and `reactNativeArchitectures=arm64-v8a` again — the test phone had only
-    ~1 GB free and rejected the install at first (`INSTALL_FAILED_INSUFFICIENT_STORAGE`).
-20. `README.md`/`CLAUDE.md` correctness (section 2).
-21. Delete the test data listed in section 9.
+23. **Lint is red:** `eslint` reports 15 errors in the consumer app (mostly `react-hooks/exhaustive-deps`,
+    plus `useFallbackLocation` called as a hook inside callbacks in `HomePage.js`) and 168 in the owner app
+    (mostly unused vars). `tsc` on the consumer reports `App.tsx(114): Property 'onboardingStep' does not
+    exist on type 'never'`. No CI enforces any of it.
+24. Both release APKs include `x86_64` (≈70 MB each). For phone-only distribution set
+    `abiFilters "arm64-v8a"` / `reactNativeArchitectures=arm64-v8a`.
+25. `README.md`/`CLAUDE.md` correctness (§2). The `tests/*.smoke.js` scripts in `services/backend/tests/`
+    were not run.
 
 ---
 
-## 6. Areas that were tested, and how
+## 6. What was tested
 
-Emulator: Android API 36 (`sdk_gphone64_x86_64`, 1080×2400). Phone: Infinix X671, Android 12,
-arm64, 50 GB but ~99% full. Both apps point at the live Render backend. Method: install the release APK,
-drive it with `adb_ui.py`, read the UI tree and screenshots, and cross-check against the API with `curl`.
+Full matrix in **`docs/handoff/QA_REPORT.md`**. Summary of method: install the release APK, drive it with
+`adb_ui.py`, read the UI tree and screenshots, and cross-check against the live API with scripts.
 
-Verified:
-
-- **Owner:** OTP sign-in, dashboard, add property (needs a map pin), add space (5 steps: details,
-  photos, price, availability, rules — "Car" is preselected in vehicle types, tapping it turns it *off*),
-  publish, property → spaces list, bookings tab (Requests), approve dialog + approve, Earnings tab renders,
-  More tab renders.
-- **Consumer:** home map + nearby list, details sheet, booking screen (date, duration, start/end time,
-  price breakdown, payment method, terms), **cash** booking, Bookings tab (Pending Approval → Confirmed
-  after owner approval), Profile tab (vehicle present).
-- **Backend/API:** the new space appeared in `GET /api/parking-spaces/search` with
-  `price_per_hour == hourly_rate` (the manual price sync from `CLAUDE.md` held).
-
-**Not tested:** online payment (only cash), check-in / QR / ANPR / barrier, cancellation and refund, KYC
-approval (needs an admin), space edit/delete, promotions, reviews, disputes, staff, the admin app, the
-firmware, and iOS.
+Devices: Android API 36 emulator (`sdk_gphone64_x86_64`) for all UI testing; one real phone (Infinix X671,
+Android 12, arm64) only for install/launch. **The fixes in §3.2 were verified on the emulator, not on a
+phone.**
 
 ---
 
 ## 7. Test runbook and gotchas
 
-**Set up a device**
-
 ```powershell
-adb devices -l                                   # note the serial; a phone shows "unauthorized" until you accept the prompt
-$env:ANDROID_SERIAL = "<serial>"                 # required when an emulator AND a phone are attached
+adb devices -l
+$env:ANDROID_SERIAL = "<serial>"     # required when an emulator AND a phone are attached
 adb install -r apps\consumer\android\app\build\outputs\apk\release\app-release.apk
 adb install -r apps\owner\android\app\build\outputs\apk\release\app-release.apk
-adb shell am start -n com.parkingapp/.MainActivity    # consumer  (package com.parkingapp)
-adb shell am start -n com.owners/.MainActivity        # owner     (package com.owners)
+adb shell am start -n com.parkingapp/.MainActivity    # consumer
+adb shell am start -n com.owners/.MainActivity        # owner
 ```
 
-**Golden path to re-test after any change**
+**Golden path** (re-run after any change): owner signs in → add property (drop a map pin; on an emulator use
+`adb emu geo fix <lng> <lat>` then "Use current location") → add space (Instant) → Publish → consumer (a
+different number) sees it under Nearby Parking → Book Now → duration → Cash → Terms → Book Now ("Booking
+Requested") → owner Bookings → Requests → Approve → consumer Bookings shows Confirmed.
 
-1. Owner app: sign in → finish profile (Skip is available) → Listings → add property (drop a map pin;
-   `adb emu geo fix <lng> <lat>` + "Use current location" on an emulator) → add space (Instant mode) → Publish.
-2. Consumer app (a *different* phone number): the property appears under Nearby Parking → Book Now → pick
-   a duration → **Cash** → tick Terms → Book Now → "Booking Requested". Vehicle must exist on the profile.
-3. Owner app: Bookings → Requests → Approve → confirm; it moves to Upcoming.
-4. Consumer app: Bookings → status is Confirmed (cold-start the app if the list looks stale).
+**Sign-in while SMS is broken:** enter `123456` (works on live — see P0 #2). Use throwaway numbers.
 
-**Sign-in while SMS is broken:** use the test code — but see P0 #2: it may be disabled on the live server.
-
-**Adb gotchas**
-
-- Run adb from **PowerShell**, or set `MSYS_NO_PATHCONV=1` in Git Bash, or `/sdcard/...` is rewritten.
-- With two devices attached you must set `ANDROID_SERIAL` or use `-s`.
-- Gboard pops "Mic permission required / Allow Gboard to record audio?" the first time the keyboard is
-  used on a fresh emulator; deny it (it looks like the app froze).
-- `adb shell input text` types fast. Multi-field inputs drop digits; that is one reason for the
-  single-input OTP rewrite.
-- Hide the keyboard with `adb shell input keyevent 4` (Back) before tapping elements under it.
-- `uiautomator dump` shows only nodes that have text/content-desc: empty inputs are invisible to it, and
-  the map WebView is opaque — use coordinates there.
-- Don't drive a real phone while its owner is using it (the tooling shows whatever app is in front).
-
-**Helper:** `docs/handoff/adb_ui.py` (`dump`, `tap "<text>"`, `tapxy`, `type`, `key`, `swipe`, `shot`,
-`wait`). `tap` prefers an exact text/description match over a substring — early on it tapped "next" inside a
-subtitle instead of the Next button.
+**Gotchas**
+- Run adb from PowerShell (or `MSYS_NO_PATHCONV=1` in Git Bash) or `/sdcard/...` is rewritten.
+- With two devices attached set `ANDROID_SERIAL` or use `-s`.
+- Pressing **Back on a root screen exits the app** — a Back-driven test script silently ends up in the
+  launcher or another app.
+- Gboard shows "Mic permission required" on a fresh emulator; deny it.
+- Hide the keyboard with Back **only while it is open**.
+- `uiautomator dump` lists only nodes with text; empty inputs are invisible, the map WebView is opaque.
+- A `Send code` → OTP screen transition can take >6 s (network); use `adb_ui.py wait "Enter the"`.
+- Don't drive a real phone while its owner is using it.
 
 ---
 
 ## 8. Building
 
-Release APKs (both apps), from each app's `android` folder:
-
 ```powershell
+$env:TEMP = "D:\somewhere"; $env:TMP = $env:TEMP     # keep Metro/Node temp off a full C: drive
 cd apps\consumer\android ; .\gradlew.bat assembleRelease --console=plain
 cd apps\owner\android    ; .\gradlew.bat assembleRelease --console=plain
-# output: android\app\build\outputs\apk\release\app-release.apk   (consumer ≈ 72 MB, owner ≈ 75 MB with x86_64+arm64)
-.\gradlew.bat --stop     # stop daemons if you abort a build; killing only the shell leaves Gradle compiling
+.\gradlew.bat --stop                                  # aborting a build does not stop Gradle
 ```
 
-- A consumer release build takes many minutes; run it in the background.
-- Free disk: `C:` was around 3.8 GB free at one point; keep Gradle caches on a roomy drive.
-- The JS bundle is embedded in release builds, so **any JS change needs a rebuild** — there is no dev
-  server in the loop. The repo also has OTA-update plumbing (`OtaUpdateBanner.js`, commit `56cad7c`);
-  its behaviour was not investigated.
-- The APKs currently on the original machine (`app-release.apk`, timestamps 14:27 consumer, 14:10 owner
-  on 2026-09-20) **predate** every fix in section 3. Rebuild before judging behaviour.
+- Output: `android\app\build\outputs\apk\release\app-release.apk`. A release build takes ≈12 minutes each.
+- The JS bundle is embedded, so **any JS change needs a rebuild**.
+- **Disk:** the original machine's `C:` drive fell to ~0 GB free, which made PowerShell throw
+  `OutOfMemoryException` and threatened the build. `GRADLE_USER_HOME` was already on `E:`. Freeing `C:` (an npm
+  cache of ~7 GB was cleared) fixed it. Watch it.
+- Final APKs from this session: **consumer built 17:45 (68.6 MB, `arm64-v8a` + `x86_64`, SHA-256 `004D17D6…F52B7`), owner built 17:35 (71.3 MB, `arm64-v8a`/`armeabi-v7a`/`x86`/`x86_64`, SHA-256 `122886AC…FA633`). They sit in `D:\parkfnb-release\` on the original machine — **not in git** — and are debug-signed. The consumer APK has no 32-bit ARM code**
 
 ---
 
 ## 9. Test data left on the live database
 
-The live DB is shared and was used for testing. Created this session — clean up when convenient:
+The live DB is shared. QA created — clean up when convenient:
 
-- A test **property "Anita Residency"** (Indore, 452001) with **Space 1** (covered, ₹40/h, ₹300/day,
-  instant, cars + SUVs) under a test owner account.
-- A **cash booking `BK-MU9MMDTB-10RX7`** (2 h, ₹80), approved → `confirmed`, by a test consumer account.
-- Accounts created by OTP sign-in for the project owner's own number, plus the test owner/consumer users.
-- Pre-existing bookings from earlier sessions (e.g. `BK-MU9LRDN4-ZEIBU` on a property named "Nsns")
-  belong to other test users.
+- Throwaway accounts with numbers `900000001x` (consumer QA users, created via the `123456` code), their
+  vehicles, and bookings (mostly cancelled; a few confirmed/rejected/pending). All bookings were on the test
+  property below.
+- From earlier sessions: property **"Anita Residency"** (Indore) with **Space 1** (covered, hourly **₹45**
+  after a test edit, ₹300/day, instant, cars + SUVs) under a test owner account, plus a cash booking
+  `BK-MU9MMDTB-10RX7`. Other bookings (e.g. on a property "Nsns") belong to earlier test users.
+- Accounts created by OTP sign-in for the project owner's own number.
 
 ---
 
@@ -331,28 +296,27 @@ The live DB is shared and was used for testing. Created this session — clean u
 
 | Concern | File |
 |---|---|
-| OTP send/verify, provider choice, test code | `services/backend/src/controllers/otpController.js` (`getOtpSmsConfig`, `resolveMsg91Credentials`, `sendCode`, `issueCode`, `verifyOtp`) |
-| Settings that override env, and their defaults | `services/backend/src/controllers/platformSettingsController.js` (`DEFAULT_SETTINGS`) |
-| Create/approve booking, status rules | `services/backend/src/controllers/bookingsController.js` (`createBooking` ~475, `approveBooking` 653) |
-| Payment → `confirmed` | `services/backend/src/controllers/paymentsController.js` |
+| OTP send/verify, provider choice, test code | `services/backend/src/controllers/otpController.js` |
+| Settings that override env, and defaults | `services/backend/src/controllers/platformSettingsController.js` |
+| Booking create/quote/approve/cancel/check-in | `services/backend/src/controllers/bookingsController.js` |
+| Price rule | `services/backend/src/utils/pricing.js` |
+| Owner stats / earnings payloads | `services/backend/src/controllers/ownersController.js` |
 | Env variables | `services/backend/.env.example` |
-| Consumer routing (auth → onboarding → main) | `apps/consumer/App.tsx` (`RootNavigator`), `apps/consumer/user/context/AuthContext.js` |
-| Consumer OTP / sign-in / onboarding | `apps/consumer/user/screens/auth/`, `.../onboarding/UserOnboarding.js` |
-| Consumer booking screen | `apps/consumer/user/screens/parking/ParkingDetailsPage.js` |
-| Consumer modal alert component | `apps/consumer/user/components/AppAlert.js` |
-| Owner OTP, add-property, add-space | `apps/owner/src/screens/auth/OtpVerifyScreen.tsx`, `.../listings/listingWizard/` |
-| Owner booking mapping | `apps/owner/src/utils/bookingTransform.ts`, `.../dashboard/DashboardScreen.tsx` |
+| Consumer routing (auth → onboarding → main) | `apps/consumer/App.tsx`, `user/context/AuthContext.js` |
+| Consumer OTP / onboarding | `user/screens/auth/OTPVerification.js`, `user/screens/onboarding/UserOnboarding.js` |
+| Consumer booking / bookings / profile | `user/screens/parking/ParkingDetailsPage.js`, `bookings/BookingManagementPage.js`, `profile/ProfilePage.js` |
+| Owner data adapters | `apps/owner/src/services/earningsService.ts`, `listingService.ts`, `utils/bookingTransform.ts` |
+| Owner mock/seed data (to eliminate) | `apps/owner/src/constants/mock*.ts`, `utils/storage.ts` |
 | API base URLs | `apps/consumer/user/utils/constants.js`, `apps/owner/src/config/api.ts` |
 
 ---
 
 ## 11. Suggested order of work
 
-1. Apply `docs/handoff/pending-changes.patch`, build the consumer APK, install on a device, confirm the
-   OTP screen no longer flickers and Continue/Skip work; commit if so. (§3.2)
-2. Fix SMS delivery: Render env + widget length 6 + check the `[mock]`/`[msg91]` log line. (§4)
-3. Rotate the MSG91 token; turn the test-OTP bypass off for production; sign a real keystore. (P0)
-4. Decide `booking_mode: instant` behaviour and implement it in `createBooking`. (P1 #7)
-5. Fix the currency default and the fake "8% platform fee". (P1 #9, #10)
-6. Test the untested list in §6 — check-in, online payment, cancel/refund first.
-7. Work through P2/P3, then tidy `README.md` / `CLAUDE.md`.
+1. **Redeploy the backend** and re-run the API checks (`QA_REPORT.md`); verify ₹300 for a 24 h stay. (§3.3)
+2. **Fix SMS** (§4) and then **turn the test-OTP bypass off**; rotate the MSG91 token. (P0)
+3. Real keystore; install the final APKs on a real phone and repeat the golden path there.
+4. Decide `booking_mode: instant`, the cancellation policy, and the commission line. (P1 #7, #8, #11)
+5. Audit the owner app for mock/seed data and wire profile edits to the API. (P1 #9, #10)
+6. Apply the overlay/inset pattern to the remaining consumer screens. (P2 #14, #15)
+7. Test what was not tested (online payment, check-in, extend, refund, KYC) and clear lint.
