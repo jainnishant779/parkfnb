@@ -438,8 +438,24 @@ export default function ProfileScreen() {
   // Owner type is now sourced from the AuthContext owner record (which the
   // backend returns on /me) — the legacy AsyncStorage 'ownerType' key is no
   // longer written to for new accounts.
-  const { owner } = useAuth();
+  const { owner, user } = useAuth();
   const ownerType = owner?.ownerType || 'individual';
+
+  // The profile is stored per account. It used to be one global key seeded with
+  // a hardcoded "John Doe / john.doe@example.com" default, so every owner saw
+  // (and edited) a stranger's details, and a second account on the same phone
+  // inherited the first one's.
+  const profileStorageKey = `${PROFILE_DATA_KEY}:${user?.id ?? 'anonymous'}`;
+  const accountProfile = useMemo<ProfileData>(() => {
+    const legalParts = (user?.legalName || '').trim().split(/\s+/).filter(Boolean);
+    return {
+      ...DEFAULT_PROFILE,
+      firstName: user?.firstName || legalParts[0] || '',
+      lastName: user?.lastName || legalParts.slice(1).join(' '),
+      email: user?.email || '',
+      phone: user?.phone || '',
+    };
+  }, [user?.firstName, user?.lastName, user?.legalName, user?.email, user?.phone]);
 
   // State
   const [isLoading, setIsLoading] = useState(false);
@@ -459,13 +475,14 @@ export default function ProfileScreen() {
   // Load profile data
   const loadProfile = useCallback(async () => {
     try {
-      const profileJson = await AsyncStorage.getItem(PROFILE_DATA_KEY);
+      const profileJson = await AsyncStorage.getItem(profileStorageKey);
 
       if (profileJson) {
         setProfile(JSON.parse(profileJson));
       } else {
-        // Save default profile on first load
-        await AsyncStorage.setItem(PROFILE_DATA_KEY, JSON.stringify(DEFAULT_PROFILE));
+        // First load for this account: start from the signed-in user's details.
+        setProfile(accountProfile);
+        await AsyncStorage.setItem(profileStorageKey, JSON.stringify(accountProfile));
       }
     } catch (error) {
       console.error('Failed to load profile:', error);
@@ -473,7 +490,7 @@ export default function ProfileScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [profileStorageKey, accountProfile]);
 
   useEffect(() => {
     loadProfile();
@@ -550,7 +567,7 @@ export default function ProfileScreen() {
         ...profile,
         updatedAt: new Date().toISOString(),
       };
-      await AsyncStorage.setItem(PROFILE_DATA_KEY, JSON.stringify(updatedProfile));
+      await AsyncStorage.setItem(profileStorageKey, JSON.stringify(updatedProfile));
       setProfile(updatedProfile);
       setHasChanges(false);
       setIsEditingPersonal(false);
@@ -563,7 +580,7 @@ export default function ProfileScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [profile, isEditingBank, showSnackbar]);
+  }, [profile, isEditingBank, showSnackbar, profileStorageKey]);
 
   // Handle profile image edit
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);

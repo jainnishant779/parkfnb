@@ -55,8 +55,38 @@ const earningsService = {
    * Fetch owner statistics (spaces, bookings, revenue, performance).
    * Endpoint: GET /api/owners/:id/stats
    */
-  getOwnerStats: (ownerId: string): Promise<ApiOwnerStats> => {
-    return api.get<ApiOwnerStats>(`/api/owners/${ownerId}/stats`);
+  getOwnerStats: async (ownerId: string): Promise<ApiOwnerStats> => {
+    // The backend answers { stats: { total_spaces, total_revenue, ... } } (flat,
+    // wrapped in `stats`, and camel-cased by the api layer). The screens expect
+    // the grouped ApiOwnerStats shape, so adapt it here. Reading the grouped
+    // fields straight off the response made the Dashboard show zeros forever
+    // and crashed the Payouts screen (`revenueStats` was undefined).
+    const res = await api.get<any>(`/api/owners/${ownerId}/stats`);
+    const s = res?.stats ?? res ?? {};
+    const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+    return {
+      spaceStats: {
+        totalSpaces: n(s.totalSpaces),
+        activeSpaces: n(s.activeSpaces),
+        inactiveSpaces: n(s.inactiveSpaces),
+      },
+      bookingStats: {
+        totalBookings: n(s.totalBookings),
+        activeBookings: n(s.activeBookings),
+        completedBookings: n(s.completedBookings),
+        cancelledBookings: n(s.cancelledBookings),
+        occupancyRate: n(s.occupancyRate),
+      },
+      revenueStats: {
+        totalRevenue: n(s.totalRevenue),
+        monthlyRevenue: n(s.monthlyRevenue),
+        monthlyBookings: n(s.monthlyBookings),
+      },
+      performance: {
+        averageRating: n(s.averageRating),
+        isVerified: Boolean(s.isVerified),
+      },
+    };
   },
 };
 

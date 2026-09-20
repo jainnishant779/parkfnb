@@ -604,9 +604,9 @@ export default function PayoutsScreen() {
   // ============================================================================
 
   const summary = useMemo(() => ({
-    availableBalance: liveStats?.revenueStats.totalRevenue ?? 0,
-    pendingAmount: liveEarnings?.earningsSummary.pendingEarnings ?? 0,
-    paidYTD: liveStats?.revenueStats.totalRevenue ?? 0,
+    availableBalance: liveStats?.revenueStats?.totalRevenue ?? 0,
+    pendingAmount: liveEarnings?.earningsSummary?.pendingEarnings ?? 0,
+    paidYTD: liveStats?.revenueStats?.totalRevenue ?? 0,
     availableTrend: 0,
     pendingTrend: 0,
     paidTrend: 0,
@@ -617,7 +617,7 @@ export default function PayoutsScreen() {
     d.setDate(d.getDate() + 7);
     return {
       date: d.toISOString(),
-      expectedAmount: liveEarnings?.earningsSummary.pendingEarnings ?? 0,
+      expectedAmount: liveEarnings?.earningsSummary?.pendingEarnings ?? 0,
       status: 'scheduled' as const,
       currentStep: 0 as number,
     };

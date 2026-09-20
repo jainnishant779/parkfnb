@@ -55,8 +55,8 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
         label: 'Notifications',
         description: 'Notification preferences',
         route: 'NotificationPreferences',
-        showBadge: true,
-        badgeCount: 3,
+        // No real unread count is wired up yet. This was a hardcoded 3, which told
+        // every owner they had three unread notifications regardless of account.
       },
     ],
   },
