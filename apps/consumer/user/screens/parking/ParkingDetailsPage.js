@@ -17,7 +17,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import * as bookingService from '../../services/bookingService';
 import * as vehicleService from '../../services/vehicleService';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import MapView, { Marker } from 'react-native-maps';
@@ -136,6 +136,10 @@ const ParkingDetailsPage = ({ navigation, route }) => {
   const scrollViewRef = useRef(null);
   const dates = useMemo(() => generateDates(), []);
   const auth = useAuth();
+  // targetSdk 36 draws edge-to-edge, so the sticky bar has to clear the
+  // system nav bar itself or its text slides underneath it.
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom;
 
   // Property mode: parkingData.spaces[] was passed from grouped homepage
   const isPropertyMode = Array.isArray(parkingData?.spaces) && parkingData.spaces.length > 0;
@@ -149,7 +153,12 @@ const ParkingDetailsPage = ({ navigation, route }) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedDate, setSelectedDate] = useState(dates[0].date);
   const [selectedStartTime, setSelectedStartTime] = useState(nextBookableHour);
-  const [selectedEndTime, setSelectedEndTime] = useState('10:00');
+  // Start at the next bookable hour + the default 1h, not a fixed 10:00 that
+  // could sit before the start time and leave Book Now disabled.
+  const [selectedEndTime, setSelectedEndTime] = useState(() => {
+    const startHour = parseInt(nextBookableHour().split(':')[0], 10);
+    return `${((startHour + 1) % 24).toString().padStart(2, '0')}:00`;
+  });
   const [selectedHours, setSelectedHours] = useState(1);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -261,12 +270,19 @@ const ParkingDetailsPage = ({ navigation, route }) => {
       ...defaultParkingData.owner,
       ...(parkingData?.owner || {}),
     },
-    dimensions: {
-      ...defaultParkingData.dimensions,
-      ...(parkingData?.dimensions || {}),
-    },
+    // Real metres from the space the owner entered. The old default (8.5 x 18 x
+    // 7 ft) was shown for every space because nothing ever mapped these fields.
+    dimensions: (() => {
+      const src = selectedSpace || parkingData || {};
+      const fmt = (v) => (Number(v) > 0 ? `${Number(v)} m` : '—');
+      return {
+        width: fmt(src.widthMeters ?? src.width_meters),
+        length: fmt(src.lengthMeters ?? src.length_meters),
+        height: fmt(src.heightMeters ?? src.height_meters),
+      };
+    })(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [parkingData, resolvedImagesKey]);
+  }), [parkingData, selectedSpace, resolvedImagesKey]);
 
   // Server-side price for the current selection. Null until it arrives.
   const [quote, setQuote] = useState(null);
@@ -1239,11 +1255,11 @@ const ParkingDetailsPage = ({ navigation, route }) => {
         </View>
 
         {/* Bottom Spacing */}
-        <View style={styles.scrollFooterSpacer} />
+        <View style={[styles.scrollFooterSpacer, { height: 160 + bottomInset }]} />
       </ScrollView>
 
       {/* Bottom Booking Bar */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(16, bottomInset + 12) }]}>
         {/* "View Details" expander — same numbers as the breakdown above,
             so it stays sourced from the quote. */}
         {showBottomBreakdown && !(isPropertyMode && !selectedSpace) && (
@@ -1326,7 +1342,7 @@ const ParkingDetailsPage = ({ navigation, route }) => {
 
       {/* Booking error shown above the bottom bar */}
       {bookingError ? (
-        <View style={styles.bookingErrorBanner}>
+        <View style={[styles.bookingErrorBanner, { bottom: 132 + bottomInset }]}>
           <Text style={styles.bookingErrorText}>{bookingError}</Text>
         </View>
       ) : null}
@@ -1339,7 +1355,11 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             <View style={styles.successIconContainer}>
               <Icon name="check-circle" size={56} color="#10B981" />
             </View>
-            <Text style={styles.successTitle}>Booking Confirmed!</Text>
+            <Text style={styles.successTitle}>
+              {confirmedBooking?.status === 'pending' || confirmedBooking?.bookingMode === 'request'
+                ? 'Booking Requested'
+                : 'Booking Confirmed!'}
+            </Text>
             {confirmedBooking?.bookingNumber ? (
               <Text style={styles.successBookingNumber}>
                 Booking #{confirmedBooking.bookingNumber}
@@ -1347,7 +1367,7 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             ) : null}
             <Text style={styles.successSubtitle}>
               Your parking space has been reserved.{'\n'}
-              {confirmedBooking?.bookingMode === 'request'
+              {confirmedBooking?.status === 'pending' || confirmedBooking?.bookingMode === 'request'
                 ? 'The owner will confirm your request shortly.'
                 : 'You\'re all set — see you there!'}
             </Text>
