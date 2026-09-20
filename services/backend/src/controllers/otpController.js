@@ -179,6 +179,19 @@ const publicOwner = (owner) =>
     : null;
 
 /**
+ * MSG91 widget credentials. The key is stored as "<widgetId>:<tokenAuth>"
+ * (sms.api_key setting or SMS_API_KEY); MSG91_WIDGET_ID / MSG91_TOKEN_AUTH
+ * work as a split alternative. Nothing is hardcoded — returns null if unset.
+ */
+const resolveMsg91Credentials = (apiKey) => {
+  const [keyId, keyToken] = (apiKey || "").split(":");
+  const widgetId = keyId && keyToken ? keyId : process.env.MSG91_WIDGET_ID;
+  const tokenAuth =
+    keyId && keyToken ? keyToken : process.env.MSG91_TOKEN_AUTH;
+  return widgetId && tokenAuth ? { widgetId, tokenAuth } : null;
+};
+
+/**
  * Hand the code to the user via configured SMS provider, Email, or Mock console log.
  */
 const sendCode = async (identifier, channel, code, overrides = {}) => {
@@ -261,30 +274,41 @@ const sendCode = async (identifier, channel, code, overrides = {}) => {
     }
 
     if (provider === "msg91") {
-      // MSG91 Widget and direct API support:
-      const [wId, wToken] = (apiKey || "").includes(":")
-        ? apiKey.split(":")
-        : ["3664796e4949363136393631", apiKey || "511716TacMwxo469ecd171P1"];
+      const creds = resolveMsg91Credentials(apiKey);
+      if (!creds) {
+        console.error(
+          "[otp] MSG91 selected but no widget credentials configured. " +
+            "Set sms.api_key (or SMS_API_KEY) to '<widgetId>:<tokenAuth>'.",
+        );
+        return {
+          success: false,
+          provider: "msg91",
+          message: "MSG91 credentials are not configured",
+        };
+      }
 
-      const widgetUrl = "https://control.msg91.com/api/v5/widget/sendOtpMobile";
-      const response = await fetch(widgetUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          widgetId: wId || "3664796e4949363136393631",
-          tokenAuth: wToken || "511716TacMwxo469ecd171P1",
-          identifier: `91${identifier}`,
-        }),
-      });
+      const response = await fetch(
+        "https://control.msg91.com/api/v5/widget/sendOtpMobile",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            widgetId: creds.widgetId,
+            tokenAuth: creds.tokenAuth,
+            identifier: `91${identifier}`,
+          }),
+        },
+      );
       const data = await response.json().catch(() => ({}));
-      return {
-        success: response.ok && data?.type === "success",
-        provider: "msg91",
-        data,
-      };
+      const ok = response.ok && data?.type === "success";
+      if (!ok) console.error("[otp] MSG91 rejected the send:", data);
+      return { success: ok, provider: "msg91", data };
     }
   } catch (err) {
     console.error(`[otp] Provider ${provider} delivery error:`, err.message);
+    if (provider !== "mock") {
+      return { success: false, provider, message: err.message };
+    }
   }
 
   return {
@@ -345,6 +369,17 @@ const issueCode = async (res, rawIdentifier, rawChannel, { isResend }) => {
 
   const code = randomCode();
   const deliveryResult = await sendCode(identifier, channel, code);
+  // A real provider that refused or failed must not look like a sent code —
+  // the user would wait on an SMS that is never coming.
+  if (!deliveryResult?.success) {
+    console.error("[otp] delivery failed:", deliveryResult);
+    return error(
+      res,
+      errorCodes.SERVER_ERROR,
+      502,
+      "We couldn't send the code right now. Please try again in a moment.",
+    );
+  }
   const reqId =
     deliveryResult?.provider === "msg91" &&
     typeof deliveryResult?.data?.message === "string"
@@ -489,27 +524,32 @@ exports.verifyOtp = async (req, res) => {
       }
 
       let codeMatched = await otp.matches(cleanCode);
+      // MSG91's widget generates and holds its own code, so a local hash
+      // match never happens for it — the widget verifies by request id.
       if (!codeMatched && otp.req_id) {
-        try {
-          const verifyRes = await fetch(
-            "https://control.msg91.com/api/v5/widget/verifyOtp",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                widgetId: "3664796e4949363136393631",
-                tokenAuth: "511716TacMwxo469ecd171P1",
-                reqId: otp.req_id,
-                otp: cleanCode,
-              }),
-            },
-          );
-          const vData = await verifyRes.json();
-          if (vData && vData.type === "success") {
-            codeMatched = true;
+        const creds = resolveMsg91Credentials((await getOtpSmsConfig()).apiKey);
+        if (creds) {
+          try {
+            const verifyRes = await fetch(
+              "https://control.msg91.com/api/v5/widget/verifyOtp",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  widgetId: creds.widgetId,
+                  tokenAuth: creds.tokenAuth,
+                  reqId: otp.req_id,
+                  otp: cleanCode,
+                }),
+              },
+            );
+            const vData = await verifyRes.json();
+            if (vData && vData.type === "success") {
+              codeMatched = true;
+            }
+          } catch (e) {
+            console.error("[otp] MSG91 verification check error:", e);
           }
-        } catch (e) {
-          console.error("[otp] MSG91 verification fallback check error:", e);
         }
       }
 
