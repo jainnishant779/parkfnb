@@ -27,7 +27,8 @@ export function transformBooking(b: ApiBooking): FullBooking {
   const renterName = user
     ? (user.legalName ||
        `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
-       'Unknown Renter')
+       // OTP sign-ups have a phone but no name until the profile is filled in.
+       (user.phone ? `+91 ${user.phone}` : 'Unknown Renter'))
     : 'Unknown Renter';
 
   return {

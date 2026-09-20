@@ -96,14 +96,15 @@ function transformApiBookingToDashboard(b: ApiBooking): DashboardBooking {
   const renterName = user
     ? (user.legalName ||
        `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
-       'Unknown Renter')
+       (user.phone ? `+91 ${user.phone}` : 'Unknown Renter'))
     : 'Unknown Renter';
   const renterInitials = renterName
+    .replace(/[^A-Za-z ]/g, '')
     .split(' ')
     .map((n: string) => n[0] ?? '')
     .join('')
     .toUpperCase()
-    .slice(0, 2);
+    .slice(0, 2) || '#';
 
   const statusMap: Record<ApiBooking['status'], DashboardBooking['status']> = {
     pending:   'request',
