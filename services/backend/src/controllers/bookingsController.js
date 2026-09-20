@@ -8,6 +8,8 @@ const ParkingSpace = require('../models/ParkingSpace');
 const UserVehicle = require('../models/UserVehicle');
 const { success, error } = require('../utils/responseHelper');
 const errorCodes = require('../utils/errorCodes');
+const { calculateBookingPrice } = require('../utils/pricing');
+const { isValidObjectId } = require('mongoose');
 
 /**
  * Helper function to generate unique booking number
@@ -41,25 +43,6 @@ const hasBookingConflict = async (spaceId, startTime, endTime, excludeBookingId 
 };
 
 /**
- * Helper function to calculate booking price
- */
-const calculateBookingPrice = (parkingSpace, durationHours) => {
-  let basePrice = 0;
-
-  if (durationHours <= 24) {
-    basePrice = parkingSpace.hourly_rate * durationHours;
-  } else if (durationHours <= 24 * 30) {
-    const days = Math.ceil(durationHours / 24);
-    basePrice = parkingSpace.daily_rate * days;
-  } else {
-    const months = Math.ceil(durationHours / (24 * 30));
-    basePrice = parkingSpace.monthly_rate * months;
-  }
-
-  return basePrice;
-};
-
-/**
  * Helper function to validate pagination
  */
 const validatePagination = (page, limit) => {
@@ -85,6 +68,9 @@ exports.quoteBooking = async (req, res) => {
     if (!space_id || !start_time || !end_time) {
       return error(res, errorCodes.REQ_MISSING_FIELD, 400,
         'space_id, start_time and end_time are required');
+    }
+    if (!isValidObjectId(space_id)) {
+      return error(res, errorCodes.REQ_INVALID_FORMAT, 400, 'Invalid space id');
     }
 
     const startDate = new Date(start_time);
@@ -351,6 +337,12 @@ exports.createBooking = async (req, res, next) => {
     // Validate required fields
     if (!space_id || !vehicle_id || !start_time || !end_time) {
       return error(res, errorCodes.REQ_VALIDATION, 400, 'Missing required fields');
+    }
+
+    // A malformed id would otherwise reach findById as a CastError and come
+    // back as a 500.
+    if (!isValidObjectId(space_id) || !isValidObjectId(vehicle_id)) {
+      return error(res, errorCodes.REQ_INVALID_FORMAT, 400, 'Invalid space or vehicle id');
     }
 
     // Validate dates
