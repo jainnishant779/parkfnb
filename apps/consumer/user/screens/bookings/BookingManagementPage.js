@@ -16,7 +16,7 @@ import {
   Image,
   Linking,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { AppAlert } from '../../components/AppAlert';
 import Icon from 'react-native-vector-icons/Feather';
@@ -231,6 +231,10 @@ const getStatusCopy = (status) => {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const BookingManagementPage = ({ navigation }) => {
+  // The tab bar is absolutely positioned (64 + the bottom inset), so the FAB
+  // has to sit above that or the bar clips it.
+  const insets = useSafeAreaInsets();
+  const tabBarSpace = 64 + insets.bottom;
   const auth = useAuth();
   const user = auth.user;
 
@@ -820,7 +824,7 @@ const BookingManagementPage = ({ navigation }) => {
 
       {/* FAB */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: tabBarSpace + 16 }]}
         onPress={() => navigation.navigate('Home')}
         activeOpacity={0.8}
       >
@@ -830,7 +834,8 @@ const BookingManagementPage = ({ navigation }) => {
       {/* ── Booking Details Modal ── */}
       {showDetailsModal ? (
 
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { paddingBottom: tabBarSpace }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.detailsModalContent}>
             <View style={styles.modalHandle} />
             <View style={styles.detailsModalHeader}>
@@ -1354,6 +1359,7 @@ const BookingManagementPage = ({ navigation }) => {
       {showCancelModal ? (
 
         <View style={styles.confirmModalOverlay}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.confirmModalContent}>
             <View style={styles.confirmIconContainer}>
               <Icon name="alert-triangle" size={32} color="#EF4444" />
@@ -1398,7 +1404,8 @@ const BookingManagementPage = ({ navigation }) => {
       {/* ── Extend Booking Modal ── */}
       {showExtendModal ? (
 
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { paddingBottom: tabBarSpace }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.extendModalContent}>
             <View style={styles.modalHandle} />
             <Text style={styles.extendModalTitle}>Extend Parking Time</Text>
@@ -1459,7 +1466,8 @@ const BookingManagementPage = ({ navigation }) => {
       {/* ── Review Modal ── */}
       {showReviewModal ? (
 
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { paddingBottom: tabBarSpace }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.reviewModalContent}>
             <View style={styles.modalHandle} />
             <Text style={styles.reviewModalTitle}>Rate Your Experience</Text>
@@ -1501,7 +1509,8 @@ const BookingManagementPage = ({ navigation }) => {
       {/* ── Filter Modal ── */}
       {showFilterModal ? (
 
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { paddingBottom: tabBarSpace }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.filterModalContent}>
             <View style={styles.modalHandle} />
             <View style={styles.filterHeader}>
@@ -1872,8 +1881,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalHandle: {
     width: 40,
@@ -2481,7 +2494,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

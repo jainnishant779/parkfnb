@@ -284,6 +284,12 @@ const ParkingDetailsPage = ({ navigation, route }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [parkingData, selectedSpace, resolvedImagesKey]);
 
+  // A conflict/validation error belongs to the selection that caused it; drop
+  // it as soon as the user changes the date, time, duration or payment method.
+  useEffect(() => {
+    setBookingError('');
+  }, [selectedDate, selectedStartTime, selectedEndTime, selectedHours, selectedDuration, selectedPaymentMethod]);
+
   // Server-side price for the current selection. Null until it arrives.
   const [quote, setQuote] = useState(null);
 
@@ -1350,7 +1356,8 @@ const ParkingDetailsPage = ({ navigation, route }) => {
       {/* Booking Success Modal */}
       {showSuccessModal ? (
 
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.successModalContent}>
             <View style={styles.successIconContainer}>
               <Icon name="check-circle" size={56} color="#10B981" />
@@ -1388,8 +1395,9 @@ const ParkingDetailsPage = ({ navigation, route }) => {
       {/* Online Payment Confirm Modal */}
       {showOnlineConfirmModal ? (
 
-        <View style={styles.modalOverlay}>
-          <View style={styles.onlineConfirmModalContent}>
+        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
+          <View style={[styles.onlineConfirmModalContent, { paddingBottom: 36 + bottomInset }]}>
             <View style={styles.onlineConfirmHeader}>
               <Text style={styles.onlineConfirmTitle}>Confirm Booking</Text>
               <TouchableOpacity onPress={() => setShowOnlineConfirmModal(false)}>
@@ -1448,13 +1456,14 @@ const ParkingDetailsPage = ({ navigation, route }) => {
       {/* Add Vehicle Modal */}
       {showAddVehicleModal ? (
 
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={() => setShowAddVehicleModal(false)}
           />
-          <View style={styles.addVehicleModalContent}>
+          <View style={[styles.addVehicleModalContent, { paddingBottom: 36 + bottomInset }]}>
             <View style={styles.addVehicleHeader}>
               <Text style={styles.addVehicleTitle}>Add a Vehicle</Text>
               <TouchableOpacity
@@ -1528,7 +1537,8 @@ const ParkingDetailsPage = ({ navigation, route }) => {
       {/* Time Picker Modal */}
       {showTimeModal ? (
 
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.timeModalContent}>
             <View style={styles.timeModalHeader}>
               <Text style={styles.timeModalTitle}>
@@ -2457,8 +2467,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(26,26,46,0.45)',
+    // The tint lives on modalBackdrop. A translucent background on a view that
+    // also has elevation makes Android paint its shadow through it, which
+    // showed up as a lighter vertical strip behind the popup.
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(26,26,46,0.45)',
   },
   timeModalContent: {
     backgroundColor: palette.bg,

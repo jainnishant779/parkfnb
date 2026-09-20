@@ -1274,10 +1274,9 @@ const HomePage = ({ navigation }) => {
             </View>
           </View>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.notificationButton}>
-              <Icon name="bell" size={20} color={palette.text} />
-              <View style={styles.notificationBadge} />
-            </TouchableOpacity>
+            {/* The bell that used to sit here had no handler and a permanent
+                "unread" dot: the consumer app has no notifications screen yet
+                (NotificationCenter.js is empty). Bring it back with the feature. */}
             {/* The avatar is the only route into the profile from here, and
                 Profile is a sibling tab rather than a stack screen. */}
             <TouchableOpacity

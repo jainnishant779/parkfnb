@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/AppAlert';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -70,6 +70,10 @@ const vehicleSizeMap = {
 };
 
 const ProfilePage = ({ navigation }) => {
+  // The tab bar (64 + bottom inset) is drawn over these bottom sheets, so pad
+  // their content clear of it or the action buttons end up underneath.
+  const insets = useSafeAreaInsets();
+  const sheetBottomPad = 64 + insets.bottom;
   const auth = useAuth();
   const user = auth.user;
 
@@ -896,12 +900,13 @@ const ProfilePage = ({ navigation }) => {
     showVehicleModal ? (
 
       <View style={styles.modalOverlay}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
           onPress={() => setShowVehicleModal(false)}
         />
-        <View style={styles.modalContent}>
+        <View style={[styles.modalContent, { paddingBottom: sheetBottomPad }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
               {editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}
@@ -1022,7 +1027,8 @@ const ProfilePage = ({ navigation }) => {
     showPaymentModal ? (
 
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
+        <View style={[styles.modalContent, { paddingBottom: sheetBottomPad }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add Payment Method</Text>
             <TouchableOpacity
@@ -1804,8 +1810,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalContent: {
     backgroundColor: palette.surface,
