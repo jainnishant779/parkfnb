@@ -23,15 +23,37 @@ const generateBookingNumber = () => {
 /**
  * Helper function to check booking conflicts
  */
+// How long an unanswered 'request'-mode booking is allowed to hold a slot.
+// Nothing auto-expires a pending booking, so without this an owner who never
+// opens the app to approve/reject blocks that slot for that renter forever.
+const PENDING_HOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 const hasBookingConflict = async (spaceId, startTime, endTime, excludeBookingId = null) => {
+  const stalePendingCutoff = new Date(Date.now() - PENDING_HOLD_MS);
+
   const filter = {
     space_id: spaceId,
-    status: { $nin: ['cancelled', 'completed', 'no_show'] },
-    $or: [
-      { start_time: { $lte: startTime }, end_time: { $gt: startTime } },
-      { start_time: { $lt: endTime }, end_time: { $gte: endTime } },
-      { start_time: { $gte: startTime }, end_time: { $lte: endTime } }
-    ]
+    // 'rejected' was missing here, so a booking the owner explicitly turned
+    // down still blocked the slot for everyone, forever.
+    status: { $nin: ['cancelled', 'completed', 'no_show', 'rejected'] },
+    // A pending request older than the hold window no longer counts — see
+    // PENDING_HOLD_MS. Anything else (confirmed, active, or a pending
+    // booking still inside the window) still blocks as before.
+    $and: [
+      {
+        $or: [
+          { status: { $ne: 'pending' } },
+          { created_at: { $gte: stalePendingCutoff } },
+        ],
+      },
+      {
+        $or: [
+          { start_time: { $lte: startTime }, end_time: { $gt: startTime } },
+          { start_time: { $lt: endTime }, end_time: { $gte: endTime } },
+          { start_time: { $gte: startTime }, end_time: { $lte: endTime } }
+        ],
+      },
+    ],
   };
 
   if (excludeBookingId) {
@@ -332,7 +354,8 @@ exports.getOwnerBookings = async (req, res, next) => {
  */
 exports.createBooking = async (req, res, next) => {
   try {
-    const { space_id, vehicle_id, start_time, end_time, promo_code } = req.body;
+    const { space_id, vehicle_id, start_time, end_time, promo_code, payment_method } = req.body;
+    const paymentMethod = payment_method === 'online' ? 'online' : 'cash';
 
     // Validate required fields
     if (!space_id || !vehicle_id || !start_time || !end_time) {
@@ -451,6 +474,13 @@ exports.createBooking = async (req, res, next) => {
     // Generate booking number
     const bookingNumber = generateBookingNumber();
 
+    // The space's booking_mode decides whether this needs the owner's sign-off.
+    // 'request' waits for approveBooking; 'instant' (and 'both', since neither
+    // app currently lets the renter pick per booking) confirms right away —
+    // this used to sit at 'pending' regardless of the mode the owner chose
+    // when publishing the space, so an "Instant" listing was never instant.
+    const initialStatus = parkingSpace.booking_mode === 'request' ? 'pending' : 'confirmed';
+
     // Create booking
     const booking = await Booking.create({
       booking_number: bookingNumber,
@@ -464,8 +494,9 @@ exports.createBooking = async (req, res, next) => {
       base_price: totalPrice,
       discount_amount: discountAmount,
       total_amount: finalPrice,
-      status: 'pending',
+      status: initialStatus,
       payment_status: 'pending',
+      payment_method: paymentMethod,
       promo_code: promo_code || null
     });
 
@@ -568,8 +599,10 @@ exports.updateBooking = async (req, res, next) => {
 
       booking.start_time = newStartTime;
       booking.end_time = newEndTime;
-      booking.total_price = newTotalPrice;
-      booking.final_price = newTotalPrice - booking.discount_amount;
+      // total_price / final_price were never fields on this schema, so a
+      // reschedule silently kept charging the original price — total_amount
+      // is the one the apps actually read and display.
+      booking.total_amount = Math.max(0, newTotalPrice - booking.discount_amount);
     }
 
     await booking.save();
@@ -793,7 +826,10 @@ exports.cancelBooking = async (req, res, next) => {
         refundPercentage = 0;
       }
 
-      refundAmount = (booking.final_price * refundPercentage) / 100;
+      // final_price was never a field on this schema — read against undefined
+      // it always produced NaN, so no cancellation ever actually recorded a
+      // refund amount. total_amount is what was actually charged.
+      refundAmount = (booking.total_amount * refundPercentage) / 100;
     }
 
     // Update booking status
@@ -802,8 +838,9 @@ exports.cancelBooking = async (req, res, next) => {
     booking.cancelled_at = now;
     booking.refund_amount = refundAmount;
 
-    // If payment was completed, create refund record
-    if (booking.payment_status === 'completed' && refundAmount > 0) {
+    // payment_status is never 'completed' — the enum only has 'paid' — so
+    // this never created a refund record even when it should have.
+    if (booking.payment_status === 'paid' && refundAmount > 0) {
       const Refund = require('../models/Refund');
       await Refund.create({
         booking_id: booking._id,
@@ -893,7 +930,8 @@ exports.checkIn = async (req, res, next) => {
 
     // Update booking status to active
     booking.status = 'active';
-    booking.actual_start_time = now;
+    // actual_start_time was never a field on this schema; check_in_time is.
+    booking.check_in_time = now;
     await booking.save();
 
     // Populate and return booking
@@ -958,11 +996,24 @@ exports.checkOut = async (req, res, next) => {
 
     // Update booking status to completed
     booking.status = 'completed';
-    booking.actual_end_time = now;
+    // actual_end_time was never a field on this schema; check_out_time is.
+    booking.check_out_time = now;
 
     if (overtimeCharge > 0) {
+      // final_price was never a field either, so the overtime charge was
+      // computed and returned to the app but never actually billed.
       booking.overtime_charge = overtimeCharge;
-      booking.final_price += overtimeCharge;
+      booking.total_amount += overtimeCharge;
+    }
+
+    // There is no online gateway yet, so every booking is cash: nothing ever
+    // marked payment_status 'paid', which meant getOwnerStats/getOwnerEarnings
+    // showed ₹0 revenue forever even for completed, paid-in-person bookings.
+    // Checkout is the point the guest actually hands over cash, so that is
+    // where cash bookings settle. An already-'paid' (future online) booking
+    // is left alone.
+    if (booking.payment_status !== 'paid') {
+      booking.payment_status = 'paid';
     }
 
     await booking.save();
@@ -1052,8 +1103,11 @@ exports.extendBooking = async (req, res, next) => {
     // Update booking
     const oldEndTime = booking.end_time;
     booking.end_time = newEndDate;
-    booking.total_price += extensionPrice;
-    booking.final_price += extensionPrice;
+    // total_price / final_price were never fields on this schema, so an
+    // extension silently kept charging the original price. total_amount and
+    // duration_hours are what the schema (and the apps) actually use.
+    booking.total_amount += extensionPrice;
+    booking.duration_hours += extensionHours;
 
     // Track extension in metadata
     if (!booking.extensions) {
