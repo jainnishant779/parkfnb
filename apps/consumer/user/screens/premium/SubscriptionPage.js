@@ -597,6 +597,7 @@ const SubscriptionPage = ({ navigation }) => {
     showPaymentModal ? (
 
       <View style={styles.modalOverlay}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
         <View style={styles.paymentModal}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Confirm Subscription</Text>
@@ -702,6 +703,7 @@ const SubscriptionPage = ({ navigation }) => {
     showManageModal ? (
 
       <View style={styles.modalOverlay}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
         <View style={styles.manageModal}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Manage Subscription</Text>
@@ -792,6 +794,7 @@ const SubscriptionPage = ({ navigation }) => {
     showConfirmModal ? (
 
       <View style={styles.modalOverlay}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
         <View style={styles.confirmModal}>
           <View style={[
             styles.confirmIconContainer,
@@ -846,6 +849,7 @@ const SubscriptionPage = ({ navigation }) => {
     showCompareModal ? (
 
       <View style={styles.modalOverlay}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
         <View style={styles.compareModal}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Compare Plans</Text>
@@ -1499,8 +1503,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    // The tint lives on modalBackdrop: a translucent background on this
+    // elevated view let Android's shadow paint through as a lighter strip.
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalHeader: {
     flexDirection: 'row',

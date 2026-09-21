@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Modal,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
@@ -276,14 +275,14 @@ const UserOnboarding = ({ navigation }) => {
     </View>
   );
 
+  // Was wrapped in the real RN <Modal>, matching every other screen's comment
+  // that <Modal> "does not present on this build" — tapping "Select vehicle
+  // type" would have looked like a dead button. Same absolute-View technique
+  // used everywhere else in the app instead.
   const renderVehicleModal = () => (
-    <Modal
-      visible={vehicleModalVisible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => setVehicleModalVisible(false)}
-    >
+    !vehicleModalVisible ? null : (
       <View style={styles.modalOverlay}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
@@ -325,17 +324,14 @@ const UserOnboarding = ({ navigation }) => {
           />
         </View>
       </View>
-    </Modal>
+    )
   );
 
+  // Same fix as renderVehicleModal above.
   const renderImagePickerModal = () => (
-    <Modal
-      visible={imageModalVisible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => setImageModalVisible(false)}
-    >
+    !imageModalVisible ? null : (
       <View style={styles.modalOverlay}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
@@ -356,7 +352,7 @@ const UserOnboarding = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
-    </Modal>
+    )
   );
 
   // ─── Main render ───────────────────────────────────────────────────────────
@@ -638,8 +634,14 @@ const styles = StyleSheet.create({
   // Modal styles
   modalOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end',
+    // The tint lives on modalBackdrop: a translucent background on this
+    // elevated view let Android's shadow paint through as a lighter strip.
+    backgroundColor: 'transparent', justifyContent: 'flex-end',
     zIndex: 99999, elevation: 25,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   modalContent: {
     backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,

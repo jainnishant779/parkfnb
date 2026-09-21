@@ -571,6 +571,7 @@ const HelpSupportPage = ({ navigation }) => {
       {showSuccessModal ? (
 
         <View style={styles.modalOverlay}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.successModal}>
             <View style={styles.successIconContainer}>
               <Icon name="check" size={32} color="#FFFFFF" />
@@ -979,9 +980,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    // The tint lives on modalBackdrop: a translucent background on this
+    // elevated view let Android's shadow paint through as a lighter strip.
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   successModal: {
     backgroundColor: palette.surface,

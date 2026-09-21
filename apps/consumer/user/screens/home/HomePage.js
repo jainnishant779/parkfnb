@@ -1628,7 +1628,8 @@ const HomePage = ({ navigation }) => {
       {/* Parking Details Modal */}
       {modalVisible ? (
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
+          <View style={[styles.modalContent, { paddingBottom: 24 + 64 + insets.bottom }]}>
             {selectedParkingData && (
               <>
                 {/* Modal Header */}
@@ -1765,7 +1766,8 @@ const HomePage = ({ navigation }) => {
       {/* Filter Modal */}
       {filterModalVisible ? (
         <View style={styles.modalOverlay}>
-          <View style={styles.filterModalContent}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
+          <View style={[styles.filterModalContent, { paddingBottom: 30 + 64 + insets.bottom }]}>
             {/* Filter Header */}
             <View style={styles.filterHeader}>
               <Text style={styles.filterTitle}>Filters</Text>
@@ -2962,8 +2964,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    // The tint lives on modalBackdrop, not here: a translucent background on
+    // a view that also carries elevation let Android's shadow paint through
+    // it as a visible lighter strip.
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   // Used by the All Recommendations sheet — softer teal-tinted backdrop.
   modalOverlayDimmed: {
@@ -2974,8 +2983,10 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
-    // Clears the tab bar, which sits above this overlay in the tree.
-    paddingBottom: 96,
+    // 96 was a guess at clearing the tab bar (64 + a typical inset); it fell
+    // short on any device with a taller gesture-nav inset. The render side
+    // now pads for real with the actual inset (see contentBottomPad).
+    paddingBottom: 24,
     // A percentage would resolve against the absolutely-positioned backdrop
     // rather than the screen, so cap in points instead.
     maxHeight: Dimensions.get('window').height * 0.85,
