@@ -117,7 +117,16 @@ const normalizeIdentifier = (raw) => {
       : null;
   }
 
-  const digits = value.replace(/[\s\-()]/g, "").replace(/^(\+91|91|0)/, "");
+  // Strip the country code by LENGTH, not by prefix. An unconditional
+  // /^(\+91|91|0)/ also ate the first two digits of a plain 10-digit number
+  // that happens to start with 91 — 9123456789 became 23456789 and every
+  // such subscriber was locked out of both apps entirely.
+  let digits = value.replace(/[^\d+]/g, "");
+  if (digits.startsWith("+91")) digits = digits.slice(3);
+  else if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+  else if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  digits = digits.replace(/^\+/, "");
+
   return /^[6-9]\d{9}$/.test(digits)
     ? { identifier: digits, channel: "sms" }
     : null;
