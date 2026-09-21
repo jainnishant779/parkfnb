@@ -200,7 +200,7 @@ exports.getAllBookings = async (req, res, next) => {
         select: 'space_number space_type hourly_rate property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate')
+      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate vehicle_type')
       .sort({ created_at: -1 })
       .skip((validPage - 1) * validLimit)
       .limit(validLimit);
@@ -287,7 +287,7 @@ exports.getUserBookings = async (req, res, next) => {
         select: 'space_number space_type hourly_rate property_id space_images',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate')
+      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate vehicle_type')
       .sort({ created_at: -1 })
       .skip((validPage - 1) * validLimit)
       .limit(validLimit);
@@ -330,7 +330,7 @@ exports.getOwnerBookings = async (req, res, next) => {
         select: 'space_number space_type property_id space_images',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate')
+      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate vehicle_type')
       .sort({ created_at: -1 })
       .skip((validPage - 1) * validLimit)
       .limit(validLimit);
@@ -509,7 +509,7 @@ exports.createBooking = async (req, res, next) => {
         select: 'space_number space_type hourly_rate daily_rate monthly_rate space_images property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate vehicle_type');
 
     return success(res, { booking: populatedBooking }, null, 201);
   } catch (err) {
@@ -616,7 +616,7 @@ exports.updateBooking = async (req, res, next) => {
         select: 'space_number space_type hourly_rate daily_rate monthly_rate space_images property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate vehicle_type');
 
     return success(res, { booking: updatedBooking });
   } catch (err) {
@@ -863,7 +863,7 @@ exports.cancelBooking = async (req, res, next) => {
         select: 'space_number space_type property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate vehicle_type');
 
     return success(res, {
       booking: cancelledBooking,
@@ -943,7 +943,7 @@ exports.checkIn = async (req, res, next) => {
         select: 'space_number space_type property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate vehicle_type');
 
     return success(res, { booking: checkedInBooking });
   } catch (err) {
@@ -1003,7 +1003,7 @@ exports.checkOut = async (req, res, next) => {
       // final_price was never a field either, so the overtime charge was
       // computed and returned to the app but never actually billed.
       booking.overtime_charge = overtimeCharge;
-      booking.total_amount += overtimeCharge;
+      booking.total_amount = Math.round((booking.total_amount + overtimeCharge) * 100) / 100;
     }
 
     // There is no online gateway yet, so every booking is cash: nothing ever
@@ -1027,7 +1027,7 @@ exports.checkOut = async (req, res, next) => {
         select: 'space_number space_type hourly_rate property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate vehicle_type');
 
     return success(res, {
       booking: checkedOutBooking,
@@ -1106,8 +1106,8 @@ exports.extendBooking = async (req, res, next) => {
     // total_price / final_price were never fields on this schema, so an
     // extension silently kept charging the original price. total_amount and
     // duration_hours are what the schema (and the apps) actually use.
-    booking.total_amount += extensionPrice;
-    booking.duration_hours += extensionHours;
+    booking.total_amount = Math.round((booking.total_amount + extensionPrice) * 100) / 100;
+    booking.duration_hours = Math.round((booking.duration_hours + extensionHours) * 100) / 100;
 
     // Track extension in metadata
     if (!booking.extensions) {
@@ -1131,7 +1131,7 @@ exports.extendBooking = async (req, res, next) => {
         select: 'space_number space_type hourly_rate daily_rate monthly_rate space_images property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate vehicle_type');
 
     return success(res, {
       booking: extendedBooking,

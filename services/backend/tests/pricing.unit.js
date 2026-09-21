@@ -26,6 +26,10 @@ const cases = [
   ['NaN duration', hourlyDaily, NaN, 0],
   ['no rates at all', {}, 5, 0],
   ['falls back to price_per_* fields', { price_per_hour: 25, price_per_day: 100 }, 6, 100],
+  // A duration derived from two timestamps carries millisecond noise; an
+  // extension used to price at 80.00325555555555.
+  ['rounds millisecond noise to paise', hourlyOnly, 2.0000814, 80],
+  ['keeps legitimate paise', { hourly_rate: 33.333 }, 1, 33.33],
 ];
 
 let failed = 0;

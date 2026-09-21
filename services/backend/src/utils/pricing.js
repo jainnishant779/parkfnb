@@ -32,7 +32,11 @@ const calculateBookingPrice = (space, durationHours) => {
   if (daily) options.push(daily * Math.ceil(hours / HOURS_PER_DAY));
   if (monthly) options.push(monthly * Math.ceil(hours / HOURS_PER_MONTH));
 
-  return options.length ? Math.min(...options) : 0;
+  if (!options.length) return 0;
+
+  // A duration derived from two timestamps carries millisecond noise, so an
+  // extension could price at 80.00325555555555. Money is rounded to paise.
+  return Math.round(Math.min(...options) * 100) / 100;
 };
 
 module.exports = { calculateBookingPrice };
