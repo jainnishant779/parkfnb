@@ -9,7 +9,7 @@
 
 services:
   - type: web
-    name: parkfnb-1
+    name: parkfnb
     runtime: node
     plan: free
     region: singapore          # closest to India of Render's regions
