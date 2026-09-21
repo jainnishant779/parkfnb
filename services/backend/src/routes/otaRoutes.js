@@ -35,7 +35,9 @@ router.get("/releases", otaController.getAllReleases);
 // Publish a new bundle or firmware binary (called by CLI script or Admin UI)
 router.post(
   "/publish",
-  optionalProtect,
+  // Was the undefined "optionalProtect" — a ReferenceError at module load
+  // that crashed the whole server before it could even start listening.
+  optionalAuth,
   upload.single("bundle"),
   otaController.publishBundle,
 );
