@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  Modal,
   View,
   Text,
   Pressable,
@@ -155,10 +156,19 @@ export function AppAlertProvider({ children }: { children: React.ReactNode }) {
     <>
       {children}
       {state.visible ? (
-        // Deliberately not a <Modal>: on the new architecture the modal never
-        // presented, so every alert in the app was silently dropped. This
-        // provider already sits above every screen, so an absolutely
-        // positioned overlay is all the stacking that is needed.
+        // A real <Modal> renders in its own window, so it cannot be painted
+        // under a sibling or clipped by a parent — which is what happened to
+        // the absolutely-positioned version when it was opened from inside a
+        // collapsed/scrolled section. MediaPickerSheet already uses <Modal>
+        // here and presents correctly, so the old "Modal never presents"
+        // note no longer holds.
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={handleBackdropPress}
+        >
         <Pressable style={[styles.backdrop, styles.overlay]} onPress={handleBackdropPress}>
           {/* Inner Pressable absorbs taps so they don't bubble up to backdrop. */}
           <Pressable style={styles.card} onPress={() => {}}>
@@ -206,6 +216,7 @@ export function AppAlertProvider({ children }: { children: React.ReactNode }) {
             </View>
           </Pressable>
         </Pressable>
+        </Modal>
       ) : null}
     </>
   );

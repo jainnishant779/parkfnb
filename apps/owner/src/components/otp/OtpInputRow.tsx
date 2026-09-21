@@ -394,6 +394,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     padding: 0,
+    // Android adds a font-padding band above the glyph and aligns text to the
+    // top of the box, which pushed the digit past the border.
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 });
 

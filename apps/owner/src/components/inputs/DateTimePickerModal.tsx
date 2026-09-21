@@ -108,8 +108,17 @@ function DateTimePickerModalImpl({
   return (
     <>
       {visible && !openDate && !openTime ? (
-
+        // A real <Modal> renders in its own window, so it can never be
+        // painted under a sibling or clipped by a collapsed parent.
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={onClose}
+        >
         <View style={styles.backdrop}>
+          <View pointerEvents="none" style={styles.backdropTint} />
           <Pressable style={styles.backdropPressable} onPress={onClose} />
           <View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.header}>
@@ -151,7 +160,7 @@ function DateTimePickerModalImpl({
             </View>
           </View>
         </View>
-      
+        </Modal>
       ) : null}
 
       <DatePickerModal
@@ -177,7 +186,25 @@ function DateTimePickerModalImpl({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  // Absolutely positioned, not flex:1 — this is rendered inline next to the
+  // field that opens it (no RN <Modal>, which does not present on this build).
+  // With flex:1 alone it laid out *inside* the form's scroll flow, so the
+  // picker appeared below the fold instead of over the screen and tapping
+  // the field looked like nothing happened.
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+    elevation: 24,
+    justifyContent: 'flex-end',
+  },
+  backdropTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
   backdropPressable: { flex: 1 },
   container: {
     backgroundColor: '#FFFFFF',

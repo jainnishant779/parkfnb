@@ -406,6 +406,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: theme.colors.textPrimary,
+    // Android gives a TextInput default vertical padding and an extra
+    // font-padding band on top of the glyph. At 28px inside a square box
+    // that pushed the digit below the border — it rendered outside the box.
+    padding: 0,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 
   // Error
