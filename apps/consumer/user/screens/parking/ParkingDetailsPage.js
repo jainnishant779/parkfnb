@@ -48,9 +48,13 @@ const HERO_AMENITIES = [
   { id: 'ev_charging', label: 'EV Friendly', icon: 'ev-station' },
 ];
 
+// 'online' has no gateway behind it yet — the backend never read
+// payment_method at all, so tapping it used to create the exact same booking
+// as Cash while claiming to "confirm instantly" and take a payment. Disabled
+// until a real gateway exists, rather than ship a button that lies.
 const PAYMENT_OPTIONS = [
   { id: 'cash', label: 'Cash', subtitle: 'Pay at the spot', icon: 'dollar-sign' },
-  { id: 'online', label: 'Online', subtitle: 'Confirm instantly', icon: 'globe' },
+  { id: 'online', label: 'Online', subtitle: 'Coming soon', icon: 'globe', disabled: true },
 ];
 
 // Generate time slots
@@ -160,7 +164,9 @@ const ParkingDetailsPage = ({ navigation, route }) => {
     return `${((startHour + 1) % 24).toString().padStart(2, '0')}:00`;
   });
   const [selectedHours, setSelectedHours] = useState(1);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+  // Cash is the only working method right now, so it starts pre-selected
+  // instead of forcing an extra tap before Book Now can be enabled.
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTimeModal, setShowTimeModal] = useState(false);
   const [timeModalType, setTimeModalType] = useState('start');
@@ -1178,15 +1184,24 @@ const ParkingDetailsPage = ({ navigation, route }) => {
               return (
                 <TouchableOpacity
                   key={opt.id}
-                  style={[styles.paymentOptionCard, active && styles.paymentOptionCardActive]}
-                  onPress={() => setSelectedPaymentMethod(opt.id)}
+                  style={[
+                    styles.paymentOptionCard,
+                    active && styles.paymentOptionCardActive,
+                    opt.disabled && styles.paymentOptionCardDisabled,
+                  ]}
+                  onPress={() => !opt.disabled && setSelectedPaymentMethod(opt.id)}
+                  disabled={opt.disabled}
                 >
                   {active && (
                     <View style={styles.paymentOptionCheckBadge}>
                       <Icon name="check-circle" size={16} color={palette.primary} />
                     </View>
                   )}
-                  <Icon name={opt.icon} size={30} color={active ? palette.primary : palette.textMuted} />
+                  <Icon
+                    name={opt.icon}
+                    size={30}
+                    color={opt.disabled ? palette.textMuted : active ? palette.primary : palette.textMuted}
+                  />
                   <Text style={[styles.paymentOptionLabel, active && styles.paymentOptionLabelActive]}>
                     {opt.label}
                   </Text>
@@ -2138,6 +2153,9 @@ const styles = StyleSheet.create({
   paymentOptionCardActive: {
     borderColor: palette.primary,
     backgroundColor: palette.primarySoft,
+  },
+  paymentOptionCardDisabled: {
+    opacity: 0.45,
   },
   paymentOptionCheckBadge: {
     position: 'absolute',
