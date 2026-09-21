@@ -436,6 +436,14 @@ exports.searchSpaces = async (req, res, next) => {
       .populate('property_id', 'property_name address city state postal_code location_lat location_lng property_images')
       .populate('owner_id', 'business_name average_rating');
 
+    // A non-numeric lat with no lng (or vice versa) used to fall through
+    // "if (lat && lng)" silently and return every space unfiltered, as if no
+    // location had been given at all.
+    if ((lat !== undefined && isNaN(parseFloat(lat))) ||
+        (lng !== undefined && isNaN(parseFloat(lng)))) {
+      return error(res, errorCodes.REQ_INVALID_FORMAT, 400, 'lat and lng must be numbers');
+    }
+
     // Location-based filtering
     if (lat && lng) {
       const latitude = parseFloat(lat);

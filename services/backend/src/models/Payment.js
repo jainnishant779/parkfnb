@@ -28,7 +28,8 @@ const paymentSchema = new mongoose.Schema({
   currency: {
     type: String,
     required: true,
-    default: 'USD',
+    // Both apps only ever show ₹; nothing here charges in USD.
+    default: 'INR',
     uppercase: true,
     trim: true
   },
