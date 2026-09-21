@@ -1,7 +1,7 @@
 # API contract aur gaps
 
 Backend `services/backend` mein **144 endpoints** hain, 19 route files mein.
-Base URL deployed: `https://parkingbnbbackend.onrender.com` · local: `http://localhost:5000`
+Base URL deployed: `https://parkfnb.onrender.com` · local: `http://localhost:5057`
 
 ## Auth
 

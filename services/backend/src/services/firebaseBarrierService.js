@@ -95,9 +95,17 @@ async function sendCommand(deviceId, action) {
     return { sent: false, skipped: `no Firebase mapping for '${deviceId}'` };
   }
 
-  // The firmware compares the raw JSON string, so it must be exactly
-  // "OPEN" or "CLOSE" — anything else is silently ignored by the device.
-  const verb = String(action).toLowerCase() === 'open' ? 'OPEN' : 'CLOSE';
+  // The firmware compares the raw JSON string, so the case has to match
+  // exactly or the device silently ignores the command. Which case it wants
+  // is not settled: this code has always written "OPEN"/"CLOSE", yet the live
+  // database was found holding lowercase "open" attributed to this same
+  // backend, from a session where the barrier did move. Until the arch-lock
+  // firmware source is in hand, FIREBASE_ACTION_CASE=lower flips it without
+  // a code change.
+  const isOpen = String(action).toLowerCase() === 'open';
+  const verb = process.env.FIREBASE_ACTION_CASE === 'lower'
+    ? (isOpen ? 'open' : 'close')
+    : (isOpen ? 'OPEN' : 'CLOSE');
 
   try {
     await request('PATCH', `/barriers/${barrierId}/command.json`, {

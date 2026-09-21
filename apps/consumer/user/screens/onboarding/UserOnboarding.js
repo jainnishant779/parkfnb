@@ -7,14 +7,13 @@ import {
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Image,
-  Modal,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AppAlert } from '../../components/AppAlert';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
@@ -138,6 +137,11 @@ const UserOnboarding = ({ navigation }) => {
     );
   }, [fullName, vehicleType, registrationNumber, termsAgreed]);
 
+  // Drop the "what's missing" hint as soon as the form becomes valid.
+  useEffect(() => {
+    if (isFormValid) setSubmitError('');
+  }, [isFormValid]);
+
   // ─── Image picker ──────────────────────────────────────────────────────────
   const pickImageFromGallery = () => {
     setImageModalVisible(false);
@@ -154,8 +158,26 @@ const UserOnboarding = ({ navigation }) => {
   };
 
   // ─── Submit ────────────────────────────────────────────────────────────────
+  // What is still missing, in the order the form asks for it. Continue used to
+  // sit greyed out with no explanation, so a forgotten field (most often the
+  // Terms checkbox, which has no error line of its own) looked like a dead button.
+  const firstMissingField = () => {
+    if (!fullName.trim()) return 'Enter your full name.';
+    if (!/^[a-zA-Z\s]+$/.test(fullName)) return 'Your name can only contain letters.';
+    if (!vehicleType) return 'Select your vehicle type.';
+    if (!registrationNumber.trim() || registrationNumber.length < 4) {
+      return 'Enter your vehicle registration number.';
+    }
+    if (!termsAgreed) return 'Please agree to the Terms and Conditions to continue.';
+    return '';
+  };
+
   const handleContinue = async () => {
-    if (!isFormValid || isSubmitting) return;
+    if (isSubmitting) return;
+    if (!isFormValid) {
+      setSubmitError(firstMissingField());
+      return;
+    }
 
     setIsSubmitting(true);
     setSubmitError('');
@@ -224,33 +246,24 @@ const UserOnboarding = ({ navigation }) => {
     }
   };
 
+  // Skips straight away. The confirmation used to go through AppAlert (a
+  // Modal), so if that popup failed to present the button looked dead; the
+  // profile can be finished later from the Profile tab anyway.
   const handleSkip = () => {
     if (isSubmitting) return;
-    AppAlert.alert(
-      'Skip Setup',
-      'You can complete your profile later from settings.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Skip',
-          onPress: () => {
-            // Advance the user immediately. RootNavigator re-renders into
-            // MainApp the moment onboardingStep flips to 'completed', so the
-            // user never sees a stuck loading state — even if the network
-            // is dead. Persistence happens in the background.
-            auth.updateUser({ onboardingStep: 'completed' });
-            AsyncStorage.removeItem(DRAFT_KEY).catch(() => {});
-            const payload = fullName.trim()
-              ? { legalName: fullName.trim(), notificationBooking: true }
-              : { notificationBooking: true };
-            userService.updateProfile(payload).catch(() => {
-              // Server didn't accept the skip — that's fine, the user has
-              // already moved on. They can re-enter details from Profile.
-            });
-          },
-        },
-      ]
-    );
+    // Advance the user immediately. RootNavigator re-renders into MainApp the
+    // moment onboardingStep flips to 'completed', so the user never sees a
+    // stuck loading state — even if the network is dead. Persistence happens
+    // in the background.
+    auth.updateUser({ onboardingStep: 'completed' });
+    AsyncStorage.removeItem(DRAFT_KEY).catch(() => {});
+    const payload = fullName.trim()
+      ? { legalName: fullName.trim(), notificationBooking: true }
+      : { notificationBooking: true };
+    userService.updateProfile(payload).catch(() => {
+      // Server didn't accept the skip — that's fine, the user has already
+      // moved on. They can re-enter details from Profile.
+    });
   };
 
   // ─── Render helpers ────────────────────────────────────────────────────────
@@ -263,14 +276,18 @@ const UserOnboarding = ({ navigation }) => {
     </View>
   );
 
+  // Rendered inside a real RN <Modal> so it floats above the screen's
+  // stacking context (headers / tab bar) instead of being painted over.
   const renderVehicleModal = () => (
     <Modal
       visible={vehicleModalVisible}
-      transparent={true}
+      transparent
       animationType="fade"
+      statusBarTranslucent
       onRequestClose={() => setVehicleModalVisible(false)}
     >
       <View style={styles.modalOverlay}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
@@ -315,14 +332,17 @@ const UserOnboarding = ({ navigation }) => {
     </Modal>
   );
 
+  // Same treatment as renderVehicleModal above.
   const renderImagePickerModal = () => (
     <Modal
       visible={imageModalVisible}
-      transparent={true}
+      transparent
       animationType="fade"
+      statusBarTranslucent
       onRequestClose={() => setImageModalVisible(false)}
     >
       <View style={styles.modalOverlay}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
@@ -350,7 +370,7 @@ const UserOnboarding = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
       <ScrollView
@@ -507,7 +527,7 @@ const UserOnboarding = ({ navigation }) => {
           <TouchableOpacity
             style={[styles.continueButton, (!isFormValid || isSubmitting) && styles.continueButtonDisabled]}
             onPress={handleContinue}
-            disabled={!isFormValid || isSubmitting}
+            disabled={isSubmitting}
             activeOpacity={0.8}
           >
             {isSubmitting ? (
@@ -622,11 +642,17 @@ const styles = StyleSheet.create({
   continueButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   skipButton: { paddingVertical: 12, alignItems: 'center' },
   skipButtonText: { color: '#6B7280', fontSize: 14, fontWeight: '500' },
-  // Modal styles
+  // Modal styles — the overlay fills the root of a real <Modal>.
   modalOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end',
+    // The tint lives on modalBackdrop: a translucent background on this
+    // elevated view let Android's shadow paint through as a lighter strip.
+    backgroundColor: 'transparent', justifyContent: 'flex-end',
     zIndex: 99999, elevation: 25,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   modalContent: {
     backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,

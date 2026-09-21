@@ -5,9 +5,10 @@
  * under the field name `file`, and expect back a `url` they can store on the
  * record and render later.
  *
- * Files land on local disk under /uploads, which server.js serves statically.
- * Swapping in S3 or Cloudinary later means changing the storage engine and the
- * url this builds — nothing that calls it needs to know.
+ * Storage is Cloudinary when it is configured (see config/cloudinary.js).
+ * Local disk under /uploads is the fallback for a dev checkout with no
+ * credentials — never rely on it in a deployment, because Render's filesystem
+ * is ephemeral and every restart wipes it.
  */
 
 const path = require('path');
@@ -19,6 +20,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { success, error } = require('../utils/responseHelper');
 const errorCodes = require('../utils/errorCodes');
+const { isConfigured, uploadBuffer } = require('../config/cloudinary');
 
 const UPLOAD_DIR = path.join(__dirname, '../../uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -35,15 +37,18 @@ const ALLOWED = {
   'application/pdf': '.pdf'
 };
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    // Random name: the client's filename is untrusted, and two owners
-    // uploading "aadhaar.jpg" must not collide.
-    const ext = ALLOWED[file.mimetype] || path.extname(file.originalname) || '';
-    cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
-  }
-});
+// Cloudinary needs the bytes in hand; disk mode streams straight to /uploads.
+const storage = isConfigured()
+  ? multer.memoryStorage()
+  : multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+    filename: (req, file, cb) => {
+      // Random name: the client's filename is untrusted, and two owners
+      // uploading "aadhaar.jpg" must not collide.
+      const ext = ALLOWED[file.mimetype] || path.extname(file.originalname) || '';
+      cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
+    }
+  });
 
 const upload = multer({
   storage,
@@ -62,7 +67,7 @@ const upload = multer({
  * @access  Private
  */
 router.post('/', protect, (req, res) => {
-  upload.single('file')(req, res, (err) => {
+  upload.single('file')(req, res, async (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return error(res, errorCodes.REQ_VALIDATION, 400,
@@ -80,6 +85,37 @@ router.post('/', protect, (req, res) => {
         'No file was uploaded (send it as the "file" field)');
     }
 
+    // ---- Cloudinary ----
+    if (isConfigured()) {
+      try {
+        const result = await uploadBuffer(req.file.buffer, {
+          folder: 'parkfnb',
+          mimeType: req.file.mimetype,
+          filename: req.file.originalname,
+        });
+
+        return success(res, {
+          // Both apps store whatever `url` they get and render it later, so
+          // this is the absolute Cloudinary URL rather than a /uploads path.
+          url: result.secure_url,
+          full_url: result.secure_url,
+          public_id: result.public_id,
+          format: result.format || path.extname(req.file.originalname).replace('.', ''),
+          width: result.width || 0,
+          height: result.height || 0,
+          bytes: result.bytes || req.file.size,
+          resource_type: result.resource_type,
+          filename: req.file.originalname,
+          mime_type: req.file.mimetype
+        }, null, 201);
+      } catch (e) {
+        console.error('Cloudinary upload failed:', e.message);
+        return error(res, errorCodes.SERVER_ERROR, 502,
+          'Could not store the file with the image provider');
+      }
+    }
+
+    // ---- local disk fallback (development only) ----
     const filename = req.file.filename;
     const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
     const host = req.get('host') || 'parkfnb.onrender.com';

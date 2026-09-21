@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/AppAlert';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -70,6 +70,11 @@ const vehicleSizeMap = {
 };
 
 const ProfilePage = ({ navigation }) => {
+  // Bottom padding for the sheets. The sheets now render in a real <Modal>
+  // (above the tab bar), but the 64 + inset padding is kept so their action
+  // buttons sit at the same height as before.
+  const insets = useSafeAreaInsets();
+  const sheetBottomPad = 64 + insets.bottom;
   const auth = useAuth();
   const user = auth.user;
 
@@ -892,16 +897,22 @@ const ProfilePage = ({ navigation }) => {
   );
 
   // Render vehicle modal
-  const renderVehicleModal = () =>
-    showVehicleModal ? (
-
+  const renderVehicleModal = () => (
+    <Modal
+      visible={showVehicleModal}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowVehicleModal(false)}
+    >
       <View style={styles.modalOverlay}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
           onPress={() => setShowVehicleModal(false)}
         />
-        <View style={styles.modalContent}>
+        <View style={[styles.modalContent, { paddingBottom: sheetBottomPad }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
               {editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}
@@ -1014,15 +1025,21 @@ const ProfilePage = ({ navigation }) => {
           </View>
         </View>
       </View>
-    
-    ) : null;
+    </Modal>
+  );
 
   // Render payment modal
-  const renderPaymentModal = () =>
-    showPaymentModal ? (
-
+  const renderPaymentModal = () => (
+    <Modal
+      visible={showPaymentModal}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowPaymentModal(false)}
+    >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View pointerEvents="none" style={styles.modalBackdrop} />
+        <View style={[styles.modalContent, { paddingBottom: sheetBottomPad }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add Payment Method</Text>
             <TouchableOpacity
@@ -1103,8 +1120,8 @@ const ProfilePage = ({ navigation }) => {
           </View>
         </View>
       </View>
-    
-    ) : null;
+    </Modal>
+  );
 
   // Render success toast
   const renderSuccessToast = () => {
@@ -1795,8 +1812,8 @@ const styles = StyleSheet.create({
 
   // Modal styles
   modalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
+    // Fills the root of a real <Modal>. Absolute positioning (and the
+    // leftover zIndex/elevation) is harmless there.
     position: 'absolute',
     top: 0,
     left: 0,
@@ -1804,8 +1821,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalContent: {
     backgroundColor: palette.surface,

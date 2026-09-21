@@ -82,29 +82,69 @@ export function AuthProvider({ children }) {
   // Session restoration on app launch
   useEffect(() => {
     async function restoreSession() {
+      const signOutLocally = async () => {
+        await AsyncStorage.multiRemove([STORAGE_KEYS.AUTH_TOKEN, STORAGE_KEYS.AUTH_USER]);
+        dispatch({ type: AUTH_ACTIONS.RESTORE_TOKEN, token: null, user: null });
+      };
+
+      let storedToken = null;
       try {
-        const storedToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+        storedToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+      } catch {
+        // Storage unavailable — nothing to restore.
+      }
 
-        if (!storedToken) {
-          dispatch({ type: AUTH_ACTIONS.RESTORE_TOKEN, token: null, user: null });
-          return;
-        }
+      if (!storedToken) {
+        dispatch({ type: AUTH_ACTIONS.RESTORE_TOKEN, token: null, user: null });
+        return;
+      }
 
-        // Validate token by fetching user profile
+      // Come up signed in from the cached user straight away. Waiting on the
+      // network here meant a cold start on a bad connection showed the
+      // sign-in screen before /me had answered.
+      let cachedUser = null;
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_USER);
+        if (raw) cachedUser = JSON.parse(raw);
+      } catch {
+        cachedUser = null;
+      }
+      if (cachedUser) {
+        dispatch({ type: AUTH_ACTIONS.RESTORE_TOKEN, token: storedToken, user: cachedUser });
+      }
+
+      try {
         const data = await authService.getMe();
         const user = data.user;
-
         if (user) {
+          try {
+            await AsyncStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(user));
+          } catch {
+            // Cache write failure is not fatal.
+          }
           dispatch({ type: AUTH_ACTIONS.RESTORE_TOKEN, token: storedToken, user });
         } else {
-          // Token invalid / user deleted
-          await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+          await signOutLocally();
+        }
+      } catch (err) {
+        // Only a real rejection from the server means the session is dead.
+        // This used to clear the token on ANY failure, so one flaky request —
+        // a timeout, no signal, the server still waking up — silently logged
+        // the user out and sent them back to re-enter their number and OTP.
+        const code = err?.code || '';
+        const isNetwork = code === 'NETWORK_ERROR' || code === 'NETWORK_TIMEOUT' || err?.http === 0;
+        const isAuthFailure = err?.http === 401 || err?.http === 403 || code.startsWith('AUTH_');
+
+        if (isAuthFailure) {
+          await signOutLocally();
+        } else if (!isNetwork && !cachedUser) {
+          // Some other error and nothing cached to fall back on.
+          await signOutLocally();
+        } else if (!cachedUser) {
+          // Offline with no cached user: keep the token, let the app retry.
           dispatch({ type: AUTH_ACTIONS.RESTORE_TOKEN, token: null, user: null });
         }
-      } catch {
-        // getMe failed (expired/invalid token) — clear and start fresh
-        await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-        dispatch({ type: AUTH_ACTIONS.RESTORE_TOKEN, token: null, user: null });
+        // Offline WITH a cached user: stay signed in on the cached session.
       }
     }
 
@@ -119,6 +159,11 @@ export function AuthProvider({ children }) {
    */
   const signIn = async (token, user) => {
     await setToken(token);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(user));
+    } catch {
+      // Cache write failure is not fatal — the session still works this run.
+    }
     dispatch({ type: AUTH_ACTIONS.SIGN_IN, token, user });
   };
 
@@ -127,6 +172,11 @@ export function AuthProvider({ children }) {
    */
   const signOut = async () => {
     await clearToken();
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_USER);
+    } catch {
+      // Best effort — the token is already gone, so the session is over.
+    }
     dispatch({ type: AUTH_ACTIONS.SIGN_OUT });
   };
 
@@ -136,6 +186,14 @@ export function AuthProvider({ children }) {
    */
   const updateUser = (user) => {
     dispatch({ type: AUTH_ACTIONS.UPDATE_USER, user });
+    // Keep the cached copy in step, so the next cold start restores the
+    // updated user (a finished onboarding, say) rather than a stale one.
+    AsyncStorage.getItem(STORAGE_KEYS.AUTH_USER)
+      .then((raw) => {
+        const merged = { ...(raw ? JSON.parse(raw) : {}), ...user };
+        return AsyncStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(merged));
+      })
+      .catch(() => {});
   };
 
   const value = {

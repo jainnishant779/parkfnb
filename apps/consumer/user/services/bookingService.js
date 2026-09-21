@@ -74,3 +74,11 @@ export const unlockBarrier = (bookingId) =>
 export const lockBarrier = (bookingId) =>
   api.post(`/api/bookings/${bookingId}/lock`);
 
+/**
+ * Tell the server the guest has arrived and parked ("I've reached").
+ * Moves the booking from confirmed to active.
+ * PUT /api/bookings/:id/checkin (private)
+ */
+export const checkIn = (bookingId) =>
+  api.put(`/api/bookings/${bookingId}/checkin`, {});
+

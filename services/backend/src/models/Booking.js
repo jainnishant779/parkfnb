@@ -64,7 +64,8 @@ const bookingSchema = new mongoose.Schema({
   currency: {
     type: String,
     required: true,
-    default: 'USD',
+    // Both apps only ever show ₹; nothing here charges in USD.
+    default: 'INR',
     uppercase: true,
     trim: true
   },
@@ -82,12 +83,29 @@ const bookingSchema = new mongoose.Schema({
     default: 'pending',
     index: true
   },
+  // How the guest intends to pay. There is no online gateway wired up yet —
+  // 'online' is accepted so it isn't lost once one exists, but every booking
+  // created today is 'cash'.
+  payment_method: {
+    type: String,
+    enum: ['cash', 'online'],
+    default: 'cash'
+  },
   check_in_time: {
     type: Date
   },
   check_out_time: {
     type: Date
   },
+  // Audit trail of time extensions. extendBooking has always pushed onto this,
+  // but without a schema path for it Mongoose dropped the array on save, so
+  // every extension was invisible after the fact.
+  extensions: [{
+    old_end_time: { type: Date },
+    new_end_time: { type: Date },
+    extension_price: { type: Number },
+    extended_at: { type: Date }
+  }],
   // Why the owner turned the request down. Kept apart from
   // cancellation_reason so "the renter cancelled" and "the owner said no"
   // stay distinguishable in the booking history.
@@ -98,6 +116,23 @@ const bookingSchema = new mongoose.Schema({
   cancellation_reason: {
     type: String,
     trim: true
+  },
+  cancelled_at: {
+    type: Date
+  },
+  // Set on cancellation per the refund-tier policy in cancelBooking. Only
+  // ever non-zero for a booking that was actually paid before it was
+  // cancelled — which nothing produces yet without an online gateway.
+  refund_amount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  // Extra charge for staying past end_time, added by checkOut.
+  overtime_charge: {
+    type: Number,
+    default: 0,
+    min: 0
   }
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }

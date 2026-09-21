@@ -568,9 +568,15 @@ const HelpSupportPage = ({ navigation }) => {
       </ScrollView>
 
       {/* Success Modal */}
-      {showSuccessModal ? (
-
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
         <View style={styles.modalOverlay}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.successModal}>
             <View style={styles.successIconContainer}>
               <Icon name="check" size={32} color="#FFFFFF" />
@@ -581,8 +587,7 @@ const HelpSupportPage = ({ navigation }) => {
             </Text>
           </View>
         </View>
-      
-      ) : null}
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -970,8 +975,8 @@ const styles = StyleSheet.create({
   },
   // Modal Styles
   modalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
+    // Fills the root of a real <Modal>. Absolute positioning (and the
+    // leftover zIndex/elevation) is harmless there.
     position: 'absolute',
     top: 0,
     left: 0,
@@ -979,9 +984,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    // The tint lives on modalBackdrop: a translucent background on this
+    // elevated view let Android's shadow paint through as a lighter strip.
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   successModal: {
     backgroundColor: palette.surface,

@@ -1274,10 +1274,9 @@ const HomePage = ({ navigation }) => {
             </View>
           </View>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.notificationButton}>
-              <Icon name="bell" size={20} color={palette.text} />
-              <View style={styles.notificationBadge} />
-            </TouchableOpacity>
+            {/* The bell that used to sit here had no handler and a permanent
+                "unread" dot: the consumer app has no notifications screen yet
+                (NotificationCenter.js is empty). Bring it back with the feature. */}
             {/* The avatar is the only route into the profile from here, and
                 Profile is a sibling tab rather than a stack screen. */}
             <TouchableOpacity
@@ -1627,9 +1626,16 @@ const HomePage = ({ navigation }) => {
       </View>
 
       {/* Parking Details Modal */}
-      {modalVisible ? (
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={closeModal}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
+          <View style={[styles.modalContent, { paddingBottom: 24 + 64 + insets.bottom }]}>
             {selectedParkingData && (
               <>
                 {/* Modal Header */}
@@ -1761,12 +1767,19 @@ const HomePage = ({ navigation }) => {
             )}
           </View>
         </View>
-      ) : null}
+      </Modal>
 
       {/* Filter Modal */}
-      {filterModalVisible ? (
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.filterModalContent}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
+          <View style={[styles.filterModalContent, { paddingBottom: 30 + 64 + insets.bottom }]}>
             {/* Filter Header */}
             <View style={styles.filterHeader}>
               <Text style={styles.filterTitle}>Filters</Text>
@@ -1892,7 +1905,7 @@ const HomePage = ({ navigation }) => {
             </View>
           </View>
         </View>
-      ) : null}
+      </Modal>
 
     </SafeAreaView>
   );
@@ -2953,9 +2966,9 @@ const styles = StyleSheet.create({
   },
   // Modal Styles
   modalOverlay: {
-    // Absolutely positioned, not flex:1 — these sheets are no longer inside a
-    // <Modal>, which does not present on this build and let their contents
-    // render inline on top of the page.
+    // These sheets render inside a real <Modal>, so this fills the modal's
+    // own root. The absolute positioning is kept (harmless there) along with
+    // the zIndex/elevation left over from when they rendered inline.
     position: 'absolute',
     top: 0,
     left: 0,
@@ -2963,8 +2976,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    // The tint lives on modalBackdrop, not here: a translucent background on
+    // a view that also carries elevation let Android's shadow paint through
+    // it as a visible lighter strip.
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   // Used by the All Recommendations sheet — softer teal-tinted backdrop.
   modalOverlayDimmed: {
@@ -2975,15 +2995,17 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
-    // Clears the tab bar, which sits above this overlay in the tree.
-    paddingBottom: 96,
+    // 96 was a guess at clearing the tab bar (64 + a typical inset); it fell
+    // short on any device with a taller gesture-nav inset. The render side
+    // now pads for real with the actual inset (see contentBottomPad).
+    paddingBottom: 24,
     // A percentage would resolve against the absolutely-positioned backdrop
     // rather than the screen, so cap in points instead.
     maxHeight: Dimensions.get('window').height * 0.85,
   },
   modalScroll: {
-    // The sheet is no longer inside a <Modal>, so it must be allowed to grow
-    // to its content instead of being clipped by the old flex constraints.
+    // The sheet must be allowed to grow to its content instead of being
+    // clipped by flex constraints.
     flexGrow: 1,
     flexShrink: 1,
   },

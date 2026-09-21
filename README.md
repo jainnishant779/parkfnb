@@ -107,7 +107,7 @@ npm run android           # dusre terminal mein
 
 | App | File | Value |
 |---|---|---|
-| consumer | `user/utils/constants.js` | `API_BASE_URL = 'https://parkingbnbbackend.onrender.com'` |
+| consumer | `user/utils/constants.js` | `API_BASE_URL = 'https://parkfnb.onrender.com'` |
 | owner | `src/config/api.ts` | wahi |
 
 Local backend ke against chalane ke liye ise apni machine ke **LAN IP** par badlo

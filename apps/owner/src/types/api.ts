@@ -136,6 +136,10 @@ export interface ApiProperty {
   city: string;
   state: string;
   postalCode: string;
+  // POST /api/properties requires this. It was missing from the type, so any
+  // call site that tried to send it failed to compile and was "fixed" by
+  // dropping the field — which then 400'd at runtime.
+  country?: string;
   locationLat: number;
   locationLng: number;
   accessInstructions?: string;

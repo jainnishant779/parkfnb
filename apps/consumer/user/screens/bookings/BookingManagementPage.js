@@ -16,7 +16,7 @@ import {
   Image,
   Linking,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { AppAlert } from '../../components/AppAlert';
 import Icon from 'react-native-vector-icons/Feather';
@@ -231,6 +231,10 @@ const getStatusCopy = (status) => {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const BookingManagementPage = ({ navigation }) => {
+  // The tab bar is absolutely positioned (64 + the bottom inset), so the FAB
+  // has to sit above that or the bar clips it.
+  const insets = useSafeAreaInsets();
+  const tabBarSpace = 64 + insets.bottom;
   const auth = useAuth();
   const user = auth.user;
 
@@ -271,6 +275,8 @@ const BookingManagementPage = ({ navigation }) => {
 
   // IoT Smart Barrier states
   const [unlockingBookingId, setUnlockingBookingId] = useState(null);
+  const [lockingBookingId, setLockingBookingId] = useState(null);
+  const [arrivingBookingId, setArrivingBookingId] = useState(null);
   const [activeBarrierCountdown, setActiveBarrierCountdown] = useState({}); // { [bookingId]: seconds }
 
   useEffect(() => {
@@ -317,6 +323,58 @@ const BookingManagementPage = ({ navigation }) => {
       AppAlert.alert('Barrier Unlock Failed', msg);
     } finally {
       setUnlockingBookingId(null);
+    }
+  };
+
+  /**
+   * "I've reached the space" — check in without touching the barrier.
+   *
+   * Unlocking also checks you in server-side, but a guest who parked at a spot
+   * with no smart barrier (or whose barrier was already open) still needs a way
+   * to tell the owner they have arrived. This moves confirmed → active.
+   */
+  const handleArrived = async (booking) => {
+    const bookingId = booking?.id || booking?._id;
+    if (!bookingId) return;
+    setArrivingBookingId(bookingId);
+    try {
+      await bookingService.checkIn(bookingId);
+      setBookings(prev =>
+        prev.map(b => (b.id === bookingId ? { ...b, status: 'active' } : b))
+      );
+      AppAlert.alert(
+        'Checked In',
+        'The owner has been notified that you have arrived. Enjoy your stay!',
+        [{ text: 'OK' }]
+      );
+      fetchBookings(false);
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.message || 'Could not check you in.';
+      AppAlert.alert('Check-in Failed', msg);
+    } finally {
+      setArrivingBookingId(null);
+    }
+  };
+
+  const handleLockBarrier = async (booking) => {
+    const bookingId = booking?.id || booking?._id;
+    if (!bookingId) return;
+    setLockingBookingId(bookingId);
+    try {
+      const res = await bookingService.lockBarrier(bookingId);
+      // Barrier is shut, so the auto-close countdown no longer applies.
+      setActiveBarrierCountdown((prev) => {
+        if (!prev[bookingId]) return prev;
+        const next = { ...prev };
+        delete next[bookingId];
+        return next;
+      });
+      AppAlert.alert('Barrier Closed', res?.data?.message || 'Smart Barrier secured.', [{ text: 'OK' }]);
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.message || 'Could not close smart barrier.';
+      AppAlert.alert('Barrier Close Failed', msg);
+    } finally {
+      setLockingBookingId(null);
     }
   };
 
@@ -600,6 +658,25 @@ const BookingManagementPage = ({ navigation }) => {
 
         {/* Card Actions */}
         <View style={styles.cardActions}>
+          {item.status === 'confirmed' && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.arrivedButton]}
+              onPress={() => handleArrived(item)}
+              disabled={arrivingBookingId === item.id}
+              activeOpacity={0.8}
+            >
+              {arrivingBookingId === item.id ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <MaterialIcon name="map-marker-check" size={18} color="#FFFFFF" />
+                  <Text style={[styles.actionButtonText, styles.unlockBarrierText]}>
+                    I've Reached
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
           {(item.status === 'confirmed' || item.status === 'active') && (
             <TouchableOpacity
               style={[
@@ -625,6 +702,23 @@ const BookingManagementPage = ({ navigation }) => {
                       ? `Open (${activeBarrierCountdown[item.id]}s)`
                       : 'Unlock'}
                   </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+          {(item.status === 'confirmed' || item.status === 'active') && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.lockBarrierButton]}
+              onPress={() => handleLockBarrier(item)}
+              disabled={lockingBookingId === item.id}
+              activeOpacity={0.8}
+            >
+              {lockingBookingId === item.id ? (
+                <ActivityIndicator size="small" color="#0D7377" />
+              ) : (
+                <>
+                  <MaterialIcon name="boom-gate" size={18} color="#0D7377" />
+                  <Text style={[styles.actionButtonText, styles.lockBarrierText]}>Close</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -820,7 +914,7 @@ const BookingManagementPage = ({ navigation }) => {
 
       {/* FAB */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: tabBarSpace + 16 }]}
         onPress={() => navigation.navigate('Home')}
         activeOpacity={0.8}
       >
@@ -828,9 +922,16 @@ const BookingManagementPage = ({ navigation }) => {
       </TouchableOpacity>
 
       {/* ── Booking Details Modal ── */}
-      {showDetailsModal ? (
+      <Modal
+        visible={showDetailsModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowDetailsModal(false)}
+      >
 
         <View style={styles.modalOverlay}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.detailsModalContent}>
             <View style={styles.modalHandle} />
             <View style={styles.detailsModalHeader}>
@@ -1267,7 +1368,7 @@ const BookingManagementPage = ({ navigation }) => {
                   <TouchableOpacity
                     style={[
                       styles.footerPrimaryButton,
-                      { backgroundColor: '#0D7377', flex: 1.2 },
+                      { backgroundColor: '#0D7377', flexGrow: 1.2, flexBasis: 104 },
                       activeBarrierCountdown[selectedBooking.id || selectedBooking._id] && { backgroundColor: '#10B981' },
                     ]}
                     onPress={() => handleUnlockBarrier(selectedBooking)}
@@ -1284,10 +1385,29 @@ const BookingManagementPage = ({ navigation }) => {
                           color="#FFFFFF"
                           style={{ marginRight: 6 }}
                         />
-                        <Text style={styles.footerPrimaryText}>
+                        <Text style={styles.footerPrimaryText} numberOfLines={1}>
                           {activeBarrierCountdown[selectedBooking.id || selectedBooking._id]
-                            ? `Open (${activeBarrierCountdown[selectedBooking.id || selectedBooking._id]}s)`
-                            : 'Unlock Barrier'}
+                            ? `Open ${activeBarrierCountdown[selectedBooking.id || selectedBooking._id]}s`
+                            : 'Unlock'}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+                {['confirmed', 'active'].includes(selectedBooking.status) && (
+                  <TouchableOpacity
+                    style={[styles.footerCancelButton, styles.footerSecondaryButton]}
+                    onPress={() => handleLockBarrier(selectedBooking)}
+                    disabled={lockingBookingId === (selectedBooking.id || selectedBooking._id)}
+                    activeOpacity={0.8}
+                  >
+                    {lockingBookingId === (selectedBooking.id || selectedBooking._id) ? (
+                      <ActivityIndicator size="small" color={palette.primary} />
+                    ) : (
+                      <>
+                        <MaterialIcon name="boom-gate" size={18} color={palette.primary} />
+                        <Text style={[styles.footerCancelText, { color: palette.primary }]} numberOfLines={1}>
+                          Close
                         </Text>
                       </>
                     )}
@@ -1303,7 +1423,7 @@ const BookingManagementPage = ({ navigation }) => {
                     activeOpacity={0.8}
                   >
                     <Icon name="x-circle" size={18} color={palette.danger} />
-                    <Text style={styles.footerCancelText}>Cancel Booking</Text>
+                    <Text style={styles.footerCancelText} numberOfLines={1}>Cancel</Text>
                   </TouchableOpacity>
                 )}
                 {selectedBooking.status === 'active' && (
@@ -1316,7 +1436,7 @@ const BookingManagementPage = ({ navigation }) => {
                     activeOpacity={0.8}
                   >
                     <Icon name="plus-circle" size={18} color={palette.primary} />
-                    <Text style={[styles.footerCancelText, { color: palette.primary }]}>Extend Time</Text>
+                    <Text style={[styles.footerCancelText, { color: palette.primary }]} numberOfLines={1}>Extend</Text>
                   </TouchableOpacity>
                 )}
                 {['completed', 'cancelled', 'rejected', 'no_show'].includes(selectedBooking.status) && (
@@ -1329,7 +1449,7 @@ const BookingManagementPage = ({ navigation }) => {
                     activeOpacity={0.8}
                   >
                     <Icon name="repeat" size={18} color={palette.primary} />
-                    <Text style={[styles.footerCancelText, { color: palette.primary }]}>Book Again</Text>
+                    <Text style={[styles.footerCancelText, { color: palette.primary }]} numberOfLines={1}>Rebook</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -1341,19 +1461,26 @@ const BookingManagementPage = ({ navigation }) => {
                   activeOpacity={0.85}
                 >
                   <Icon name="home" size={18} color={palette.textInverse} />
-                  <Text style={styles.footerPrimaryText}>Back to Home</Text>
+                  <Text style={styles.footerPrimaryText} numberOfLines={1}>Home</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
         </View>
       
-      ) : null}
+      </Modal>
 
       {/* ── Cancel Confirmation Modal ── */}
-      {showCancelModal ? (
+      <Modal
+        visible={showCancelModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowCancelModal(false)}
+      >
 
         <View style={styles.confirmModalOverlay}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.confirmModalContent}>
             <View style={styles.confirmIconContainer}>
               <Icon name="alert-triangle" size={32} color="#EF4444" />
@@ -1393,12 +1520,19 @@ const BookingManagementPage = ({ navigation }) => {
           </View>
         </View>
       
-      ) : null}
+      </Modal>
 
       {/* ── Extend Booking Modal ── */}
-      {showExtendModal ? (
+      <Modal
+        visible={showExtendModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowExtendModal(false)}
+      >
 
         <View style={styles.modalOverlay}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.extendModalContent}>
             <View style={styles.modalHandle} />
             <Text style={styles.extendModalTitle}>Extend Parking Time</Text>
@@ -1454,12 +1588,19 @@ const BookingManagementPage = ({ navigation }) => {
           </View>
         </View>
       
-      ) : null}
+      </Modal>
 
       {/* ── Review Modal ── */}
-      {showReviewModal ? (
+      <Modal
+        visible={showReviewModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowReviewModal(false)}
+      >
 
         <View style={styles.modalOverlay}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.reviewModalContent}>
             <View style={styles.modalHandle} />
             <Text style={styles.reviewModalTitle}>Rate Your Experience</Text>
@@ -1496,12 +1637,19 @@ const BookingManagementPage = ({ navigation }) => {
           </View>
         </View>
       
-      ) : null}
+      </Modal>
 
       {/* ── Filter Modal ── */}
-      {showFilterModal ? (
+      <Modal
+        visible={showFilterModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowFilterModal(false)}
+      >
 
         <View style={styles.modalOverlay}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.filterModalContent}>
             <View style={styles.modalHandle} />
             <View style={styles.filterHeader}>
@@ -1539,7 +1687,7 @@ const BookingManagementPage = ({ navigation }) => {
           </View>
         </View>
       
-      ) : null}
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1754,10 +1902,14 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     flexDirection: 'row',
+    // An active booking can show four actions (Open / Close / Navigate /
+    // Extend); without wrapping they squeeze until the labels clip.
+    flexWrap: 'wrap',
     gap: 10,
   },
   actionButton: {
     flex: 1,
+    minWidth: 96,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1863,8 +2015,10 @@ const styles = StyleSheet.create({
 
   // Modal Styles
   modalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
+    // Back inside a real <Modal>. The old claim that Modal does not
+    // present on this build was wrong (AppAlert uses one); as a plain View
+    // the sheet sat in the screen stacking context and the bottom tab bar
+    // painted over it. Kept absolute so it fills the Modal window.
     position: 'absolute',
     top: 0,
     left: 0,
@@ -1872,8 +2026,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalHandle: {
     width: 40,
@@ -2420,6 +2578,11 @@ const styles = StyleSheet.create({
   // Sticky footer
   stickyFooter: {
     flexDirection: 'row',
+    // An active booking shows four actions (Unlock / Close / Extend /
+    // Home). Sharing one non-wrapping row gave each about 63dp, so the
+    // labels ran past their buttons and the last one was cut off by the
+    // screen edge. They wrap to a second row instead of shrinking.
+    flexWrap: 'wrap',
     alignItems: 'center',
     backgroundColor: palette.surface,
     paddingHorizontal: spacing.lg,
@@ -2430,7 +2593,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   footerCancelButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 104,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2454,7 +2618,8 @@ const styles = StyleSheet.create({
     color: palette.danger,
   },
   footerPrimaryButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 104,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2472,8 +2637,10 @@ const styles = StyleSheet.create({
 
   // Confirm Modal
   confirmModalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
+    // Back inside a real <Modal>. The old claim that Modal does not
+    // present on this build was wrong (AppAlert uses one); as a plain View
+    // the sheet sat in the screen stacking context and the bottom tab bar
+    // painted over it. Kept absolute so it fills the Modal window.
     position: 'absolute',
     top: 0,
     left: 0,
@@ -2481,7 +2648,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -2797,6 +2964,24 @@ const styles = StyleSheet.create({
     color: '#A1A1AA',
   },
   // IoT Smart Barrier styles
+  arrivedButton: {
+    backgroundColor: '#0D7377',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    borderWidth: 0,
+  },
+  lockBarrierButton: {
+    backgroundColor: 'rgba(13, 115, 119, 0.10)',
+    borderWidth: 1,
+    borderColor: '#0D7377',
+    paddingHorizontal: 14,
+  },
+  lockBarrierText: {
+    color: '#0D7377',
+  },
   unlockBarrierButton: {
     backgroundColor: '#0D7377',
     flexDirection: 'row',

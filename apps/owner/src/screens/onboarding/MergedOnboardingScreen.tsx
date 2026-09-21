@@ -786,6 +786,11 @@ export default function MergedOnboardingScreen() {
           city: state.address.city,
           state: state.address.state,
           postalCode: state.address.pincode,
+          // POST /api/properties requires country. Leaving it out made this
+          // 400 every time — and because the failure is swallowed below as
+          // "best effort", onboarding finished with no starter property and
+          // no sign anything had gone wrong.
+          country: 'IN',
           locationLat: state.location.lat ?? 0,
           locationLng: state.location.lng ?? 0,
           // status: 'draft' is accepted by the backend createProperty handler.
@@ -959,7 +964,9 @@ export default function MergedOnboardingScreen() {
         onStepPress={handleStepPress}
         savedStatus={savedStatus}
         onBackPress={confirmQuit}
-        onMenuPress={confirmQuit}
+        // No menu here: the ⋮ button was wired to confirmQuit too, so it was
+        // a "More options" icon whose only option was signing out — the same
+        // thing the back arrow already does. Omitting onMenuPress hides it.
         showBack
       />
 

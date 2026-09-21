@@ -90,7 +90,8 @@ router.put(
   protect,
   validateObjectId('id'),
   sanitize,
-  validateRequired(['new_end_time']),
+  // No validateRequired here: the controller accepts either an absolute
+  // `new_end_time` or an `additional_hours` duration (what both apps send).
   bookingsController.extendBooking
 );
 

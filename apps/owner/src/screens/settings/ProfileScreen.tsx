@@ -35,6 +35,7 @@ import FormPickerInput from '../../components/inputs/FormPickerInput';
 import { indianStates } from '../../constants/mockData';
 import { useAuth } from '../../context/AuthContext';
 import { resolveImageUri } from '../../utils/imageUri';
+import { ownerService } from '../../services/ownerService';
 
 // Storage keys
 const PROFILE_DATA_KEY = 'owners:profile_data';
@@ -438,8 +439,24 @@ export default function ProfileScreen() {
   // Owner type is now sourced from the AuthContext owner record (which the
   // backend returns on /me) — the legacy AsyncStorage 'ownerType' key is no
   // longer written to for new accounts.
-  const { owner } = useAuth();
+  const { owner, user, updateUser, updateOwner } = useAuth();
   const ownerType = owner?.ownerType || 'individual';
+
+  // The profile is stored per account. It used to be one global key seeded with
+  // a hardcoded "John Doe / john.doe@example.com" default, so every owner saw
+  // (and edited) a stranger's details, and a second account on the same phone
+  // inherited the first one's.
+  const profileStorageKey = `${PROFILE_DATA_KEY}:${user?.id ?? 'anonymous'}`;
+  const accountProfile = useMemo<ProfileData>(() => {
+    const legalParts = (user?.legalName || '').trim().split(/\s+/).filter(Boolean);
+    return {
+      ...DEFAULT_PROFILE,
+      firstName: user?.firstName || legalParts[0] || '',
+      lastName: user?.lastName || legalParts.slice(1).join(' '),
+      email: user?.email || '',
+      phone: user?.phone || '',
+    };
+  }, [user?.firstName, user?.lastName, user?.legalName, user?.email, user?.phone]);
 
   // State
   const [isLoading, setIsLoading] = useState(false);
@@ -459,13 +476,14 @@ export default function ProfileScreen() {
   // Load profile data
   const loadProfile = useCallback(async () => {
     try {
-      const profileJson = await AsyncStorage.getItem(PROFILE_DATA_KEY);
+      const profileJson = await AsyncStorage.getItem(profileStorageKey);
 
       if (profileJson) {
         setProfile(JSON.parse(profileJson));
       } else {
-        // Save default profile on first load
-        await AsyncStorage.setItem(PROFILE_DATA_KEY, JSON.stringify(DEFAULT_PROFILE));
+        // First load for this account: start from the signed-in user's details.
+        setProfile(accountProfile);
+        await AsyncStorage.setItem(profileStorageKey, JSON.stringify(accountProfile));
       }
     } catch (error) {
       console.error('Failed to load profile:', error);
@@ -473,7 +491,7 @@ export default function ProfileScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [profileStorageKey, accountProfile]);
 
   useEffect(() => {
     loadProfile();
@@ -492,11 +510,6 @@ export default function ProfileScreen() {
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
-  };
-
-  // Validate phone
-  const validatePhone = (phone: string) => {
-    return phone.length >= 10 && /^\d+$/.test(phone);
   };
 
   // Update profile field
@@ -521,9 +534,7 @@ export default function ProfileScreen() {
     if (!validateEmail(profile.email)) {
       newErrors.email = 'Please enter a valid email';
     }
-    if (!validatePhone(profile.phone)) {
-      newErrors.phone = 'Please enter a valid phone number';
-    }
+    // Phone is read-only now (see the field above), so it is never re-validated here.
 
     // Bank validation only if editing bank section
     if (isEditingBank) {
@@ -550,20 +561,38 @@ export default function ProfileScreen() {
         ...profile,
         updatedAt: new Date().toISOString(),
       };
-      await AsyncStorage.setItem(PROFILE_DATA_KEY, JSON.stringify(updatedProfile));
+
+      // This used to only write to AsyncStorage — "Profile saved successfully"
+      // showed even though nothing reached the server, so the edit vanished
+      // the moment the app was reinstalled or opened on another device.
+      // Phone is not sent: it is the OTP sign-in identity and the endpoint
+      // does not accept changing it (see the disabled field below).
+      const response = await ownerService.updateProfile({
+        first_name: profile.firstName,
+        last_name: profile.lastName,
+        email: profile.email,
+        address_line1: profile.address,
+        city: profile.city,
+        state: profile.state,
+        pincode: profile.pincode,
+      });
+      updateUser(response.user);
+      if (response.owner) updateOwner(response.owner);
+
+      await AsyncStorage.setItem(profileStorageKey, JSON.stringify(updatedProfile));
       setProfile(updatedProfile);
       setHasChanges(false);
       setIsEditingPersonal(false);
       setIsEditingBank(false);
       setIsEditingAddress(false);
       showSnackbar('Profile saved successfully', 'success');
-    } catch (error) {
-      console.error('Failed to save profile:', error);
-      showSnackbar('Failed to save profile', 'error');
+    } catch (err) {
+      console.error('Failed to save profile:', err);
+      showSnackbar('Failed to save profile — check your connection and try again', 'error');
     } finally {
       setIsSaving(false);
     }
-  }, [profile, isEditingBank, showSnackbar]);
+  }, [profile, isEditingBank, showSnackbar, profileStorageKey, updateUser, updateOwner]);
 
   // Handle profile image edit
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
@@ -808,39 +837,33 @@ export default function ProfileScreen() {
                 <Text style={[styles.formInputLabel, { color: theme.textSecondary }]}>
                   Phone Number
                 </Text>
+                {/* Always read-only: this is the number signed in with via OTP,
+                    and /api/owners/me/profile has no way to change it. Letting
+                    it look editable saved a new number locally that the
+                    server ignored and the next login silently overwrote. */}
                 <View
                   style={[
                     styles.phoneInputWrapper,
-                    {
-                      borderColor: errors.phone ? theme.danger : theme.border,
-                      backgroundColor: isEditingPersonal ? theme.surface : theme.borderLight,
-                    },
+                    { borderColor: theme.border, backgroundColor: theme.borderLight },
                   ]}
                 >
                   <CountryCodeSelector
                     value={profile.countryCode}
-                    onSelect={(code) => updateField('countryCode', code)}
+                    onSelect={() => {}}
                     theme={theme}
                   />
                   <TextInput
                     value={profile.phone}
-                    onChangeText={(text) => updateField('phone', text.replace(/\D/g, ''))}
+                    editable={false}
                     placeholder="Phone number"
                     placeholderTextColor={theme.textMuted}
-                    keyboardType="phone-pad"
-                    editable={isEditingPersonal}
-                    style={[
-                      styles.phoneInput,
-                      { color: isEditingPersonal ? theme.text : theme.textMuted },
-                    ]}
+                    style={[styles.phoneInput, { color: theme.textMuted }]}
                     maxLength={10}
                   />
                 </View>
-                {errors.phone && (
-                  <Text style={[styles.formInputError, { color: theme.danger }]}>
-                    {errors.phone}
-                  </Text>
-                )}
+                <Text style={[styles.formInputHint, { color: theme.textMuted }]}>
+                  This is the number you signed in with and can't be changed here.
+                </Text>
               </View>
             </View>
           </Animated.View>
@@ -1253,6 +1276,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
   },
   formInputError: {
+    fontSize: fontSize.xs,
+    marginTop: spacing[1],
+  },
+  formInputHint: {
     fontSize: fontSize.xs,
     marginTop: spacing[1],
   },

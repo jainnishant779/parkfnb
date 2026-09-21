@@ -17,7 +17,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import * as bookingService from '../../services/bookingService';
 import * as vehicleService from '../../services/vehicleService';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import MapView, { Marker } from 'react-native-maps';
@@ -48,9 +48,13 @@ const HERO_AMENITIES = [
   { id: 'ev_charging', label: 'EV Friendly', icon: 'ev-station' },
 ];
 
+// 'online' has no gateway behind it yet — the backend never read
+// payment_method at all, so tapping it used to create the exact same booking
+// as Cash while claiming to "confirm instantly" and take a payment. Disabled
+// until a real gateway exists, rather than ship a button that lies.
 const PAYMENT_OPTIONS = [
   { id: 'cash', label: 'Cash', subtitle: 'Pay at the spot', icon: 'dollar-sign' },
-  { id: 'online', label: 'Online', subtitle: 'Confirm instantly', icon: 'globe' },
+  { id: 'online', label: 'Online', subtitle: 'Coming soon', icon: 'globe', disabled: true },
 ];
 
 // Generate time slots
@@ -136,6 +140,10 @@ const ParkingDetailsPage = ({ navigation, route }) => {
   const scrollViewRef = useRef(null);
   const dates = useMemo(() => generateDates(), []);
   const auth = useAuth();
+  // targetSdk 36 draws edge-to-edge, so the sticky bar has to clear the
+  // system nav bar itself or its text slides underneath it.
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom;
 
   // Property mode: parkingData.spaces[] was passed from grouped homepage
   const isPropertyMode = Array.isArray(parkingData?.spaces) && parkingData.spaces.length > 0;
@@ -149,9 +157,16 @@ const ParkingDetailsPage = ({ navigation, route }) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedDate, setSelectedDate] = useState(dates[0].date);
   const [selectedStartTime, setSelectedStartTime] = useState(nextBookableHour);
-  const [selectedEndTime, setSelectedEndTime] = useState('10:00');
+  // Start at the next bookable hour + the default 1h, not a fixed 10:00 that
+  // could sit before the start time and leave Book Now disabled.
+  const [selectedEndTime, setSelectedEndTime] = useState(() => {
+    const startHour = parseInt(nextBookableHour().split(':')[0], 10);
+    return `${((startHour + 1) % 24).toString().padStart(2, '0')}:00`;
+  });
   const [selectedHours, setSelectedHours] = useState(1);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+  // Cash is the only working method right now, so it starts pre-selected
+  // instead of forcing an extra tap before Book Now can be enabled.
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTimeModal, setShowTimeModal] = useState(false);
   const [timeModalType, setTimeModalType] = useState('start');
@@ -261,12 +276,25 @@ const ParkingDetailsPage = ({ navigation, route }) => {
       ...defaultParkingData.owner,
       ...(parkingData?.owner || {}),
     },
-    dimensions: {
-      ...defaultParkingData.dimensions,
-      ...(parkingData?.dimensions || {}),
-    },
+    // Real metres from the space the owner entered. The old default (8.5 x 18 x
+    // 7 ft) was shown for every space because nothing ever mapped these fields.
+    dimensions: (() => {
+      const src = selectedSpace || parkingData || {};
+      const fmt = (v) => (Number(v) > 0 ? `${Number(v)} m` : '—');
+      return {
+        width: fmt(src.widthMeters ?? src.width_meters),
+        length: fmt(src.lengthMeters ?? src.length_meters),
+        height: fmt(src.heightMeters ?? src.height_meters),
+      };
+    })(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [parkingData, resolvedImagesKey]);
+  }), [parkingData, selectedSpace, resolvedImagesKey]);
+
+  // A conflict/validation error belongs to the selection that caused it; drop
+  // it as soon as the user changes the date, time, duration or payment method.
+  useEffect(() => {
+    setBookingError('');
+  }, [selectedDate, selectedStartTime, selectedEndTime, selectedHours, selectedDuration, selectedPaymentMethod]);
 
   // Server-side price for the current selection. Null until it arrives.
   const [quote, setQuote] = useState(null);
@@ -1156,15 +1184,24 @@ const ParkingDetailsPage = ({ navigation, route }) => {
               return (
                 <TouchableOpacity
                   key={opt.id}
-                  style={[styles.paymentOptionCard, active && styles.paymentOptionCardActive]}
-                  onPress={() => setSelectedPaymentMethod(opt.id)}
+                  style={[
+                    styles.paymentOptionCard,
+                    active && styles.paymentOptionCardActive,
+                    opt.disabled && styles.paymentOptionCardDisabled,
+                  ]}
+                  onPress={() => !opt.disabled && setSelectedPaymentMethod(opt.id)}
+                  disabled={opt.disabled}
                 >
                   {active && (
                     <View style={styles.paymentOptionCheckBadge}>
                       <Icon name="check-circle" size={16} color={palette.primary} />
                     </View>
                   )}
-                  <Icon name={opt.icon} size={30} color={active ? palette.primary : palette.textMuted} />
+                  <Icon
+                    name={opt.icon}
+                    size={30}
+                    color={opt.disabled ? palette.textMuted : active ? palette.primary : palette.textMuted}
+                  />
                   <Text style={[styles.paymentOptionLabel, active && styles.paymentOptionLabelActive]}>
                     {opt.label}
                   </Text>
@@ -1239,11 +1276,11 @@ const ParkingDetailsPage = ({ navigation, route }) => {
         </View>
 
         {/* Bottom Spacing */}
-        <View style={styles.scrollFooterSpacer} />
+        <View style={[styles.scrollFooterSpacer, { height: 160 + bottomInset }]} />
       </ScrollView>
 
       {/* Bottom Booking Bar */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(16, bottomInset + 12) }]}>
         {/* "View Details" expander — same numbers as the breakdown above,
             so it stays sourced from the quote. */}
         {showBottomBreakdown && !(isPropertyMode && !selectedSpace) && (
@@ -1326,20 +1363,30 @@ const ParkingDetailsPage = ({ navigation, route }) => {
 
       {/* Booking error shown above the bottom bar */}
       {bookingError ? (
-        <View style={styles.bookingErrorBanner}>
+        <View style={[styles.bookingErrorBanner, { bottom: 132 + bottomInset }]}>
           <Text style={styles.bookingErrorText}>{bookingError}</Text>
         </View>
       ) : null}
 
       {/* Booking Success Modal */}
-      {showSuccessModal ? (
-
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.successModalContent}>
             <View style={styles.successIconContainer}>
               <Icon name="check-circle" size={56} color="#10B981" />
             </View>
-            <Text style={styles.successTitle}>Booking Confirmed!</Text>
+            <Text style={styles.successTitle}>
+              {confirmedBooking?.status === 'pending' || confirmedBooking?.bookingMode === 'request'
+                ? 'Booking Requested'
+                : 'Booking Confirmed!'}
+            </Text>
             {confirmedBooking?.bookingNumber ? (
               <Text style={styles.successBookingNumber}>
                 Booking #{confirmedBooking.bookingNumber}
@@ -1347,7 +1394,7 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             ) : null}
             <Text style={styles.successSubtitle}>
               Your parking space has been reserved.{'\n'}
-              {confirmedBooking?.bookingMode === 'request'
+              {confirmedBooking?.status === 'pending' || confirmedBooking?.bookingMode === 'request'
                 ? 'The owner will confirm your request shortly.'
                 : 'You\'re all set — see you there!'}
             </Text>
@@ -1362,14 +1409,19 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
         </View>
-      
-      ) : null}
+      </Modal>
 
       {/* Online Payment Confirm Modal */}
-      {showOnlineConfirmModal ? (
-
-        <View style={styles.modalOverlay}>
-          <View style={styles.onlineConfirmModalContent}>
+      <Modal
+        visible={showOnlineConfirmModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowOnlineConfirmModal(false)}
+      >
+        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
+          <View style={[styles.onlineConfirmModalContent, { paddingBottom: 36 + bottomInset }]}>
             <View style={styles.onlineConfirmHeader}>
               <Text style={styles.onlineConfirmTitle}>Confirm Booking</Text>
               <TouchableOpacity onPress={() => setShowOnlineConfirmModal(false)}>
@@ -1422,19 +1474,24 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
         </View>
-      
-      ) : null}
+      </Modal>
 
       {/* Add Vehicle Modal */}
-      {showAddVehicleModal ? (
-
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={showAddVehicleModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowAddVehicleModal(false)}
+      >
+        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={() => setShowAddVehicleModal(false)}
           />
-          <View style={styles.addVehicleModalContent}>
+          <View style={[styles.addVehicleModalContent, { paddingBottom: 36 + bottomInset }]}>
             <View style={styles.addVehicleHeader}>
               <Text style={styles.addVehicleTitle}>Add a Vehicle</Text>
               <TouchableOpacity
@@ -1502,13 +1559,18 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
         </View>
-      
-      ) : null}
+      </Modal>
 
       {/* Time Picker Modal */}
-      {showTimeModal ? (
-
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={showTimeModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowTimeModal(false)}
+      >
+        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+          <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.timeModalContent}>
             <View style={styles.timeModalHeader}>
               <Text style={styles.timeModalTitle}>
@@ -1551,8 +1613,7 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             </ScrollView>
           </View>
         </View>
-      
-      ) : null}
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -2109,6 +2170,9 @@ const styles = StyleSheet.create({
     borderColor: palette.primary,
     backgroundColor: palette.primarySoft,
   },
+  paymentOptionCardDisabled: {
+    opacity: 0.45,
+  },
   paymentOptionCheckBadge: {
     position: 'absolute',
     top: 10,
@@ -2428,8 +2492,8 @@ const styles = StyleSheet.create({
 
   // Time Modal
   modalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
+    // Fills the root of a real <Modal>. Absolute positioning (and the
+    // leftover zIndex/elevation) is harmless there.
     position: 'absolute',
     top: 0,
     left: 0,
@@ -2437,8 +2501,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(26,26,46,0.45)',
+    // The tint lives on modalBackdrop. A translucent background on a view that
+    // also has elevation makes Android paint its shadow through it, which
+    // showed up as a lighter vertical strip behind the popup.
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(26,26,46,0.45)',
   },
   timeModalContent: {
     backgroundColor: palette.bg,

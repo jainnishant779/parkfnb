@@ -8,6 +8,8 @@ const ParkingSpace = require('../models/ParkingSpace');
 const UserVehicle = require('../models/UserVehicle');
 const { success, error } = require('../utils/responseHelper');
 const errorCodes = require('../utils/errorCodes');
+const { calculateBookingPrice } = require('../utils/pricing');
+const { isValidObjectId } = require('mongoose');
 
 /**
  * Helper function to generate unique booking number
@@ -21,15 +23,37 @@ const generateBookingNumber = () => {
 /**
  * Helper function to check booking conflicts
  */
+// How long an unanswered 'request'-mode booking is allowed to hold a slot.
+// Nothing auto-expires a pending booking, so without this an owner who never
+// opens the app to approve/reject blocks that slot for that renter forever.
+const PENDING_HOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 const hasBookingConflict = async (spaceId, startTime, endTime, excludeBookingId = null) => {
+  const stalePendingCutoff = new Date(Date.now() - PENDING_HOLD_MS);
+
   const filter = {
     space_id: spaceId,
-    status: { $nin: ['cancelled', 'completed', 'no_show'] },
-    $or: [
-      { start_time: { $lte: startTime }, end_time: { $gt: startTime } },
-      { start_time: { $lt: endTime }, end_time: { $gte: endTime } },
-      { start_time: { $gte: startTime }, end_time: { $lte: endTime } }
-    ]
+    // 'rejected' was missing here, so a booking the owner explicitly turned
+    // down still blocked the slot for everyone, forever.
+    status: { $nin: ['cancelled', 'completed', 'no_show', 'rejected'] },
+    // A pending request older than the hold window no longer counts — see
+    // PENDING_HOLD_MS. Anything else (confirmed, active, or a pending
+    // booking still inside the window) still blocks as before.
+    $and: [
+      {
+        $or: [
+          { status: { $ne: 'pending' } },
+          { created_at: { $gte: stalePendingCutoff } },
+        ],
+      },
+      {
+        $or: [
+          { start_time: { $lte: startTime }, end_time: { $gt: startTime } },
+          { start_time: { $lt: endTime }, end_time: { $gte: endTime } },
+          { start_time: { $gte: startTime }, end_time: { $lte: endTime } }
+        ],
+      },
+    ],
   };
 
   if (excludeBookingId) {
@@ -38,25 +62,6 @@ const hasBookingConflict = async (spaceId, startTime, endTime, excludeBookingId 
 
   const conflictingBooking = await Booking.findOne(filter);
   return conflictingBooking;
-};
-
-/**
- * Helper function to calculate booking price
- */
-const calculateBookingPrice = (parkingSpace, durationHours) => {
-  let basePrice = 0;
-
-  if (durationHours <= 24) {
-    basePrice = parkingSpace.hourly_rate * durationHours;
-  } else if (durationHours <= 24 * 30) {
-    const days = Math.ceil(durationHours / 24);
-    basePrice = parkingSpace.daily_rate * days;
-  } else {
-    const months = Math.ceil(durationHours / (24 * 30));
-    basePrice = parkingSpace.monthly_rate * months;
-  }
-
-  return basePrice;
 };
 
 /**
@@ -85,6 +90,9 @@ exports.quoteBooking = async (req, res) => {
     if (!space_id || !start_time || !end_time) {
       return error(res, errorCodes.REQ_MISSING_FIELD, 400,
         'space_id, start_time and end_time are required');
+    }
+    if (!isValidObjectId(space_id)) {
+      return error(res, errorCodes.REQ_INVALID_FORMAT, 400, 'Invalid space id');
     }
 
     const startDate = new Date(start_time);
@@ -186,13 +194,13 @@ exports.getAllBookings = async (req, res, next) => {
 
     // Get bookings
     const bookings = await Booking.find(filter)
-      .populate('user_id', 'email first_name last_name phone')
+      .populate('user_id', 'email first_name last_name legal_name phone')
       .populate({
         path: 'space_id',
         select: 'space_number space_type hourly_rate property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate')
+      .populate('vehicle_id', 'vehicle_make vehicle_model make model license_plate vehicle_type')
       .sort({ created_at: -1 })
       .skip((validPage - 1) * validLimit)
       .limit(validLimit);
@@ -219,7 +227,7 @@ exports.getBookingById = async (req, res, next) => {
     const { id } = req.params;
 
     const booking = await Booking.findById(id)
-      .populate('user_id', 'email first_name last_name phone')
+      .populate('user_id', 'email first_name last_name legal_name phone')
       .populate('owner_id', 'user_id business_name')
       .populate({
         path: 'space_id',
@@ -279,7 +287,7 @@ exports.getUserBookings = async (req, res, next) => {
         select: 'space_number space_type hourly_rate property_id space_images',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate')
+      .populate('vehicle_id', 'vehicle_make vehicle_model make model license_plate vehicle_type')
       .sort({ created_at: -1 })
       .skip((validPage - 1) * validLimit)
       .limit(validLimit);
@@ -316,13 +324,13 @@ exports.getOwnerBookings = async (req, res, next) => {
 
     // Get bookings
     const bookings = await Booking.find(filter)
-      .populate('user_id', 'email first_name last_name phone')
+      .populate('user_id', 'email first_name last_name legal_name phone')
       .populate({
         path: 'space_id',
         select: 'space_number space_type property_id space_images',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate')
+      .populate('vehicle_id', 'vehicle_make vehicle_model make model license_plate vehicle_type')
       .sort({ created_at: -1 })
       .skip((validPage - 1) * validLimit)
       .limit(validLimit);
@@ -346,11 +354,18 @@ exports.getOwnerBookings = async (req, res, next) => {
  */
 exports.createBooking = async (req, res, next) => {
   try {
-    const { space_id, vehicle_id, start_time, end_time, promo_code } = req.body;
+    const { space_id, vehicle_id, start_time, end_time, promo_code, payment_method } = req.body;
+    const paymentMethod = payment_method === 'online' ? 'online' : 'cash';
 
     // Validate required fields
     if (!space_id || !vehicle_id || !start_time || !end_time) {
       return error(res, errorCodes.REQ_VALIDATION, 400, 'Missing required fields');
+    }
+
+    // A malformed id would otherwise reach findById as a CastError and come
+    // back as a 500.
+    if (!isValidObjectId(space_id) || !isValidObjectId(vehicle_id)) {
+      return error(res, errorCodes.REQ_INVALID_FORMAT, 400, 'Invalid space or vehicle id');
     }
 
     // Validate dates
@@ -459,6 +474,13 @@ exports.createBooking = async (req, res, next) => {
     // Generate booking number
     const bookingNumber = generateBookingNumber();
 
+    // The space's booking_mode decides whether this needs the owner's sign-off.
+    // 'request' waits for approveBooking; 'instant' (and 'both', since neither
+    // app currently lets the renter pick per booking) confirms right away —
+    // this used to sit at 'pending' regardless of the mode the owner chose
+    // when publishing the space, so an "Instant" listing was never instant.
+    const initialStatus = parkingSpace.booking_mode === 'request' ? 'pending' : 'confirmed';
+
     // Create booking
     const booking = await Booking.create({
       booking_number: bookingNumber,
@@ -472,21 +494,22 @@ exports.createBooking = async (req, res, next) => {
       base_price: totalPrice,
       discount_amount: discountAmount,
       total_amount: finalPrice,
-      status: 'pending',
+      status: initialStatus,
       payment_status: 'pending',
+      payment_method: paymentMethod,
       promo_code: promo_code || null
     });
 
     // Populate booking details
     const populatedBooking = await Booking.findById(booking._id)
-      .populate('user_id', 'email first_name last_name phone')
+      .populate('user_id', 'email first_name last_name legal_name phone')
       .populate('owner_id', 'business_name')
       .populate({
         path: 'space_id',
         select: 'space_number space_type hourly_rate daily_rate monthly_rate space_images property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model make model license_plate vehicle_type');
 
     return success(res, { booking: populatedBooking }, null, 201);
   } catch (err) {
@@ -576,22 +599,24 @@ exports.updateBooking = async (req, res, next) => {
 
       booking.start_time = newStartTime;
       booking.end_time = newEndTime;
-      booking.total_price = newTotalPrice;
-      booking.final_price = newTotalPrice - booking.discount_amount;
+      // total_price / final_price were never fields on this schema, so a
+      // reschedule silently kept charging the original price — total_amount
+      // is the one the apps actually read and display.
+      booking.total_amount = Math.max(0, newTotalPrice - booking.discount_amount);
     }
 
     await booking.save();
 
     // Populate and return updated booking
     const updatedBooking = await Booking.findById(id)
-      .populate('user_id', 'email first_name last_name phone')
+      .populate('user_id', 'email first_name last_name legal_name phone')
       .populate('owner_id', 'business_name')
       .populate({
         path: 'space_id',
         select: 'space_number space_type hourly_rate daily_rate monthly_rate space_images property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model make model license_plate vehicle_type');
 
     return success(res, { booking: updatedBooking });
   } catch (err) {
@@ -636,7 +661,7 @@ const loadForOwner = async (req, res) => {
 /** Re-read a booking with everything both apps render. */
 const populatedBooking = (id) =>
   Booking.findById(id)
-    .populate('user_id', 'email first_name last_name phone')
+    .populate('user_id', 'email first_name last_name legal_name phone')
     .populate('owner_id', 'user_id business_name')
     .populate({
       path: 'space_id',
@@ -801,7 +826,10 @@ exports.cancelBooking = async (req, res, next) => {
         refundPercentage = 0;
       }
 
-      refundAmount = (booking.final_price * refundPercentage) / 100;
+      // final_price was never a field on this schema — read against undefined
+      // it always produced NaN, so no cancellation ever actually recorded a
+      // refund amount. total_amount is what was actually charged.
+      refundAmount = (booking.total_amount * refundPercentage) / 100;
     }
 
     // Update booking status
@@ -810,8 +838,9 @@ exports.cancelBooking = async (req, res, next) => {
     booking.cancelled_at = now;
     booking.refund_amount = refundAmount;
 
-    // If payment was completed, create refund record
-    if (booking.payment_status === 'completed' && refundAmount > 0) {
+    // payment_status is never 'completed' — the enum only has 'paid' — so
+    // this never created a refund record even when it should have.
+    if (booking.payment_status === 'paid' && refundAmount > 0) {
       const Refund = require('../models/Refund');
       await Refund.create({
         booking_id: booking._id,
@@ -827,14 +856,14 @@ exports.cancelBooking = async (req, res, next) => {
 
     // Populate and return cancelled booking
     const cancelledBooking = await Booking.findById(id)
-      .populate('user_id', 'email first_name last_name phone')
+      .populate('user_id', 'email first_name last_name legal_name phone')
       .populate('owner_id', 'business_name')
       .populate({
         path: 'space_id',
         select: 'space_number space_type property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model make model license_plate vehicle_type');
 
     return success(res, {
       booking: cancelledBooking,
@@ -867,9 +896,12 @@ exports.checkIn = async (req, res, next) => {
       return error(res, errorCodes.NOT_FOUND, 404, 'Booking not found');
     }
 
-    // Check authorization - only owner or admin can check in
+    // Check authorization. The guest can check themselves in ("I've reached
+    // the space") — an unattended barrier has no owner standing there to do
+    // it, and this was owner/admin only, so arrival could never be recorded.
     const ownerUserId = booking.owner_id && booking.owner_id.user_id ? booking.owner_id.user_id.toString() : null;
-    if (req.user.user_type !== 'admin' && ownerUserId !== req.user._id.toString()) {
+    const isGuest = booking.user_id && booking.user_id.toString() === req.user._id.toString();
+    if (req.user.user_type !== 'admin' && ownerUserId !== req.user._id.toString() && !isGuest) {
       return error(res, errorCodes.AUTH_FORBIDDEN, 403, 'Not authorized to check in this booking');
     }
 
@@ -878,20 +910,30 @@ exports.checkIn = async (req, res, next) => {
       return error(res, errorCodes.BIZ_OPERATION_NOT_ALLOWED, 400, 'Only confirmed bookings can be checked in');
     }
 
-    // Verify check-in is within allowed window (1 hour before to 1 hour after start time)
+    // Check-in window: 1 hour before start, up to the end of the booking.
+    // It used to close at start + 1h and flip the booking to no_show, so a
+    // guest who turned up 90 minutes into a slot they had paid for lost it by
+    // pressing "I've Reached". Arriving late is not a no-show — never showing
+    // up is, and that is only knowable once the slot is over.
     const now = new Date();
-    const earlyCheckIn = new Date(booking.start_time.getTime() - (60 * 60 * 1000)); // 1 hour before
-    const lateCheckIn = new Date(booking.start_time.getTime() + (60 * 60 * 1000)); // 1 hour after
+    const earlyCheckIn = new Date(booking.start_time.getTime() - (60 * 60 * 1000));
+    const lateCheckIn = new Date(booking.end_time.getTime());
 
     if (now < earlyCheckIn) {
-      return error(res, errorCodes.BIZ_OPERATION_NOT_ALLOWED, 400, 'Check-in window has not opened yet');
+      const mins = Math.ceil((earlyCheckIn.getTime() - now.getTime()) / (60 * 1000));
+      return error(
+        res,
+        errorCodes.BIZ_OPERATION_NOT_ALLOWED,
+        400,
+        `Check-in opens 1 hour before your start time — ${mins} minute(s) to go.`
+      );
     }
 
     if (now > lateCheckIn) {
-      // Mark as no-show if check-in window has passed
+      // The whole slot elapsed with nobody arriving. That is a no-show.
       booking.status = 'no_show';
       await booking.save();
-      return error(res, errorCodes.BIZ_OPERATION_NOT_ALLOWED, 400, 'Check-in window has passed. Booking marked as no-show');
+      return error(res, errorCodes.BIZ_OPERATION_NOT_ALLOWED, 400, 'Booking period has ended. Booking marked as no-show');
     }
 
     // Verify check-in code if provided (optional verification)
@@ -901,19 +943,20 @@ exports.checkIn = async (req, res, next) => {
 
     // Update booking status to active
     booking.status = 'active';
-    booking.actual_start_time = now;
+    // actual_start_time was never a field on this schema; check_in_time is.
+    booking.check_in_time = now;
     await booking.save();
 
     // Populate and return booking
     const checkedInBooking = await Booking.findById(id)
-      .populate('user_id', 'email first_name last_name phone')
+      .populate('user_id', 'email first_name last_name legal_name phone')
       .populate('owner_id', 'business_name')
       .populate({
         path: 'space_id',
         select: 'space_number space_type property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model make model license_plate vehicle_type');
 
     return success(res, { booking: checkedInBooking });
   } catch (err) {
@@ -966,25 +1009,38 @@ exports.checkOut = async (req, res, next) => {
 
     // Update booking status to completed
     booking.status = 'completed';
-    booking.actual_end_time = now;
+    // actual_end_time was never a field on this schema; check_out_time is.
+    booking.check_out_time = now;
 
     if (overtimeCharge > 0) {
+      // final_price was never a field either, so the overtime charge was
+      // computed and returned to the app but never actually billed.
       booking.overtime_charge = overtimeCharge;
-      booking.final_price += overtimeCharge;
+      booking.total_amount = Math.round((booking.total_amount + overtimeCharge) * 100) / 100;
+    }
+
+    // There is no online gateway yet, so every booking is cash: nothing ever
+    // marked payment_status 'paid', which meant getOwnerStats/getOwnerEarnings
+    // showed ₹0 revenue forever even for completed, paid-in-person bookings.
+    // Checkout is the point the guest actually hands over cash, so that is
+    // where cash bookings settle. An already-'paid' (future online) booking
+    // is left alone.
+    if (booking.payment_status !== 'paid') {
+      booking.payment_status = 'paid';
     }
 
     await booking.save();
 
     // Populate and return booking
     const checkedOutBooking = await Booking.findById(id)
-      .populate('user_id', 'email first_name last_name phone')
+      .populate('user_id', 'email first_name last_name legal_name phone')
       .populate('owner_id', 'business_name')
       .populate({
         path: 'space_id',
         select: 'space_number space_type hourly_rate property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model make model license_plate vehicle_type');
 
     return success(res, {
       booking: checkedOutBooking,
@@ -1007,10 +1063,20 @@ exports.checkOut = async (req, res, next) => {
 exports.extendBooking = async (req, res, next) => {
   try {
     const { id } = req.params;
+    // Both apps extend by a duration ("+2 hours"), not by an absolute
+    // timestamp, so accept `additional_hours` as well. Requiring only
+    // new_end_time made every in-app extend fail with "missing required field".
     const { new_end_time } = req.body;
+    const additionalHours = Number(
+      req.body.additional_hours ?? req.body.additionalHours ?? NaN
+    );
 
-    if (!new_end_time) {
-      return error(res, errorCodes.REQ_VALIDATION, 400, 'New end time is required');
+    if (!new_end_time && !Number.isFinite(additionalHours)) {
+      return error(res, errorCodes.REQ_VALIDATION, 400, 'Provide either new_end_time or additional_hours');
+    }
+
+    if (!new_end_time && (additionalHours <= 0 || additionalHours > 24)) {
+      return error(res, errorCodes.REQ_VALIDATION, 400, 'additional_hours must be between 1 and 24');
     }
 
     // Find booking
@@ -1030,7 +1096,9 @@ exports.extendBooking = async (req, res, next) => {
       return error(res, errorCodes.BIZ_OPERATION_NOT_ALLOWED, 400, 'Can only extend confirmed or active bookings');
     }
 
-    const newEndDate = new Date(new_end_time);
+    const newEndDate = new_end_time
+      ? new Date(new_end_time)
+      : new Date(booking.end_time.getTime() + additionalHours * 60 * 60 * 1000);
     const now = new Date();
 
     // Validate new end time
@@ -1060,8 +1128,11 @@ exports.extendBooking = async (req, res, next) => {
     // Update booking
     const oldEndTime = booking.end_time;
     booking.end_time = newEndDate;
-    booking.total_price += extensionPrice;
-    booking.final_price += extensionPrice;
+    // total_price / final_price were never fields on this schema, so an
+    // extension silently kept charging the original price. total_amount and
+    // duration_hours are what the schema (and the apps) actually use.
+    booking.total_amount = Math.round((booking.total_amount + extensionPrice) * 100) / 100;
+    booking.duration_hours = Math.round((booking.duration_hours + extensionHours) * 100) / 100;
 
     // Track extension in metadata
     if (!booking.extensions) {
@@ -1078,14 +1149,14 @@ exports.extendBooking = async (req, res, next) => {
 
     // Populate and return extended booking
     const extendedBooking = await Booking.findById(id)
-      .populate('user_id', 'email first_name last_name phone')
+      .populate('user_id', 'email first_name last_name legal_name phone')
       .populate('owner_id', 'business_name')
       .populate({
         path: 'space_id',
         select: 'space_number space_type hourly_rate daily_rate monthly_rate space_images property_id',
         populate: { path: 'property_id', select: 'property_name address city state postal_code location_lat location_lng property_images' }
       })
-      .populate('vehicle_id', 'vehicle_make vehicle_model license_plate');
+      .populate('vehicle_id', 'vehicle_make vehicle_model make model license_plate vehicle_type');
 
     return success(res, {
       booking: extendedBooking,

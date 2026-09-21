@@ -12,7 +12,13 @@ services:
     name: parkfnb-admin
     runtime: static
     rootDir: apps/admin
-    buildCommand: npm ci && npm run build
+    # --include=dev because the build needs devDependencies: `npm run build`
+    # is `tsc -b && vite build`, and typescript, @types/react and
+    # @types/react-dom all live there. A stray NODE_ENV=production on the
+    # service makes npm skip them, and the build then dies with dozens of
+    # "JSX element implicitly has type 'any'" errors that look like broken
+    # source but are only React's type definitions being absent.
+    buildCommand: npm ci --include=dev && npm run build
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
