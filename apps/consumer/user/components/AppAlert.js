@@ -4,6 +4,7 @@ import {
   View,
   Text,
   Pressable,
+  TouchableOpacity,
   StyleSheet,
   Platform,
   ScrollView,
@@ -173,16 +174,20 @@ export function AppAlertProvider({ children }) {
                   : isStacked
                     ? { marginTop: 8 }
                     : { marginLeft: 8 };
+                // TouchableOpacity rather than Pressable: a Pressable here
+                // laid out correctly and responded to taps, but its
+                // background never painted on Android inside this nested
+                // modal, so the label rendered white-on-white.
                 return (
-                  <Pressable
+                  <TouchableOpacity
                     key={`${btn.text}-${idx}`}
                     onPress={() => handleButton(btn)}
-                    style={({ pressed }) => [
+                    activeOpacity={0.7}
+                    style={[
                       styles.button,
                       isCancel && styles.buttonCancel,
                       isDestructive && styles.buttonDestructive,
                       !isCancel && !isDestructive && styles.buttonPrimary,
-                      pressed && styles.buttonPressed,
                       isStacked && styles.buttonFull,
                       spacingStyle,
                     ]}
@@ -197,7 +202,7 @@ export function AppAlertProvider({ children }) {
                     >
                       {btn.text}
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -259,9 +264,15 @@ const styles = StyleSheet.create({
   },
   buttonFull: { width: '100%' },
   buttonPressed: { opacity: 0.7 },
-  buttonPrimary: { backgroundColor: '#0D7377' },
-  buttonCancel: { backgroundColor: '#F1F5F9' },
-  buttonDestructive: { backgroundColor: '#EF4444' },
+  // Every button carries a border in its own colour as well as a fill.
+  // The fill alone was not enough: on Android the button laid out and was
+  // tappable, but painted nothing, leaving white label on the white card —
+  // an alert that looked like it had no button at all and could only be
+  // dismissed by guessing that the backdrop closes it. The border survives
+  // whatever eats the background, so the button is always visible.
+  buttonPrimary: { backgroundColor: '#0D7377', borderWidth: 1.5, borderColor: '#0D7377' },
+  buttonCancel: { backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#CBD5E1' },
+  buttonDestructive: { backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#EF4444' },
   buttonText: { fontSize: 14, fontWeight: '600' },
   buttonTextPrimary: { color: '#FFFFFF' },
   buttonTextCancel: { color: '#1F2937' },

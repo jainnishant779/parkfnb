@@ -4,12 +4,12 @@
 # to wake, which is fine for a demo and not for a pilot — move to `starter`
 # (about Rs 600/month) before putting it in front of anyone.
 #
-# Secrets are deliberately not set here. Add MONGODB_URI and JWT_SECRET in the
-# Render dashboard so they never live in the repository.
+# Secrets are deliberately not set here. Anything marked `sync: false` is added
+# in the Render dashboard so it never lives in the repository.
 
 services:
   - type: web
-    name: parkfnb-api
+    name: parkfnb-1
     runtime: node
     plan: free
     region: singapore          # closest to India of Render's regions
@@ -28,6 +28,67 @@ services:
         value: 7d
       - key: FRONTEND_URL
         sync: false            # the admin panel's origin, for CORS
-      # ALLOW_DEV_OTP is intentionally absent. Setting it to 'true' returns the
-      # login code in the API response, which would let anyone sign in as any
-      # phone number. It exists only for local development.
+
+      # ---- Uploads -------------------------------------------------
+      # Without these, uploads fall back to the container's own disk, which
+      # Render wipes on every deploy — taking every KYC document and space
+      # photo with it. All three are required together.
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      # ---- Physical barrier over Firebase --------------------------
+      # The arch-lock unit polls a Realtime Database rather than speaking
+      # MQTT, so the API mirrors every open/close there. Leaving
+      # FIREBASE_DATABASE_URL unset disables the bridge and the barrier
+      # simply never moves.
+      - key: FIREBASE_DATABASE_URL
+        sync: false
+      - key: FIREBASE_BARRIER_ENABLED
+        value: "true"
+      # Maps device ids to Firebase barrier ids — different namespaces.
+      - key: FIREBASE_DEVICE_MAP
+        value: pb-001:BARRIER_001
+      # The firmware compares the raw JSON string, so the case must match
+      # exactly. Its source does `response == "\"OPEN\""`, hence upper.
+      - key: FIREBASE_ACTION_CASE
+        value: upper
+
+      # ---- MQTT ----------------------------------------------------
+      # Unset falls back to the public broker.hivemq.com, which is fine for
+      # a simulator and not fine for real hardware: no credentials, no TLS,
+      # and anyone who knows a device id can drive it.
+      - key: MQTT_HOST
+        sync: false
+      - key: MQTT_PORT
+        sync: false
+      - key: MQTT_USER
+        sync: false
+      - key: MQTT_PASS
+        sync: false
+
+      # ---- Test-only switches --------------------------------------
+      # BOTH of these are unsafe in front of real users and are listed here
+      # only so a cloud test behaves like the local one. Set them in the
+      # dashboard for the test window and remove them afterwards.
+      #
+      # ALLOW_DEV_OTP returns the login code in the API response, which lets
+      # anyone sign in as any phone number.
+      #
+      # BARRIER_DEMO_MODE skips the booking status, payment and time-window
+      # checks and routes every space to one barrier, so any booking opens
+      # it at any time.
+      #
+      # These four are live right now for the cloud test. DELETE THEM
+      # before this URL goes in front of anybody who is not you.
+      - key: ALLOW_DEV_OTP
+        value: "true"
+      - key: TEST_OTP
+        value: "123456"
+      - key: BARRIER_DEMO_MODE
+        value: "true"
+      - key: BARRIER_DEMO_DEVICE_ID
+        value: pb-001

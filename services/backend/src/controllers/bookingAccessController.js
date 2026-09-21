@@ -27,18 +27,26 @@ const DEMO_DEVICE_ID = process.env.BARRIER_DEMO_DEVICE_ID || 'pb-001';
  * (a ref) is the fallback, because pairing writes both but older rows only have one.
  */
 async function findDeviceForSpace(space) {
+  // In demo mode every space drives the one bench barrier, whatever it is
+  // paired to. Seeded spaces each point at their own device id (pb-001 …
+  // pb-007) but only one of those is a real unit, so a booking on any other
+  // space dispatched a command that physically went nowhere — the app looked
+  // broken while it was in fact working perfectly.
+  if (DEMO_MODE) {
+    const demo = await Device.findOne({ device_id: DEMO_DEVICE_ID });
+    if (demo) {
+      if (!space || space.device_id !== DEMO_DEVICE_ID) {
+        console.warn(`[BARRIER_DEMO_MODE] routing to ${DEMO_DEVICE_ID} instead of ${space && space.device_id ? space.device_id : 'unpaired space'}`);
+      }
+      return demo;
+    }
+  }
   let device = null;
   if (space && space.device_id) {
     device = await Device.findOne({ device_id: space.device_id });
   }
   if (!device && space) {
     device = await Device.findOne({ parking_space_id: space._id });
-  }
-  if (!device && DEMO_MODE) {
-    device = await Device.findOne({ device_id: DEMO_DEVICE_ID });
-    if (device) {
-      console.warn(`[BARRIER_DEMO_MODE] space has no barrier, falling back to ${DEMO_DEVICE_ID}`);
-    }
   }
   return device;
 }

@@ -7,7 +7,7 @@
 // running. For local backend work, swap in http://localhost:5000 and run
 // `adb reverse tcp:5000 tcp:5000` — plain localhost will not reach a
 // physical device otherwise.
-export const API_BASE_URL = 'https://parkfnb.onrender.com';
+export const API_BASE_URL = 'https://parkfnb-1.onrender.com';
 
 // Render's free tier sleeps after 15 minutes idle and takes roughly a
 // minute to wake, so the first request after a quiet spell is slow. Fifteen

@@ -1368,7 +1368,7 @@ const BookingManagementPage = ({ navigation }) => {
                   <TouchableOpacity
                     style={[
                       styles.footerPrimaryButton,
-                      { backgroundColor: '#0D7377', flex: 1.2 },
+                      { backgroundColor: '#0D7377', flexGrow: 1.2, flexBasis: 104 },
                       activeBarrierCountdown[selectedBooking.id || selectedBooking._id] && { backgroundColor: '#10B981' },
                     ]}
                     onPress={() => handleUnlockBarrier(selectedBooking)}
@@ -1385,10 +1385,29 @@ const BookingManagementPage = ({ navigation }) => {
                           color="#FFFFFF"
                           style={{ marginRight: 6 }}
                         />
-                        <Text style={styles.footerPrimaryText}>
+                        <Text style={styles.footerPrimaryText} numberOfLines={1}>
                           {activeBarrierCountdown[selectedBooking.id || selectedBooking._id]
-                            ? `Open (${activeBarrierCountdown[selectedBooking.id || selectedBooking._id]}s)`
-                            : 'Unlock Barrier'}
+                            ? `Open ${activeBarrierCountdown[selectedBooking.id || selectedBooking._id]}s`
+                            : 'Unlock'}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+                {['confirmed', 'active'].includes(selectedBooking.status) && (
+                  <TouchableOpacity
+                    style={[styles.footerCancelButton, styles.footerSecondaryButton]}
+                    onPress={() => handleLockBarrier(selectedBooking)}
+                    disabled={lockingBookingId === (selectedBooking.id || selectedBooking._id)}
+                    activeOpacity={0.8}
+                  >
+                    {lockingBookingId === (selectedBooking.id || selectedBooking._id) ? (
+                      <ActivityIndicator size="small" color={palette.primary} />
+                    ) : (
+                      <>
+                        <MaterialIcon name="boom-gate" size={18} color={palette.primary} />
+                        <Text style={[styles.footerCancelText, { color: palette.primary }]} numberOfLines={1}>
+                          Close
                         </Text>
                       </>
                     )}
@@ -1404,7 +1423,7 @@ const BookingManagementPage = ({ navigation }) => {
                     activeOpacity={0.8}
                   >
                     <Icon name="x-circle" size={18} color={palette.danger} />
-                    <Text style={styles.footerCancelText}>Cancel Booking</Text>
+                    <Text style={styles.footerCancelText} numberOfLines={1}>Cancel</Text>
                   </TouchableOpacity>
                 )}
                 {selectedBooking.status === 'active' && (
@@ -1417,7 +1436,7 @@ const BookingManagementPage = ({ navigation }) => {
                     activeOpacity={0.8}
                   >
                     <Icon name="plus-circle" size={18} color={palette.primary} />
-                    <Text style={[styles.footerCancelText, { color: palette.primary }]}>Extend Time</Text>
+                    <Text style={[styles.footerCancelText, { color: palette.primary }]} numberOfLines={1}>Extend</Text>
                   </TouchableOpacity>
                 )}
                 {['completed', 'cancelled', 'rejected', 'no_show'].includes(selectedBooking.status) && (
@@ -1430,7 +1449,7 @@ const BookingManagementPage = ({ navigation }) => {
                     activeOpacity={0.8}
                   >
                     <Icon name="repeat" size={18} color={palette.primary} />
-                    <Text style={[styles.footerCancelText, { color: palette.primary }]}>Book Again</Text>
+                    <Text style={[styles.footerCancelText, { color: palette.primary }]} numberOfLines={1}>Rebook</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -1442,7 +1461,7 @@ const BookingManagementPage = ({ navigation }) => {
                   activeOpacity={0.85}
                 >
                   <Icon name="home" size={18} color={palette.textInverse} />
-                  <Text style={styles.footerPrimaryText}>Back to Home</Text>
+                  <Text style={styles.footerPrimaryText} numberOfLines={1}>Home</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -2559,6 +2578,11 @@ const styles = StyleSheet.create({
   // Sticky footer
   stickyFooter: {
     flexDirection: 'row',
+    // An active booking shows four actions (Unlock / Close / Extend /
+    // Home). Sharing one non-wrapping row gave each about 63dp, so the
+    // labels ran past their buttons and the last one was cut off by the
+    // screen edge. They wrap to a second row instead of shrinking.
+    flexWrap: 'wrap',
     alignItems: 'center',
     backgroundColor: palette.surface,
     paddingHorizontal: spacing.lg,
@@ -2569,7 +2593,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   footerCancelButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 104,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2593,7 +2618,8 @@ const styles = StyleSheet.create({
     color: palette.danger,
   },
   footerPrimaryButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 104,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
