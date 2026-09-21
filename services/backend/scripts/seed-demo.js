@@ -138,7 +138,7 @@ async function seed() {
   // ---- owner with verified KYC -------------------------------------------
   const ownerUser = await User.create({
     email: 'owner@parkfnb.com',
-    phone: '9000000001',
+    phone: '9555000001',
     password_hash: hash,
     first_name: 'Rajesh',
     last_name: 'Sharma',
@@ -160,7 +160,7 @@ async function seed() {
   // ---- owner awaiting KYC — this is the one approved live on stage -------
   const pendingUser = await User.create({
     email: 'newowner@parkfnb.com',
-    phone: '9000000002',
+    phone: '9555000002',
     password_hash: hash,
     first_name: 'Priya',
     last_name: 'Desai',
@@ -269,7 +269,7 @@ async function seed() {
   // ---- driver with a live paid booking -> ANPR ALLOW ---------------------
   const driver = await User.create({
     email: 'driver@parkfnb.com',
-    phone: '9000000003',
+    phone: '9555000003',
     password_hash: hash,
     first_name: 'Amit',
     last_name: 'Verma',
@@ -351,7 +351,7 @@ async function seed() {
   // ---- stranger with no booking -> ANPR DENY -----------------------------
   const stranger = await User.create({
     email: 'stranger@parkfnb.com',
-    phone: '9000000004',
+    phone: '9555000004',
     password_hash: hash,
     first_name: 'Unknown',
     last_name: 'Driver',
