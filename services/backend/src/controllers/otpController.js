@@ -639,6 +639,20 @@ exports.verifyOtp = async (req, res) => {
     });
   } catch (err) {
     console.error("Verify OTP error:", err);
+    // A bad field (an owner_type outside the enum, say) is the caller's
+    // problem, not a server fault. Reporting it as a 500 "Could not verify
+    // the code" hid a sign-up that failed for a completely unrelated reason.
+    if (err && err.name === "ValidationError") {
+      const detail = Object.values(err.errors || {})
+        .map((e) => e.message)
+        .join("; ");
+      return error(
+        res,
+        errorCodes.REQ_VALIDATION,
+        400,
+        detail || "Some of those details are not valid",
+      );
+    }
     return error(
       res,
       errorCodes.SERVER_ERROR,

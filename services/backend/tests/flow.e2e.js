@@ -243,6 +243,36 @@ const err = (r) => `HTTP ${r.s} ${r.j?.error?.code || ''} ${r.j?.error?.message 
   ok('extending a booking actually raises the price (was silently dropped)',
     after.d?.booking?.total_amount > beforeTotal,
     `${beforeTotal} -> ${after.d?.booking?.total_amount}`);
+  // Both apps extend by a duration, not an absolute timestamp. The route used
+  // to hard-require new_end_time, so every in-app extend died on
+  // "missing required field".
+  const extHours = await call('PUT', `/api/bookings/${acId}/extend`, { token: uTok, body: { additional_hours: 2 } });
+  ok('extend accepts additional_hours (what the apps send)', extHours.s === 200, err(extHours));
+  const afterHours = await call('GET', `/api/bookings/${acId}`, { token: uTok });
+  ok('extensions are persisted (was a non-schema field, dropped on save)',
+    Array.isArray(afterHours.d?.booking?.extensions) && afterHours.d.booking.extensions.length >= 1,
+    `extensions=${(afterHours.d?.booking?.extensions || []).length}`);
+  const extBad = await call('PUT', `/api/bookings/${acId}/extend`, { token: uTok, body: {} });
+  ok('extend with neither field = 400', extBad.s === 400, err(extBad));
+
+  // ---------- 11b. ARRIVAL: "I'VE REACHED" ----------
+  console.log('\n--- arrival ---');
+  // A booking starting now, so the check-in window is open.
+  const arrive = await call('POST', '/api/bookings', {
+    token: uTok,
+    body: { space_id: inst.id, vehicle_id: vehId, start_time: iso(1), end_time: iso(180), payment_method: 'cash' },
+  });
+  ok('instant booking for arrival test is confirmed', arrive.d?.booking?.status === 'confirmed', err(arrive));
+  const arrId = arrive.d?.booking?._id || arrive.d?.booking?.id;
+  // The guest checks themselves in — an unattended barrier has no owner
+  // standing there to do it, and this was owner/admin only.
+  const arrCi = await call('PUT', `/api/bookings/${arrId}/checkin`, { token: uTok });
+  ok('guest can check themselves in', arrCi.s === 200, err(arrCi));
+  ok('check-in flips the booking to active', arrCi.d?.booking?.status === 'active', arrCi.d?.booking?.status);
+  ok('check_in_time is recorded', !!arrCi.d?.booking?.check_in_time, arrCi.d?.booking?.check_in_time);
+  const arrCiTwice = await call('PUT', `/api/bookings/${arrId}/checkin`, { token: uTok });
+  ok('checking in twice is rejected, not duplicated', arrCiTwice.s === 400, err(arrCiTwice));
+  await call('PUT', `/api/bookings/${arrId}/cancel`, { token: uTok, body: { cancellation_reason: 'e2e cleanup' } });
 
   // ---------- 12. AUTHORISATION ----------
   console.log('\n--- authorisation ---');

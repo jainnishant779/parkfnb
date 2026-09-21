@@ -97,6 +97,15 @@ const bookingSchema = new mongoose.Schema({
   check_out_time: {
     type: Date
   },
+  // Audit trail of time extensions. extendBooking has always pushed onto this,
+  // but without a schema path for it Mongoose dropped the array on save, so
+  // every extension was invisible after the fact.
+  extensions: [{
+    old_end_time: { type: Date },
+    new_end_time: { type: Date },
+    extension_price: { type: Number },
+    extended_at: { type: Date }
+  }],
   // Why the owner turned the request down. Kept apart from
   // cancellation_reason so "the renter cancelled" and "the owner said no"
   // stay distinguishable in the booking history.

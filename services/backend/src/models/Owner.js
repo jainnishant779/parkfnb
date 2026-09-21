@@ -11,7 +11,21 @@ const ownerSchema = new mongoose.Schema({
   owner_type: {
     type: String,
     required: true,
-    enum: ['individual', 'business', 'property_manager'],
+    // The owner app's sign-up screen offers five types and its navigation keys
+    // off them (see apps/owner/src/navigation/MainTabs.tsx). This enum only
+    // listed three, overlapping on 'individual' alone, so picking any of the
+    // other four blew up Owner.create() and the whole sign-up came back as a
+    // 500 "Could not verify the code" — those owners could not register at all.
+    // 'business' and 'property_manager' stay for records already stored.
+    enum: [
+      'individual',
+      'residential_community',
+      'commercial_property',
+      'industrial_facility',
+      'empty_land',
+      'business',
+      'property_manager',
+    ],
     default: 'individual',
     trim: true
   },
