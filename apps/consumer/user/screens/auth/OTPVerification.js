@@ -457,6 +457,10 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: palette.text,
     letterSpacing: -1,
+    // Android reserves an extra font-padding band above/below the glyph,
+    // which at 28px can push the digit out of its cell.
+    includeFontPadding: false,
+    textAlign: 'center',
   },
   hiddenInput: {
     position: 'absolute',

@@ -593,9 +593,14 @@ const SubscriptionPage = ({ navigation }) => {
   );
 
   // Render payment modal
-  const renderPaymentModal = () =>
-    showPaymentModal ? (
-
+  const renderPaymentModal = () => (
+    <Modal
+      visible={showPaymentModal}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowPaymentModal(false)}
+    >
       <View style={styles.modalOverlay}>
         <View pointerEvents="none" style={styles.modalBackdrop} />
         <View style={styles.paymentModal}>
@@ -695,13 +700,18 @@ const SubscriptionPage = ({ navigation }) => {
           )}
         </View>
       </View>
-    
-    ) : null;
+    </Modal>
+  );
 
   // Render manage subscription modal
-  const renderManageModal = () =>
-    showManageModal ? (
-
+  const renderManageModal = () => (
+    <Modal
+      visible={showManageModal}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowManageModal(false)}
+    >
       <View style={styles.modalOverlay}>
         <View pointerEvents="none" style={styles.modalBackdrop} />
         <View style={styles.manageModal}>
@@ -786,13 +796,18 @@ const SubscriptionPage = ({ navigation }) => {
           </View>
         </View>
       </View>
-    
-    ) : null;
+    </Modal>
+  );
 
   // Render confirm action modal
-  const renderConfirmModal = () =>
-    showConfirmModal ? (
-
+  const renderConfirmModal = () => (
+    <Modal
+      visible={showConfirmModal}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowConfirmModal(false)}
+    >
       <View style={styles.modalOverlay}>
         <View pointerEvents="none" style={styles.modalBackdrop} />
         <View style={styles.confirmModal}>
@@ -841,13 +856,18 @@ const SubscriptionPage = ({ navigation }) => {
           </View>
         </View>
       </View>
-    
-    ) : null;
+    </Modal>
+  );
 
   // Render feature comparison modal
-  const renderCompareModal = () =>
-    showCompareModal ? (
-
+  const renderCompareModal = () => (
+    <Modal
+      visible={showCompareModal}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowCompareModal(false)}
+    >
       <View style={styles.modalOverlay}>
         <View pointerEvents="none" style={styles.modalBackdrop} />
         <View style={styles.compareModal}>
@@ -915,8 +935,8 @@ const SubscriptionPage = ({ navigation }) => {
           </ScrollView>
         </View>
       </View>
-    
-    ) : null;
+    </Modal>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
@@ -1494,8 +1514,8 @@ const styles = StyleSheet.create({
 
   // Modal Styles
   modalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
+    // Fills the root of a real <Modal>. Absolute positioning (and the
+    // leftover zIndex/elevation) is harmless there.
     position: 'absolute',
     top: 0,
     left: 0,

@@ -585,7 +585,16 @@ const SearchPage = ({ navigation, route }) => {
     const config = dropdownConfigs[openDropdown];
     if (!config) return null;
 
+    // Mounted only while a dropdown is open, so the Modal is always visible
+    // when it renders at all.
     return (
+      <Modal
+        visible
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setOpenDropdown(null)}
+      >
         <TouchableOpacity
           style={styles.dropdownOverlay}
           activeOpacity={1}
@@ -615,7 +624,7 @@ const SearchPage = ({ navigation, route }) => {
             })}
           </View>
         </TouchableOpacity>
-
+      </Modal>
     );
   };
 
@@ -798,9 +807,14 @@ const SearchPage = ({ navigation, route }) => {
   );
 
   // Render filter modal
-  const renderFilterModal = () =>
-    showFilters ? (
-
+  const renderFilterModal = () => (
+    <Modal
+      visible={showFilters}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowFilters(false)}
+    >
       <View style={styles.filterModalOverlay}>
         <View style={styles.filterModal}>
           <View style={styles.filterModalHeader}>
@@ -859,8 +873,8 @@ const SearchPage = ({ navigation, route }) => {
           </View>
         </View>
       </View>
-    
-    ) : null;
+    </Modal>
+  );
 
   // Render empty / error state inside the sheet
   const renderEmptyState = () => {
@@ -1084,8 +1098,8 @@ const styles = StyleSheet.create({
 
   // ─── Dropdown sheet ────────────────────────────────────────────────────────
   dropdownOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
+    // Fills the root of a real <Modal>. Absolute positioning (and the
+    // leftover zIndex/elevation) is harmless there.
     position: 'absolute',
     top: 0,
     left: 0,
@@ -1440,8 +1454,8 @@ const styles = StyleSheet.create({
 
   // ─── Filter modal ──────────────────────────────────────────────────────────
   filterModalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
+    // Fills the root of a real <Modal>. Absolute positioning (and the
+    // leftover zIndex/elevation) is harmless there.
     position: 'absolute',
     top: 0,
     left: 0,

@@ -1369,8 +1369,13 @@ const ParkingDetailsPage = ({ navigation, route }) => {
       ) : null}
 
       {/* Booking Success Modal */}
-      {showSuccessModal ? (
-
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
         <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.successModalContent}>
@@ -1404,12 +1409,16 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
         </View>
-      
-      ) : null}
+      </Modal>
 
       {/* Online Payment Confirm Modal */}
-      {showOnlineConfirmModal ? (
-
+      <Modal
+        visible={showOnlineConfirmModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowOnlineConfirmModal(false)}
+      >
         <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={[styles.onlineConfirmModalContent, { paddingBottom: 36 + bottomInset }]}>
@@ -1465,12 +1474,16 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
         </View>
-      
-      ) : null}
+      </Modal>
 
       {/* Add Vehicle Modal */}
-      {showAddVehicleModal ? (
-
+      <Modal
+        visible={showAddVehicleModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowAddVehicleModal(false)}
+      >
         <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
           <TouchableOpacity
@@ -1546,12 +1559,16 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
         </View>
-      
-      ) : null}
+      </Modal>
 
       {/* Time Picker Modal */}
-      {showTimeModal ? (
-
+      <Modal
+        visible={showTimeModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowTimeModal(false)}
+      >
         <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.timeModalContent}>
@@ -1596,8 +1613,7 @@ const ParkingDetailsPage = ({ navigation, route }) => {
             </ScrollView>
           </View>
         </View>
-      
-      ) : null}
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -2476,8 +2492,8 @@ const styles = StyleSheet.create({
 
   // Time Modal
   modalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
+    // Fills the root of a real <Modal>. Absolute positioning (and the
+    // leftover zIndex/elevation) is harmless there.
     position: 'absolute',
     top: 0,
     left: 0,

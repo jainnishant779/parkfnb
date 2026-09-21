@@ -1626,7 +1626,13 @@ const HomePage = ({ navigation }) => {
       </View>
 
       {/* Parking Details Modal */}
-      {modalVisible ? (
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={closeModal}
+      >
         <View style={styles.modalOverlay}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={[styles.modalContent, { paddingBottom: 24 + 64 + insets.bottom }]}>
@@ -1761,10 +1767,16 @@ const HomePage = ({ navigation }) => {
             )}
           </View>
         </View>
-      ) : null}
+      </Modal>
 
       {/* Filter Modal */}
-      {filterModalVisible ? (
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={[styles.filterModalContent, { paddingBottom: 30 + 64 + insets.bottom }]}>
@@ -1893,7 +1905,7 @@ const HomePage = ({ navigation }) => {
             </View>
           </View>
         </View>
-      ) : null}
+      </Modal>
 
     </SafeAreaView>
   );
@@ -2954,9 +2966,9 @@ const styles = StyleSheet.create({
   },
   // Modal Styles
   modalOverlay: {
-    // Absolutely positioned, not flex:1 — these sheets are no longer inside a
-    // <Modal>, which does not present on this build and let their contents
-    // render inline on top of the page.
+    // These sheets render inside a real <Modal>, so this fills the modal's
+    // own root. The absolute positioning is kept (harmless there) along with
+    // the zIndex/elevation left over from when they rendered inline.
     position: 'absolute',
     top: 0,
     left: 0,
@@ -2992,8 +3004,8 @@ const styles = StyleSheet.create({
     maxHeight: Dimensions.get('window').height * 0.85,
   },
   modalScroll: {
-    // The sheet is no longer inside a <Modal>, so it must be allowed to grow
-    // to its content instead of being clipped by the old flex constraints.
+    // The sheet must be allowed to grow to its content instead of being
+    // clipped by flex constraints.
     flexGrow: 1,
     flexShrink: 1,
   },

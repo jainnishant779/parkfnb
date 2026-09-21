@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Image,
   FlatList,
@@ -275,12 +276,16 @@ const UserOnboarding = ({ navigation }) => {
     </View>
   );
 
-  // Was wrapped in the real RN <Modal>, matching every other screen's comment
-  // that <Modal> "does not present on this build" — tapping "Select vehicle
-  // type" would have looked like a dead button. Same absolute-View technique
-  // used everywhere else in the app instead.
+  // Rendered inside a real RN <Modal> so it floats above the screen's
+  // stacking context (headers / tab bar) instead of being painted over.
   const renderVehicleModal = () => (
-    !vehicleModalVisible ? null : (
+    <Modal
+      visible={vehicleModalVisible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setVehicleModalVisible(false)}
+    >
       <View style={styles.modalOverlay}>
         <View pointerEvents="none" style={styles.modalBackdrop} />
         <TouchableOpacity
@@ -324,12 +329,18 @@ const UserOnboarding = ({ navigation }) => {
           />
         </View>
       </View>
-    )
+    </Modal>
   );
 
-  // Same fix as renderVehicleModal above.
+  // Same treatment as renderVehicleModal above.
   const renderImagePickerModal = () => (
-    !imageModalVisible ? null : (
+    <Modal
+      visible={imageModalVisible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setImageModalVisible(false)}
+    >
       <View style={styles.modalOverlay}>
         <View pointerEvents="none" style={styles.modalBackdrop} />
         <TouchableOpacity
@@ -352,7 +363,7 @@ const UserOnboarding = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
-    )
+    </Modal>
   );
 
   // ─── Main render ───────────────────────────────────────────────────────────
@@ -631,7 +642,7 @@ const styles = StyleSheet.create({
   continueButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   skipButton: { paddingVertical: 12, alignItems: 'center' },
   skipButtonText: { color: '#6B7280', fontSize: 14, fontWeight: '500' },
-  // Modal styles
+  // Modal styles — the overlay fills the root of a real <Modal>.
   modalOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     // The tint lives on modalBackdrop: a translucent background on this

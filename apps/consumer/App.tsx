@@ -111,7 +111,21 @@ function RootNavigator() {
     );
   }
 
-  if (user?.onboardingStep !== 'completed') {
+  // Only these two states mean "this person has not filled in a consumer
+  // profile yet". The rest of the ladder (kyc_submitted, completed) belongs to
+  // the owner app's KYC flow.
+  //
+  // Both apps share one User record with a single user_type, so a number that
+  // signed up as an owner sits at 'kyc_submitted'. Requiring exactly
+  // 'completed' here trapped those accounts in the consumer onboarding screen
+  // forever: Continue saved fine and the server answered 200, but the step
+  // never became 'completed' so the screen never moved on.
+  const needsConsumerOnboarding =
+    !user?.onboardingStep ||
+    user.onboardingStep === 'auth_complete' ||
+    user.onboardingStep === 'profile_setup';
+
+  if (needsConsumerOnboarding) {
     return (
       <>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />

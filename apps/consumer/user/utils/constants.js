@@ -16,5 +16,8 @@ export const API_TIMEOUT = 60000; // 60 seconds
 
 export const STORAGE_KEYS = {
   AUTH_TOKEN: 'auth:token',
+  // The signed-in user, cached so a launch with no network still restores the
+  // session instead of bouncing the user back to the phone-number screen.
+  AUTH_USER: 'auth:user',
   ONBOARDING_DRAFT: 'consumers:onboardingDraft.v1',
 };

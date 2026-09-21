@@ -70,8 +70,9 @@ const vehicleSizeMap = {
 };
 
 const ProfilePage = ({ navigation }) => {
-  // The tab bar (64 + bottom inset) is drawn over these bottom sheets, so pad
-  // their content clear of it or the action buttons end up underneath.
+  // Bottom padding for the sheets. The sheets now render in a real <Modal>
+  // (above the tab bar), but the 64 + inset padding is kept so their action
+  // buttons sit at the same height as before.
   const insets = useSafeAreaInsets();
   const sheetBottomPad = 64 + insets.bottom;
   const auth = useAuth();
@@ -896,9 +897,14 @@ const ProfilePage = ({ navigation }) => {
   );
 
   // Render vehicle modal
-  const renderVehicleModal = () =>
-    showVehicleModal ? (
-
+  const renderVehicleModal = () => (
+    <Modal
+      visible={showVehicleModal}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowVehicleModal(false)}
+    >
       <View style={styles.modalOverlay}>
         <View pointerEvents="none" style={styles.modalBackdrop} />
         <TouchableOpacity
@@ -1019,13 +1025,18 @@ const ProfilePage = ({ navigation }) => {
           </View>
         </View>
       </View>
-    
-    ) : null;
+    </Modal>
+  );
 
   // Render payment modal
-  const renderPaymentModal = () =>
-    showPaymentModal ? (
-
+  const renderPaymentModal = () => (
+    <Modal
+      visible={showPaymentModal}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowPaymentModal(false)}
+    >
       <View style={styles.modalOverlay}>
         <View pointerEvents="none" style={styles.modalBackdrop} />
         <View style={[styles.modalContent, { paddingBottom: sheetBottomPad }]}>
@@ -1109,8 +1120,8 @@ const ProfilePage = ({ navigation }) => {
           </View>
         </View>
       </View>
-    
-    ) : null;
+    </Modal>
+  );
 
   // Render success toast
   const renderSuccessToast = () => {
@@ -1801,8 +1812,8 @@ const styles = StyleSheet.create({
 
   // Modal styles
   modalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
+    // Fills the root of a real <Modal>. Absolute positioning (and the
+    // leftover zIndex/elevation) is harmless there.
     position: 'absolute',
     top: 0,
     left: 0,
