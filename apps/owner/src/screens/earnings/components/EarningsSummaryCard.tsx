@@ -70,7 +70,10 @@ function EarningsSummaryCard({
           <Text style={[styles.metricValue, { color: theme.warning }]}>
             -{formatCurrency(summary.fees, summary.currency)}
           </Text>
-          <Text style={[styles.metricSubtext, { color: theme.textMuted }]}>8% of gross</Text>
+          {/* There is no commission model yet — `fees` is hardcoded to 0
+              upstream. "8% of gross" claimed a rate that was never actually
+              charged against the ₹0 shown above it. */}
+          <Text style={[styles.metricSubtext, { color: theme.textMuted }]}>No platform fee yet</Text>
         </View>
 
         {/* Net */}
