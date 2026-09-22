@@ -37,8 +37,16 @@ const Payment = require('../src/models/Payment');
 
 // The plate the ANPR demo image carries. Both vehicle fields are set to it,
 // because the lookup queries license_plate OR registration_number.
-const ALLOW_PLATE = process.env.DEMO_ALLOW_PLATE || 'MH04DB6948';
-const DENY_PLATE = process.env.DEMO_DENY_PLATE || 'MH12AB1234';
+// Comma separated, so extra demo cars need no code change.
+// MH04DB6948 is the synthetic test image; MH12JC2813 is a real photograph.
+const ALLOW_PLATES = (process.env.DEMO_ALLOW_PLATE || 'MH04DB6948,MH12JC2813')
+  .split(',').map((p) => p.trim().toUpperCase()).filter(Boolean);
+const ALLOW_PLATE = ALLOW_PLATES[0];
+const DENY_PLATE = (process.env.DEMO_DENY_PLATE || 'MH12AB1234').trim().toUpperCase();
+
+// How long the demo booking stays open. Three hours meant a seed from the
+// morning was already expired by the afternoon.
+const BOOKING_DAYS = Number(process.env.DEMO_BOOKING_DAYS || 4);
 
 const DEVICE_ID = process.env.DEMO_DEVICE_ID || 'pb-001';
 const DEVICE_SECRET = process.env.DEMO_DEVICE_SECRET || 'change-me-to-a-long-random-string';
@@ -278,56 +286,73 @@ async function seed() {
     is_active: true,
   });
 
-  const vehicle = await UserVehicle.create({
-    user_id: driver._id,
-    vehicle_type: 'car',
-    vehicle_size: 'medium',
-    registration_number: ALLOW_PLATE,
-    license_plate: ALLOW_PLATE,
-    make: 'Maruti', model: 'Swift',
-    vehicle_make: 'Maruti', vehicle_model: 'Swift',
-    vehicle_year: 2022,
-    is_default: true,
-    is_verified: true,
-  });
+  // Two cars on one account: the synthetic test image and the real photograph
+  // taken at a gate. Both have to open the barrier, so whichever picture is
+  // used on the day works without re-seeding.
+  const vehicles = [];
+  for (const [i, plate] of ALLOW_PLATES.entries()) {
+    vehicles.push(await UserVehicle.create({
+      user_id: driver._id,
+      vehicle_type: 'car',
+      vehicle_size: 'medium',
+      registration_number: plate,
+      license_plate: plate,
+      make: i === 0 ? 'Maruti' : 'Skoda',
+      model: i === 0 ? 'Swift' : 'Rapid',
+      vehicle_make: i === 0 ? 'Maruti' : 'Skoda',
+      vehicle_model: i === 0 ? 'Swift' : 'Rapid',
+      vehicle_year: 2022,
+      is_default: i === 0,
+      is_verified: true,
+    }));
+  }
+  const vehicle = vehicles[0];
 
-  // Starts 15 min out, so unlockBarrier's 30-minute early window is already
-  // open when the demo runs.
+  // Opens 15 minutes out — inside unlockBarrier's 30-minute early window — and
+  // runs for DEMO_BOOKING_DAYS so the data survives a weekend. A three-hour
+  // window meant a seed from the morning was already dead by the afternoon.
   const start = new Date(now.getTime() + 15 * 60 * 1000);
-  const end = new Date(start.getTime() + 3 * 60 * 60 * 1000);
+  const end = new Date(start.getTime() + BOOKING_DAYS * 24 * 60 * 60 * 1000);
+  const hours = BOOKING_DAYS * 24;
 
-  const booking = await Booking.create({
-    booking_number: `PFB${Date.now().toString().slice(-8)}`,
-    user_id: driver._id,
-    owner_id: owner._id,
-    space_id: spaceA._id,
-    vehicle_id: vehicle._id,
-    start_time: start,
-    end_time: end,
-    duration_hours: 3,
-    base_price: 120,
-    discount_amount: 0,
-    total_amount: 120,
-    currency: 'INR',
-    status: 'confirmed',
-    payment_status: 'paid',
-  });
+  let booking = null;
 
-  // The Payment enums still carry the original US-market values — there is no
-  // razorpay/upi option yet, so the closest valid pair is used here. Worth
-  // fixing in the model before a pilot, not before the demo.
-  await Payment.create({
-    payment_number: `PAY${Date.now().toString().slice(-8)}`,
-    booking_id: booking._id,
-    user_id: driver._id,
-    amount: 120,
-    currency: 'INR',
-    payment_method: 'credit_card',
-    payment_provider: 'stripe',
-    provider_transaction_id: `DEMO_${Date.now()}`,
-    payment_status: 'succeeded',
-    paid_at: now,
-  });
+  for (const v of vehicles) {
+    const b = await Booking.create({
+      booking_number: `PFB${(Date.now() + vehicles.indexOf(v)).toString().slice(-8)}`,
+      user_id: driver._id,
+      owner_id: owner._id,
+      space_id: spaceA._id,
+      vehicle_id: v._id,
+      start_time: start,
+      end_time: end,
+      duration_hours: hours,
+      base_price: 40 * hours,
+      discount_amount: 0,
+      total_amount: 40 * hours,
+      currency: 'INR',
+      status: 'confirmed',
+      payment_status: 'paid',
+    });
+
+    // The Payment enums still carry the original US-market values — there is
+    // no razorpay/upi option yet, so the closest valid pair is used here.
+    // Worth fixing in the model before a pilot, not before the demo.
+    await Payment.create({
+      payment_number: `PAY${(Date.now() + vehicles.indexOf(v)).toString().slice(-8)}`,
+      booking_id: b._id,
+      user_id: driver._id,
+      amount: 40 * hours,
+      currency: 'INR',
+      payment_method: 'credit_card',
+      payment_provider: 'stripe',
+      provider_transaction_id: `DEMO_${Date.now()}_${vehicles.indexOf(v)}`,
+      payment_status: 'succeeded',
+      paid_at: now,
+    });
+
+    if (!booking) booking = b;
+  }
 
   // A second booking in `pending` for the owner app's approve/reject screen.
   const laterStart = new Date(now.getTime() + 26 * 60 * 60 * 1000);
@@ -415,7 +440,9 @@ async function seed() {
   ok('space', `${r.spaceA.space_number}  Rs.40/hr`);
   ok('device', `${r.device.device_id}  -> BARRIER_001`);
   line();
-  ok('ALLOW plate', `${ALLOW_PLATE}  (paid booking, starts in 15 min)`);
+  ALLOW_PLATES.forEach((p, i) => {
+    ok(i === 0 ? 'ALLOW plates' : '', `${p}  (paid booking, open ${BOOKING_DAYS} days)`);
+  });
   ok('DENY plate', `${DENY_PLATE}  (registered, no booking)`);
   ok('booking id', r.booking._id);
   line();
