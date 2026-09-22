@@ -25,11 +25,14 @@ from pathlib import Path
 import cv2
 import numpy as np
 import httpx
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from detector import get_detector, normalise_plate
+from occupancy import (
+    BayMap, BayState, Detection, OccupancyTracker, annotate,
+)
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
 SERVICE_TOKEN = os.getenv("ANPR_SERVICE_TOKEN", "change-me-anpr-token")
@@ -163,6 +166,120 @@ def normalise(text: str = Form(...)):
     """Expose the plate normaliser on its own — handy when demoing the logic."""
     plate, valid = normalise_plate(text)
     return {"input": text, "plate": plate, "valid_format": valid}
+
+
+# ---------------------------------------------------------------- occupancy
+
+# Bay layouts, keyed by camera. Drawn once at install and, in production,
+# stored in the backend — held here so the service can run standalone.
+_bay_maps: dict[str, BayMap] = {}
+_trackers: dict[str, OccupancyTracker] = {}
+
+
+@app.post("/occupancy/bays")
+async def define_bays(request: Request):
+    """
+    Register the bays for a camera.
+
+        {"camera_id": "cam-1",
+         "view": "oblique" | "topdown",
+         "bays": {"A-01": [[x,y],[x,y],[x,y],[x,y]], ...}}
+
+    Replaces any previous layout for that camera and resets its tracker,
+    because bay ids and history would otherwise disagree.
+    """
+    body = await request.json()
+    camera_id = body.get("camera_id", "default")
+    bays = body.get("bays") or {}
+    view = body.get("view", "oblique")
+
+    if not bays:
+        return JSONResponse({"error": "no bays supplied"}, status_code=400)
+
+    try:
+        bm = BayMap(bays, view=view)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    _bay_maps[camera_id] = bm
+    _trackers[camera_id] = OccupancyTracker(bm)
+    return {"camera_id": camera_id, "view": view,
+            "bays": bm.bay_ids, "count": len(bm.bay_ids)}
+
+
+@app.post("/occupancy/check")
+async def occupancy_check(
+    image: UploadFile = File(...),
+    camera_id: str = Form("default"),
+    track: bool = Form(True),
+    conf: float = Form(0.10),
+    imgsz: int = Form(1280),
+):
+    """
+    One frame in, bay states out.
+
+    `track=true` folds the frame into that camera's rolling window and
+    returns the debounced state — what you want in production, because a
+    car driving past should not flip a bay. `track=false` returns the raw
+    single-frame reading, which is what you want while tuning.
+    """
+    bm = _bay_maps.get(camera_id)
+    if bm is None:
+        return JSONResponse(
+            {"error": f"no bays defined for camera '{camera_id}' — "
+                      f"POST /occupancy/bays first"}, status_code=400)
+
+    frame = _decode(await image.read())
+    if frame is None:
+        return JSONResponse({"error": "could not decode image"}, status_code=400)
+
+    t0 = time.time()
+    det = get_detector()
+    raw = det.vehicles(frame, conf=conf, imgsz=imgsz)
+    dets = [Detection(*r) for r in raw]
+
+    observations = bm.observe(dets)
+
+    if track:
+        tracker = _trackers.setdefault(camera_id, OccupancyTracker(bm))
+        states = tracker.update(dets)
+        summary = tracker.summary()
+    else:
+        states = {o.bay_id: BayState(o.bay_id, o.state, coverage=o.coverage,
+                                     straddles=o.straddles,
+                                     two_wheeler=o.two_wheeler)
+                  for o in observations}
+        summary = {
+            "total": len(states),
+            "occupied": sum(1 for s in states.values() if s.state == "occupied"),
+            "empty": sum(1 for s in states.values() if s.state == "empty"),
+            "badly_parked": sum(1 for s in states.values()
+                                if s.state == "badly_parked"),
+            "unknown": sum(1 for s in states.values() if s.state == "unknown"),
+            "bays": {k: v.dict() for k, v in states.items()},
+        }
+
+    return {
+        "camera_id": camera_id,
+        "view": bm.view,
+        "tracked": track,
+        "vehicles_detected": len(dets),
+        "summary": {k: v for k, v in summary.items() if k != "bays"},
+        "bays": summary["bays"],
+        "observations": [o.dict() for o in observations],
+        "annotated": _b64(annotate(frame, bm, states, dets)),
+        "total_ms": round((time.time() - t0) * 1000),
+    }
+
+
+@app.get("/occupancy/state")
+def occupancy_state(camera_id: str = "default"):
+    """Last known state without sending a new frame."""
+    tracker = _trackers.get(camera_id)
+    if tracker is None:
+        return JSONResponse({"error": f"no tracker for '{camera_id}'"},
+                            status_code=404)
+    return {"camera_id": camera_id, **tracker.summary()}
 
 
 @app.get("/", response_class=HTMLResponse)

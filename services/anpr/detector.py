@@ -251,6 +251,29 @@ class Detector:
         best.ms = (time.time() - t0) * 1000
         return best
 
+    def vehicles(self, frame, conf: float = 0.10, imgsz: int | None = None):
+        """
+        Vehicle boxes only — the input to occupancy.
+
+        A lower default confidence than plate reading on purpose. A missed
+        car reads a full bay as empty and sells it twice, which is worse
+        than a spurious box: a false detection has to land inside a bay
+        polygon to do any harm, and the temporal vote discards it.
+
+        Top-down views need a larger imgsz than the plate path uses. Cars
+        seen from above look nothing like the side-on vehicles this model
+        was trained on, so recall drops sharply at 960.
+        """
+        r = self.model.predict(frame, conf=conf, imgsz=imgsz or IMGSZ,
+                               device=self.device, verbose=False)[0]
+        out = []
+        for b in r.boxes:
+            if int(b.cls[0]) != VEHICLE_CLS:
+                continue
+            x1, y1, x2, y2 = (float(v) for v in b.xyxy[0].tolist())
+            out.append((x1, y1, x2, y2, float(b.conf[0])))
+        return out
+
     def annotate(self, frame, res: PlateRead, allowed: bool | None = None):
         """Draw the box and write the plate above it. Returns a new image."""
         img = frame.copy()
