@@ -8,23 +8,30 @@ import {
   Share,
   Linking,
   Platform,
-  Dimensions,
   Modal,
-  ActivityIndicator,
-  TextInput,
   Image,
+  StatusBar,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import * as bookingService from '../../services/bookingService';
 import * as vehicleService from '../../services/vehicleService';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
-import MapView, { Marker } from 'react-native-maps';
-import { palette, radii, fontStacks, shadow } from '../../theme';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { palette, radii, spacing, fonts, typography, shadow } from '../../theme';
+import {
+  PillButton,
+  IconCircle,
+  Field,
+  SectionTitle,
+  StatusTag,
+  InfoGrid,
+  Chip,
+  Segmented,
+  IsoBlock,
+} from '../../components/ui';
 import { resolveImageUri } from '../../utils/imageUri';
-
-const { width } = Dimensions.get('window');
 
 // Duration options for booking
 const durationOptions = [
@@ -53,8 +60,8 @@ const HERO_AMENITIES = [
 // as Cash while claiming to "confirm instantly" and take a payment. Disabled
 // until a real gateway exists, rather than ship a button that lies.
 const PAYMENT_OPTIONS = [
-  { id: 'cash', label: 'Cash', subtitle: 'Pay at the spot', icon: 'dollar-sign' },
-  { id: 'online', label: 'Online', subtitle: 'Coming soon', icon: 'globe', disabled: true },
+  { id: 'cash', label: 'Cash', subtitle: 'Pay at the spot', icon: 'cash' },
+  { id: 'online', label: 'Online', subtitle: 'Coming soon', icon: 'credit-card-outline', disabled: true },
 ];
 
 // Generate time slots
@@ -726,208 +733,186 @@ const ParkingDetailsPage = ({ navigation, route }) => {
     return `${hour - 12}:00 PM`;
   };
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-left" size={20} color={palette.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>PARK</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => setIsFavorite(!isFavorite)}
-          >
-            <MaterialIcon
-              name={isFavorite ? 'heart' : 'heart-outline'}
-              size={20}
-              color={isFavorite ? palette.danger : palette.text}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton} onPress={handleShare}>
-            <Icon name="share-2" size={20} color={palette.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
+  const availableLabel = selectedSpace
+    ? `${Math.max(0, (selectedSpace.totalSpots || 1) - (selectedSpace.activeBookingCount || 0))} spot${(selectedSpace.totalSpots || 1) > 1 ? 's' : ''} available`
+    : `${parking.available} spot${parking.available !== 1 ? 's' : ''} available`;
+  const availableCount = selectedSpace
+    ? Math.max(0, (selectedSpace.totalSpots || 1) - (selectedSpace.activeBookingCount || 0))
+    : Number(parking.available) || 0;
 
+  const headlinePrice = isPropertyMode && !selectedSpace
+    ? parking.minPrice === parking.maxPrice
+      ? `₹${parking.minPrice}`
+      : `₹${parking.minPrice}–₹${parking.maxPrice}`
+    : `₹${selectedSpace?.pricePerHour ?? parking.pricePerHour}`;
+
+  // Details grid: only facts the listing actually carries.
+  const detailItems = [
+    parking.distance && parking.distance !== '—' ? { label: 'Distance', value: parking.distance } : null,
+    { label: 'Price', value: `${headlinePrice}/hr` },
+    { label: 'Open hours', value: availabilityText.replace('Available: ', '') },
+    { label: 'Rating', value: parking.totalReviews > 0 ? `${parking.rating} (${parking.totalReviews} reviews)` : 'No reviews yet' },
+    ...propertyInfo.map((cell) => ({
+      label: cell.label === 'Allowed' || cell.label.startsWith('+') ? 'Vehicles' : cell.label,
+      value: cell.label.startsWith('+') ? `${cell.value} ${cell.label}` : cell.value,
+    })),
+  ].filter(Boolean);
+
+  const isActiveDate = (d) => selectedDate.toDateString() === d.toDateString();
+
+  const renderBreakdownRows = (rowStyle, labelStyle, valueStyle) => (
+    <>
+      <View style={rowStyle}>
+        <Text style={labelStyle}>Base price ({calculatePricing.durationText})</Text>
+        <Text style={valueStyle}>₹{calculatePricing.basePrice}</Text>
+      </View>
+      <View style={rowStyle}>
+        <Text style={labelStyle}>Service fee</Text>
+        <Text style={valueStyle}>₹{calculatePricing.serviceFee}</Text>
+      </View>
+      <View style={rowStyle}>
+        <Text style={labelStyle}>{calculatePricing.taxLabel}</Text>
+        <Text style={valueStyle}>₹{calculatePricing.tax}</Text>
+      </View>
+    </>
+  );
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        {/* Image Gallery */}
-        <View style={styles.imageGallery}>
-          <View style={styles.mainImageContainer}>
-            {parking.images.length > 0 ? (
-              <Image
-                source={{ uri: parking.images[Math.min(selectedImageIndex, parking.images.length - 1)] }}
-                style={styles.mainImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.imagePlaceholder}>
-                <MaterialIcon name="parking" size={60} color={palette.primary} />
-                <Text style={styles.imagePlaceholderText}>{parking.name}</Text>
-              </View>
-            )}
-            <View style={styles.availabilityBadge}>
-              <View style={styles.availabilityDot} />
-              <Text style={styles.availabilityText}>
-                {selectedSpace
-                  ? `${Math.max(0, (selectedSpace.totalSpots || 1) - (selectedSpace.activeBookingCount || 0))} spot${(selectedSpace.totalSpots || 1) > 1 ? 's' : ''} available`
-                  : `${parking.available} spot${parking.available !== 1 ? 's' : ''} available`}
-              </Text>
+        {/* Photo hero */}
+        <View style={[styles.hero, { height: 300 + insets.top }]}>
+          {parking.images.length > 0 ? (
+            <Image
+              source={{ uri: parking.images[Math.min(selectedImageIndex, parking.images.length - 1)] }}
+              style={StyleSheet.absoluteFill}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.heroPlaceholder}>
+              <IsoBlock size={200} tone="peach" />
             </View>
+          )}
+          <View pointerEvents="none" style={styles.heroScrim} />
+
+          <View style={[styles.heroTop, { paddingTop: insets.top + 8 }]}>
+            <IconCircle icon="arrow-left" variant="glass" size={44} onPress={() => navigation.goBack()} />
+            <View style={styles.heroActions}>
+              <TouchableOpacity
+                style={styles.glassBtn}
+                onPress={() => setIsFavorite(!isFavorite)}
+                activeOpacity={0.75}
+                hitSlop={6}
+              >
+                <MaterialIcon
+                  name={isFavorite ? 'heart' : 'heart-outline'}
+                  size={20}
+                  color={isFavorite ? palette.danger : palette.textInverse}
+                />
+              </TouchableOpacity>
+              <IconCircle icon="share-2" variant="glass" size={44} onPress={handleShare} style={styles.heroActionGap} />
+            </View>
+          </View>
+
+          <View style={styles.heroBottom}>
+            {heroAmenities.length > 0 ? (
+              <View style={styles.heroAmenityRow}>
+                {heroAmenities.map((a) => (
+                  <View key={a.id} style={styles.heroAmenityPill}>
+                    <MaterialIcon name={a.icon} size={13} color={palette.textInverse} />
+                    <Text style={styles.heroAmenityText}>{a.label}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : <View />}
             {parking.images.length > 0 && (
               <View style={styles.imageCounter}>
                 <Text style={styles.imageCounterText}>{selectedImageIndex + 1}/{parking.images.length}</Text>
               </View>
             )}
-
-            {/* Amenity pills over the bottom of the hero */}
-            {heroAmenities.length > 0 && (
-              <View style={styles.heroAmenityRow}>
-                {heroAmenities.map((a) => (
-                  <View key={a.id} style={styles.heroAmenityPill}>
-                    <MaterialIcon name={a.icon} size={13} color={palette.primary} />
-                    <Text style={styles.heroAmenityText}>{a.label}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
           </View>
+        </View>
 
+        {/* Details card */}
+        <View style={styles.detailsCard}>
           {parking.images.length > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbnailRow}>
               {parking.images.map((uri, index) => (
                 <TouchableOpacity
                   key={`${uri}-${index}`}
-                  style={[
-                    styles.thumbnail,
-                    selectedImageIndex === index && styles.thumbnailActive,
-                  ]}
+                  style={[styles.thumbnail, selectedImageIndex === index && styles.thumbnailActive]}
                   onPress={() => setSelectedImageIndex(index)}
+                  activeOpacity={0.8}
                 >
                   <Image source={{ uri: resolveImageUri(uri) }} style={styles.thumbnailImage} resizeMode="cover" />
                 </TouchableOpacity>
               ))}
             </ScrollView>
           )}
-        </View>
 
-        {/* Parking Space Details */}
-        <View style={styles.section}>
-          <View style={styles.titleRow}>
-            <View style={styles.titleContainer}>
-              <Text style={styles.parkingName}>{parking.name}</Text>
-              {parking.totalReviews > 0 ? (
-                <View style={styles.ratingRow}>
-                  <Icon name="star" size={14} color="#F59E0B" />
-                  <Text style={styles.ratingText}>{parking.rating}</Text>
-                  <Text style={styles.reviewCount}>({parking.totalReviews} reviews)</Text>
-                </View>
-              ) : (
-                <Text style={styles.reviewCount}>No reviews yet</Text>
-              )}
-            </View>
+          <View style={styles.titleTopRow}>
+            <StatusTag label={availableLabel} tone={availableCount === 0 ? 'danger' : 'ink'} />
             <View style={styles.priceTag}>
-              <Text style={styles.priceAmount}>
-                {isPropertyMode && !selectedSpace
-                  ? parking.minPrice === parking.maxPrice
-                    ? `₹${parking.minPrice}`
-                    : `₹${parking.minPrice}–₹${parking.maxPrice}`
-                  : `₹${selectedSpace?.pricePerHour ?? parking.pricePerHour}`}
-              </Text>
+              <Text style={styles.priceAmount}>{headlinePrice}</Text>
               <Text style={styles.priceUnit}>/hr</Text>
             </View>
           </View>
-
-          <TouchableOpacity style={styles.addressRow} onPress={handleDirections}>
-            <Icon name="map-pin" size={16} color={palette.primary} />
-            <Text style={styles.addressText}>
-              {parking.address}
-              {parking.distance && parking.distance !== '—' ? ` · ${parking.distance}` : ''}
-            </Text>
-            <Text style={styles.directionsLink}>Get Directions</Text>
-            <Icon name="navigation" size={14} color={palette.primary} />
+          <Text style={styles.parkingName}>{parking.name}</Text>
+          <TouchableOpacity style={styles.addressRow} onPress={handleDirections} activeOpacity={0.7}>
+            <Icon name="map-pin" size={15} color={palette.textMuted} />
+            <Text style={styles.addressText} numberOfLines={2}>{parking.address}</Text>
           </TouchableOpacity>
 
-          {/* Property Info Strip */}
-          {propertyInfo.length > 0 && (
-            <View style={styles.infoStrip}>
-              {propertyInfo.map((cell, index) => (
-                <React.Fragment key={cell.key}>
-                  {index > 0 && <View style={styles.infoStripDivider} />}
-                  <View style={styles.infoStripCell}>
-                    <MaterialIcon name={cell.icon} size={18} color={palette.primary} />
-                    <View style={styles.infoStripTextGroup}>
-                      <Text style={styles.infoStripValue} numberOfLines={1}>
-                        {cell.value}
-                      </Text>
-                      <Text style={styles.infoStripLabel} numberOfLines={1}>
-                        {cell.label}
-                      </Text>
+          <View style={styles.cardDivider} />
+          <InfoGrid items={detailItems} columns={2} />
+
+          <View style={styles.dimensionsBox}>
+            <InfoGrid
+              columns={3}
+              items={[
+                { label: 'Width', value: parking.dimensions.width },
+                { label: 'Length', value: parking.dimensions.length },
+                { label: 'Height', value: parking.dimensions.height },
+              ]}
+            />
+          </View>
+
+          {parking.amenities.length > 0 && (
+            <>
+              <Text style={styles.cardSubTitle}>Amenities</Text>
+              <View style={styles.amenitiesWrap}>
+                {parking.amenities.map((amenity, index) => {
+                  const amenityInfo = getAmenityIcon(amenity);
+                  return (
+                    <View key={index} style={styles.amenityPill}>
+                      <MaterialIcon name={amenityInfo.icon} size={16} color={palette.text} />
+                      <Text style={styles.amenityLabel}>{amenityInfo.label}</Text>
                     </View>
-                  </View>
-                </React.Fragment>
-              ))}
-            </View>
+                  );
+                })}
+              </View>
+            </>
           )}
-
-          {/* Space Dimensions */}
-          <View style={styles.dimensionsCard}>
-            <Text style={styles.dimensionsTitle}>Space Dimensions</Text>
-            <View style={styles.dimensionsRow}>
-              <View style={styles.dimensionItem}>
-                <MaterialIcon name="arrow-left-right" size={18} color={palette.textMuted} />
-                <Text style={styles.dimensionLabel}>Width</Text>
-                <Text style={styles.dimensionValue}>{parking.dimensions.width}</Text>
-              </View>
-              <View style={styles.dimensionDivider} />
-              <View style={styles.dimensionItem}>
-                <MaterialIcon name="arrow-up-down" size={18} color={palette.textMuted} />
-                <Text style={styles.dimensionLabel}>Length</Text>
-                <Text style={styles.dimensionValue}>{parking.dimensions.length}</Text>
-              </View>
-              <View style={styles.dimensionDivider} />
-              <View style={styles.dimensionItem}>
-                <MaterialIcon name="arrow-collapse-up" size={18} color={palette.textMuted} />
-                <Text style={styles.dimensionLabel}>Height</Text>
-                <Text style={styles.dimensionValue}>{parking.dimensions.height}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Amenities */}
-          <Text style={styles.subsectionTitle}>Amenities</Text>
-          <View style={styles.amenitiesGrid}>
-            {parking.amenities.map((amenity, index) => {
-              const amenityInfo = getAmenityIcon(amenity);
-              return (
-                <View key={index} style={styles.amenityItem}>
-                  <MaterialIcon name={amenityInfo.icon} size={18} color={palette.primary} />
-                  <Text style={styles.amenityLabel}>{amenityInfo.label}</Text>
-                </View>
-              );
-            })}
-          </View>
         </View>
 
         {/* Space Selector — shown when multiple spaces exist for this property */}
         {isPropertyMode && parkingData.spaces.length > 1 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Choose Your Spot</Text>
-            <Text style={styles.spaceSelectorSubtitle}>
+            <SectionTitle title="Choose your spot" />
+            <Text style={styles.sectionSub}>
               {parkingData.spaces.length} space types available at this location
             </Text>
             {parkingData.spaces.map((space) => {
               const spaceAvailable = Math.max(0, (space.totalSpots || 1) - (space.activeBookingCount || 0));
               const isFullyBooked = spaceAvailable === 0;
               const isSelected = selectedSpace?.id === space.id;
+              const fg = isSelected ? palette.textInverse : palette.text;
+              const muted = isSelected ? 'rgba(255,255,255,0.7)' : palette.textMuted;
 
               return (
                 <TouchableOpacity
@@ -940,60 +925,45 @@ const ParkingDetailsPage = ({ navigation, route }) => {
                   onPress={() => {
                     if (!isFullyBooked) setSelectedSpace(isSelected ? null : space);
                   }}
-                  activeOpacity={isFullyBooked ? 1 : 0.8}
+                  activeOpacity={isFullyBooked ? 1 : 0.85}
                 >
-                  <View style={styles.spaceCardLeft}>
-                    <View style={[styles.spaceIconCircle, isSelected && styles.spaceIconCircleSelected]}>
-                      <MaterialIcon
-                        name={SPACE_TYPE_ICONS[space.spaceType] || 'parking'}
-                        size={22}
-                        color={isSelected ? palette.textInverse : palette.primary}
-                      />
-                    </View>
+                  <View style={[styles.spaceIconCircle, isSelected && styles.spaceIconCircleSelected]}>
+                    <MaterialIcon
+                      name={SPACE_TYPE_ICONS[space.spaceType] || 'parking'}
+                      size={22}
+                      color={palette.text}
+                    />
                   </View>
                   <View style={styles.spaceCardBody}>
                     <View style={styles.spaceCardHeader}>
-                      <Text style={[styles.spaceCardType, isFullyBooked && styles.spaceCardTextDisabled]}>
+                      <Text style={[styles.spaceCardType, { color: fg }]}>
                         {SPACE_TYPE_LABELS[space.spaceType] || space.spaceType}
                       </Text>
-                      <Text style={[styles.spaceCardPrice, isFullyBooked && styles.spaceCardTextDisabled]}>
-                        ₹{space.pricePerHour}/hr
-                      </Text>
+                      <Text style={[styles.spaceCardPrice, { color: fg }]}>₹{space.pricePerHour}/hr</Text>
                     </View>
                     <View style={styles.spaceCardMeta}>
                       {isFullyBooked ? (
-                        <View style={styles.spaceFullBadge}>
-                          <Text style={styles.spaceFullText}>Fully Booked</Text>
-                        </View>
+                        <StatusTag label="Fully booked" tone="danger" />
                       ) : (
-                        <Text style={styles.spaceAvailableText}>
+                        <Text style={[styles.spaceAvailableText, { color: muted }]}>
                           {spaceAvailable} of {space.totalSpots || 1} spot{(space.totalSpots || 1) > 1 ? 's' : ''} available
                         </Text>
                       )}
                       {space.hasEvCharging && (
-                        <View style={styles.spaceBadge}>
-                          <MaterialIcon name="ev-station" size={12} color="#10B981" />
-                          <Text style={styles.spaceBadgeText}>EV</Text>
-                        </View>
+                        <StatusTag label="EV" tone={isSelected ? 'white' : 'success'} style={styles.spaceTag} />
                       )}
                       {space.bookingMode === 'request' && (
-                        <View style={[styles.spaceBadge, styles.spaceBadgeRequest]}>
-                          <Text style={[styles.spaceBadgeText, styles.spaceBadgeTextRequest]}>On Request</Text>
-                        </View>
+                        <StatusTag label="On request" tone={isSelected ? 'white' : 'warning'} style={styles.spaceTag} />
                       )}
                     </View>
                     {(space.allowedVehicleTypes || []).length > 0 && (
-                      <Text style={styles.spaceVehicleTypes} numberOfLines={1}>
+                      <Text style={[styles.spaceVehicleTypes, { color: muted }]} numberOfLines={1}>
                         {(space.allowedVehicleTypes || []).slice(0, 3).join(', ')}
                         {(space.allowedVehicleTypes || []).length > 3 ? ' +more' : ''}
                       </Text>
                     )}
                   </View>
-                  {isSelected && (
-                    <View style={styles.spaceCheckmark}>
-                      <Icon name="check-circle" size={22} color={palette.primary} />
-                    </View>
-                  )}
+                  {isSelected && <Icon name="check-circle" size={22} color={palette.textInverse} />}
                 </TouchableOpacity>
               );
             })}
@@ -1002,174 +972,112 @@ const ParkingDetailsPage = ({ navigation, route }) => {
 
         {/* Date Selection */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Date</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.dateRow}>
-              {dates.map((dateItem, index) => (
+          <SectionTitle title="Select date" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateRow}>
+            {dates.map((dateItem, index) => {
+              const active = isActiveDate(dateItem.date);
+              return (
                 <TouchableOpacity
                   key={index}
-                  style={[
-                    styles.dateCard,
-                    selectedDate.toDateString() === dateItem.date.toDateString() && styles.dateCardActive,
-                  ]}
+                  style={[styles.dateCard, active && styles.dateCardActive]}
                   onPress={() => setSelectedDate(dateItem.date)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[
-                    styles.dateDayName,
-                    selectedDate.toDateString() === dateItem.date.toDateString() && styles.dateTextActive,
-                  ]}>
+                  <Text style={[styles.dateDayName, active && styles.dateTextActiveMuted]}>
                     {dateItem.isToday ? 'Today' : dateItem.dayName}
                   </Text>
-                  <Text style={[
-                    styles.dateDay,
-                    selectedDate.toDateString() === dateItem.date.toDateString() && styles.dateTextActive,
-                  ]}>
-                    {dateItem.day}
-                  </Text>
-                  <Text style={[
-                    styles.dateMonth,
-                    selectedDate.toDateString() === dateItem.date.toDateString() && styles.dateTextActive,
-                  ]}>
-                    {dateItem.month}
-                  </Text>
+                  <Text style={[styles.dateDay, active && styles.dateTextActive]}>{dateItem.day}</Text>
+                  <Text style={[styles.dateMonth, active && styles.dateTextActiveMuted]}>{dateItem.month}</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
+              );
+            })}
           </ScrollView>
         </View>
 
         {/* Duration & Time Selection */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Booking Duration</Text>
+          <SectionTitle title="Booking duration" />
+          <View style={styles.whiteCard}>
+            <Segmented
+              options={durationOptions.map((o) => ({ id: o.id, label: o.label }))}
+              value={selectedDuration}
+              onChange={setSelectedDuration}
+            />
 
-          {/* Duration Type Selector */}
-          <View style={styles.durationTypeRow}>
-            {durationOptions.map((option) => (
-              <TouchableOpacity
-                key={option.id}
-                style={[
-                  styles.durationTypeButton,
-                  selectedDuration === option.id && styles.durationTypeButtonActive,
-                ]}
-                onPress={() => setSelectedDuration(option.id)}
-              >
-                <Icon
-                  name={option.icon}
-                  size={16}
-                  color={selectedDuration === option.id ? palette.primaryDeep : palette.textMuted}
-                />
-                <Text style={[
-                  styles.durationTypeText,
-                  selectedDuration === option.id && styles.durationTypeTextActive,
-                ]}>
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Hourly Time Selection */}
-          {selectedDuration === 'hourly' && (
-            <View style={styles.timeSelectionContainer}>
-              <View style={styles.selectTimeHeader}>
-                <Text style={styles.selectTimeTitle}>Select Time</Text>
-                <Text style={styles.availabilityHint}>{availabilityText}</Text>
-              </View>
-
-              <View style={styles.timePickerRow}>
-                <TouchableOpacity
-                  style={styles.timePickerButton}
-                  onPress={() => openTimePicker('start')}
-                >
-                  <Text style={styles.timePickerLabel}>Start Time</Text>
-                  <View style={styles.timePickerValue}>
-                    <Icon name="clock" size={18} color={palette.primary} />
-                    <Text style={styles.timePickerText}>{getDisplayTime(selectedStartTime)}</Text>
-                    <Icon name="chevron-down" size={18} color={palette.textMuted} />
-                  </View>
-                </TouchableOpacity>
-
-                <View style={styles.timeArrow}>
-                  <Icon name="arrow-right" size={20} color="#6B7280" />
+            {selectedDuration === 'hourly' && (
+              <View style={styles.timeBlock}>
+                <View style={styles.selectTimeHeader}>
+                  <Text style={styles.selectTimeTitle}>Select time</Text>
+                  <Text style={styles.availabilityHint}>{availabilityText}</Text>
                 </View>
 
-                <TouchableOpacity
-                  style={styles.timePickerButton}
-                  onPress={() => openTimePicker('end')}
-                >
-                  <Text style={styles.timePickerLabel}>End Time</Text>
-                  <View style={styles.timePickerValue}>
-                    <Icon name="clock" size={18} color={palette.primary} />
-                    <Text style={styles.timePickerText}>{getDisplayTime(selectedEndTime)}</Text>
-                    <Icon name="chevron-down" size={18} color={palette.textMuted} />
+                <View style={styles.timePickerRow}>
+                  <TouchableOpacity style={styles.timePill} onPress={() => openTimePicker('start')} activeOpacity={0.8}>
+                    <Text style={styles.timePillLabel}>Start</Text>
+                    <View style={styles.timePillValueRow}>
+                      <Text style={styles.timePillValue}>{getDisplayTime(selectedStartTime)}</Text>
+                      <Icon name="chevron-down" size={16} color={palette.textMuted} />
+                    </View>
+                  </TouchableOpacity>
+                  <View style={styles.timeArrow}>
+                    <Icon name="arrow-right" size={18} color={palette.textMuted} />
                   </View>
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity style={styles.timePill} onPress={() => openTimePicker('end')} activeOpacity={0.8}>
+                    <Text style={styles.timePillLabel}>End</Text>
+                    <View style={styles.timePillValueRow}>
+                      <Text style={styles.timePillValue}>{getDisplayTime(selectedEndTime)}</Text>
+                      <Icon name="chevron-down" size={16} color={palette.textMuted} />
+                    </View>
+                  </TouchableOpacity>
+                </View>
 
-              {/* Quick duration chips — replaces the old +/- stepper */}
-              <View style={styles.quickHoursRow}>
-                {QUICK_HOURS.map((h) => {
-                  const active = selectedHours === h;
-                  return (
-                    <TouchableOpacity
-                      key={h}
-                      style={[styles.quickHourChip, active && styles.quickHourChipActive]}
-                      onPress={() => applyHours(h)}
-                      activeOpacity={0.8}
-                    >
-                      <Text
-                        style={[
-                          styles.quickHourText,
-                          active && styles.quickHourTextActive,
-                        ]}
-                      >
-                        {h}h
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                {/* Quick duration chips — replaces the old +/- stepper */}
+                <View style={styles.quickHoursRow}>
+                  {QUICK_HOURS.map((h) => {
+                    const active = selectedHours === h;
+                    return (
+                      <Chip
+                        key={h}
+                        label={`${h}h`}
+                        selected={active}
+                        onPress={() => applyHours(h)}
+                        style={[styles.quickChip, !active && styles.quickChipIdle]}
+                      />
+                    );
+                  })}
+                </View>
 
-              {/* A duration reached through the end-time picker won't match a
-                  chip — show it so the selection is never invisible. */}
-              {!QUICK_HOURS.includes(selectedHours) && (
-                <Text style={styles.customDurationNote}>
-                  Custom duration: {selectedHours} hour{selectedHours > 1 ? 's' : ''}
-                </Text>
-              )}
-            </View>
-          )}
+                {/* A duration reached through the end-time picker won't match a
+                    chip — show it so the selection is never invisible. */}
+                {!QUICK_HOURS.includes(selectedHours) && (
+                  <Text style={styles.customDurationNote}>
+                    Custom duration: {selectedHours} hour{selectedHours > 1 ? 's' : ''}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Price Breakdown */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Price Breakdown</Text>
-          <View style={styles.priceBreakdownCard}>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceRowLabel}>
-                Base Price ({calculatePricing.durationText})
-              </Text>
-              <Text style={styles.priceRowValue}>₹{calculatePricing.basePrice}</Text>
+          <SectionTitle title="Price breakdown" />
+          <View style={styles.priceCard}>
+            <View style={styles.priceArt} pointerEvents="none">
+              <IsoBlock size={140} tone="peach" />
             </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceRowLabel}>Service Fee</Text>
-              <Text style={styles.priceRowValue}>₹{calculatePricing.serviceFee}</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceRowLabel}>{calculatePricing.taxLabel}</Text>
-              <Text style={styles.priceRowValue}>₹{calculatePricing.tax}</Text>
-            </View>
-            {Number(calculatePricing.discount) > 0 && (
-              <View style={styles.priceRow}>
-                <Text style={styles.priceRowLabel}>Discount</Text>
-                <Text style={[styles.priceRowValue, styles.priceRowValueDiscount]}>
-                  −₹{calculatePricing.discount}
-                </Text>
-              </View>
-            )}
-            <View style={styles.priceDivider} />
-            <View style={styles.priceRowTotal}>
-              <Text style={styles.priceTotalLabel}>Total Amount</Text>
+            <View style={styles.priceBody}>
+              {renderBreakdownRows(styles.priceRow, styles.priceRowLabel, styles.priceRowValue)}
+              {Number(calculatePricing.discount) > 0 && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceRowLabel}>Discount</Text>
+                  <Text style={[styles.priceRowValue, styles.priceRowValueDiscount]}>
+                    −₹{calculatePricing.discount}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.priceDivider} />
+              <Text style={styles.priceTotalLabel}>Total amount</Text>
               <Text style={styles.priceTotalValue}>₹{calculatePricing.total}</Text>
             </View>
           </View>
@@ -1177,7 +1085,7 @@ const ParkingDetailsPage = ({ navigation, route }) => {
 
         {/* Payment Method */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment Method</Text>
+          <SectionTitle title="Payment method" />
           <View style={styles.paymentOptionsRow}>
             {PAYMENT_OPTIONS.map((opt) => {
               const active = selectedPaymentMethod === opt.id;
@@ -1191,18 +1099,19 @@ const ParkingDetailsPage = ({ navigation, route }) => {
                   ]}
                   onPress={() => !opt.disabled && setSelectedPaymentMethod(opt.id)}
                   disabled={opt.disabled}
+                  activeOpacity={0.85}
                 >
-                  {active && (
-                    <View style={styles.paymentOptionCheckBadge}>
-                      <Icon name="check-circle" size={16} color={palette.primary} />
+                  <View style={styles.paymentTopRow}>
+                    <View style={[styles.paymentIcon, active && styles.paymentIconActive]}>
+                      <MaterialIcon
+                        name={opt.icon}
+                        size={22}
+                        color={active ? palette.textInverse : opt.disabled ? palette.textSubtle : palette.text}
+                      />
                     </View>
-                  )}
-                  <Icon
-                    name={opt.icon}
-                    size={30}
-                    color={opt.disabled ? palette.textMuted : active ? palette.primary : palette.textMuted}
-                  />
-                  <Text style={[styles.paymentOptionLabel, active && styles.paymentOptionLabelActive]}>
+                    {active && <Icon name="check-circle" size={18} color={palette.ink} />}
+                  </View>
+                  <Text style={[styles.paymentOptionLabel, opt.disabled && styles.paymentTextDisabled]}>
                     {opt.label}
                   </Text>
                   <Text style={styles.paymentOptionSubtitle}>{opt.subtitle}</Text>
@@ -1214,10 +1123,13 @@ const ParkingDetailsPage = ({ navigation, route }) => {
 
         {/* Location Map */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Location</Text>
+          <SectionTitle title="Location" />
           <View style={styles.mapContainer}>
             <MapView
               style={styles.map}
+              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+              mapType={Platform.OS === 'ios' ? 'mutedStandard' : 'standard'}
+              userInterfaceStyle="dark"
               initialRegion={{
                 latitude: parking.latitude,
                 longitude: parking.longitude,
@@ -1234,71 +1146,68 @@ const ParkingDetailsPage = ({ navigation, route }) => {
                 }}
               >
                 <View style={styles.mapMarker}>
-                  <MaterialIcon name="parking" size={20} color="#FFFFFF" />
+                  <MaterialIcon name="parking" size={20} color={palette.textInverse} />
                 </View>
               </Marker>
             </MapView>
-            <TouchableOpacity style={styles.directionsButton} onPress={handleDirections}>
-              <Icon name="navigation" size={18} color="#FFFFFF" />
-              <Text style={styles.directionsButtonText}>Get Directions</Text>
-            </TouchableOpacity>
+            <PillButton
+              label="Get directions"
+              icon="navigation"
+              variant="ink"
+              size="sm"
+              onPress={handleDirections}
+              style={styles.directionsButton}
+            />
           </View>
         </View>
 
         {/* Terms & Conditions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Terms & Conditions</Text>
-          <TouchableOpacity
-            style={styles.termsCheckbox}
-            onPress={() => setAgreedToTerms(!agreedToTerms)}
-          >
-            <View style={[
-              styles.checkbox,
-              agreedToTerms && styles.checkboxChecked,
-            ]}>
-              {agreedToTerms && <Icon name="check" size={14} color="#FFFFFF" />}
-            </View>
-            <Text style={styles.termsText}>
-              I agree to the{' '}
-              <Text style={styles.termsLink}>Terms of Service</Text>,{' '}
-              <Text style={styles.termsLink}>Privacy Policy</Text>, and{' '}
-              <Text style={styles.termsLink}>Refund Policy</Text>
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.whiteCard}>
+            <TouchableOpacity
+              style={styles.termsCheckbox}
+              onPress={() => setAgreedToTerms(!agreedToTerms)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+                {agreedToTerms && <Icon name="check" size={14} color={palette.textInverse} />}
+              </View>
+              <Text style={styles.termsText}>
+                I agree to the{' '}
+                <Text style={styles.termsLink}>Terms of Service</Text>,{' '}
+                <Text style={styles.termsLink}>Privacy Policy</Text>, and{' '}
+                <Text style={styles.termsLink}>Refund Policy</Text>
+              </Text>
+            </TouchableOpacity>
 
-          {/* Cancellation Policy */}
-          <View style={styles.cancellationCard}>
-            <Icon name="info" size={18} color={palette.primary} />
-            <Text style={styles.cancellationText}>
-              Free cancellation up to 2 hours before your booking starts
-            </Text>
+            <View style={styles.cancellationCard}>
+              <Icon name="info" size={16} color={palette.text} />
+              <Text style={styles.cancellationText}>
+                Free cancellation up to 2 hours before your booking starts
+              </Text>
+            </View>
           </View>
         </View>
 
         {/* Bottom Spacing */}
-        <View style={[styles.scrollFooterSpacer, { height: 160 + bottomInset }]} />
+        <View style={{ height: 170 + bottomInset }} />
       </ScrollView>
 
+      {/* Booking error shown above the bottom bar */}
+      {bookingError ? (
+        <View style={[styles.bookingErrorBanner, { bottom: 150 + bottomInset }]}>
+          <Icon name="alert-circle" size={16} color={palette.danger} />
+          <Text style={styles.bookingErrorText}>{bookingError}</Text>
+        </View>
+      ) : null}
+
       {/* Bottom Booking Bar */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(16, bottomInset + 12) }]}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(16, bottomInset + 10) }]}>
         {/* "View Details" expander — same numbers as the breakdown above,
             so it stays sourced from the quote. */}
         {showBottomBreakdown && !(isPropertyMode && !selectedSpace) && (
           <View style={styles.bottomBreakdown}>
-            <View style={styles.bottomBreakdownRow}>
-              <Text style={styles.bottomBreakdownLabel}>
-                Base Price ({calculatePricing.durationText})
-              </Text>
-              <Text style={styles.bottomBreakdownValue}>₹{calculatePricing.basePrice}</Text>
-            </View>
-            <View style={styles.bottomBreakdownRow}>
-              <Text style={styles.bottomBreakdownLabel}>Service Fee</Text>
-              <Text style={styles.bottomBreakdownValue}>₹{calculatePricing.serviceFee}</Text>
-            </View>
-            <View style={styles.bottomBreakdownRow}>
-              <Text style={styles.bottomBreakdownLabel}>{calculatePricing.taxLabel}</Text>
-              <Text style={styles.bottomBreakdownValue}>₹{calculatePricing.tax}</Text>
-            </View>
+            {renderBreakdownRows(styles.bottomBreakdownRow, styles.bottomBreakdownLabel, styles.bottomBreakdownValue)}
           </View>
         )}
 
@@ -1311,64 +1220,42 @@ const ParkingDetailsPage = ({ navigation, route }) => {
               </>
             ) : (
               <>
+                <Text style={styles.bottomPriceLabel}>Total for {calculatePricing.durationText}</Text>
                 <Text style={styles.bottomPriceValue}>₹{calculatePricing.total}</Text>
-                <Text style={styles.bottomPriceDuration}>
-                  for {calculatePricing.durationText}
-                </Text>
                 <TouchableOpacity
                   style={styles.viewDetailsButton}
                   onPress={() => setShowBottomBreakdown(!showBottomBreakdown)}
                   activeOpacity={0.7}
+                  hitSlop={6}
                 >
-                  <Text style={styles.viewDetailsText}>View Details</Text>
+                  <Text style={styles.viewDetailsText}>View details</Text>
                   <Icon
                     name={showBottomBreakdown ? 'chevron-down' : 'chevron-up'}
-                    size={16}
-                    color={palette.primary}
+                    size={15}
+                    color={palette.textMuted}
                   />
                 </TouchableOpacity>
               </>
             )}
           </View>
 
-          <View style={styles.bottomActionColumn}>
-            <TouchableOpacity
-              style={[
-                styles.bookButton,
-                (!isFormValid || isLoading) && styles.bookButtonDisabled,
-              ]}
-              onPress={handleBookNow}
-              disabled={!isFormValid || isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color={palette.textInverse} size="small" />
-              ) : (
-                <>
-                  <Text style={styles.bookButtonText}>
-                    {isPropertyMode && !selectedSpace ? 'Select a Spot' : 'Book Now'}
-                  </Text>
-                  <Icon name="arrow-right" size={20} color={palette.textInverse} />
-                </>
-              )}
-            </TouchableOpacity>
-            <View style={styles.bottomCancellationRow}>
-              <MaterialIcon name="shield-check" size={13} color={palette.primary} />
-              <Text style={styles.bottomCancellationText}>
-                Free cancellation up to 2 hours before
-              </Text>
-            </View>
-          </View>
+          <PillButton
+            label={isPropertyMode && !selectedSpace ? 'Select a spot' : 'Book now'}
+            iconRight={isPropertyMode && !selectedSpace ? undefined : 'arrow-right'}
+            variant="ink"
+            onPress={handleBookNow}
+            disabled={!isFormValid}
+            loading={isLoading}
+            style={styles.bookButton}
+          />
+        </View>
+        <View style={styles.bottomCancellationRow}>
+          <MaterialIcon name="shield-check" size={13} color={palette.textMuted} />
+          <Text style={styles.bottomCancellationText}>Free cancellation up to 2 hours before</Text>
         </View>
       </View>
 
-      {/* Booking error shown above the bottom bar */}
-      {bookingError ? (
-        <View style={[styles.bookingErrorBanner, { bottom: 132 + bottomInset }]}>
-          <Text style={styles.bookingErrorText}>{bookingError}</Text>
-        </View>
-      ) : null}
-
-      {/* Booking Success Modal */}
+      {/* Booking Success Sheet */}
       <Modal
         visible={showSuccessModal}
         transparent
@@ -1376,11 +1263,12 @@ const ParkingDetailsPage = ({ navigation, route }) => {
         statusBarTranslucent
         onRequestClose={() => setShowSuccessModal(false)}
       >
-        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+        <View style={styles.modalOverlay}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
-          <View style={styles.successModalContent}>
+          <View style={[styles.sheet, styles.sheetCenter, { paddingBottom: 28 + bottomInset }]}>
+            <View style={styles.grabber} />
             <View style={styles.successIconContainer}>
-              <Icon name="check-circle" size={56} color="#10B981" />
+              <Icon name="check" size={40} color={palette.success} />
             </View>
             <Text style={styles.successTitle}>
               {confirmedBooking?.status === 'pending' || confirmedBooking?.bookingMode === 'request'
@@ -1388,9 +1276,7 @@ const ParkingDetailsPage = ({ navigation, route }) => {
                 : 'Booking Confirmed!'}
             </Text>
             {confirmedBooking?.bookingNumber ? (
-              <Text style={styles.successBookingNumber}>
-                Booking #{confirmedBooking.bookingNumber}
-              </Text>
+              <StatusTag label={`Booking #${confirmedBooking.bookingNumber}`} style={styles.successTag} />
             ) : null}
             <Text style={styles.successSubtitle}>
               Your parking space has been reserved.{'\n'}
@@ -1398,20 +1284,20 @@ const ParkingDetailsPage = ({ navigation, route }) => {
                 ? 'The owner will confirm your request shortly.'
                 : 'You\'re all set — see you there!'}
             </Text>
-            <TouchableOpacity
-              style={styles.successButton}
+            <PillButton
+              label="Done"
+              variant="ink"
               onPress={() => {
                 setShowSuccessModal(false);
                 navigation.goBack();
               }}
-            >
-              <Text style={styles.successButtonText}>Done</Text>
-            </TouchableOpacity>
+              style={styles.sheetButton}
+            />
           </View>
         </View>
       </Modal>
 
-      {/* Online Payment Confirm Modal */}
+      {/* Online Payment Confirm Sheet */}
       <Modal
         visible={showOnlineConfirmModal}
         transparent
@@ -1419,36 +1305,21 @@ const ParkingDetailsPage = ({ navigation, route }) => {
         statusBarTranslucent
         onRequestClose={() => setShowOnlineConfirmModal(false)}
       >
-        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+        <View style={styles.modalOverlay}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
-          <View style={[styles.onlineConfirmModalContent, { paddingBottom: 36 + bottomInset }]}>
-            <View style={styles.onlineConfirmHeader}>
-              <Text style={styles.onlineConfirmTitle}>Confirm Booking</Text>
-              <TouchableOpacity onPress={() => setShowOnlineConfirmModal(false)}>
-                <Icon name="x" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
+          <View style={[styles.sheet, { paddingBottom: 28 + bottomInset }]}>
+            <View style={styles.grabber} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Confirm booking</Text>
+              <IconCircle icon="x" variant="grey" size={38} onPress={() => setShowOnlineConfirmModal(false)} />
             </View>
 
-            {/* Price breakdown */}
             <View style={styles.confirmBreakdownCard}>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceRowLabel}>
-                  Base Price ({calculatePricing.durationText})
-                </Text>
-                <Text style={styles.priceRowValue}>₹{calculatePricing.basePrice}</Text>
-              </View>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceRowLabel}>Service Fee</Text>
-                <Text style={styles.priceRowValue}>₹{calculatePricing.serviceFee}</Text>
-              </View>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceRowLabel}>{calculatePricing.taxLabel}</Text>
-                <Text style={styles.priceRowValue}>₹{calculatePricing.tax}</Text>
-              </View>
-              <View style={styles.priceDivider} />
-              <View style={styles.priceRowTotal}>
-                <Text style={styles.priceTotalLabel}>Total</Text>
-                <Text style={styles.priceTotalValue}>₹{calculatePricing.total}</Text>
+              {renderBreakdownRows(styles.confirmRow, styles.confirmRowLabel, styles.confirmRowValue)}
+              <View style={styles.confirmDivider} />
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmTotalLabel}>Total</Text>
+                <Text style={styles.confirmTotalValue}>₹{calculatePricing.total}</Text>
               </View>
             </View>
 
@@ -1459,24 +1330,18 @@ const ParkingDetailsPage = ({ navigation, route }) => {
               </Text>
             </View>
 
-            <TouchableOpacity
-              style={[styles.addVehicleSaveButton, isLoading && styles.bookButtonDisabled]}
+            <PillButton
+              label={`Confirm & Book  ·  ₹${calculatePricing.total}`}
+              variant="ink"
               onPress={handleOnlineConfirm}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.addVehicleSaveText}>
-                  Confirm & Book  ·  ₹{calculatePricing.total}
-                </Text>
-              )}
-            </TouchableOpacity>
+              loading={isLoading}
+              style={styles.sheetButton}
+            />
           </View>
         </View>
       </Modal>
 
-      {/* Add Vehicle Modal */}
+      {/* Add Vehicle Sheet */}
       <Modal
         visible={showAddVehicleModal}
         transparent
@@ -1484,84 +1349,62 @@ const ParkingDetailsPage = ({ navigation, route }) => {
         statusBarTranslucent
         onRequestClose={() => setShowAddVehicleModal(false)}
       >
-        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+        <View style={styles.modalOverlay}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={() => setShowAddVehicleModal(false)}
           />
-          <View style={[styles.addVehicleModalContent, { paddingBottom: 36 + bottomInset }]}>
-            <View style={styles.addVehicleHeader}>
-              <Text style={styles.addVehicleTitle}>Add a Vehicle</Text>
-              <TouchableOpacity
-                onPress={() => setShowAddVehicleModal(false)}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Icon name="x" size={24} color={palette.text} />
-              </TouchableOpacity>
+          <View style={[styles.sheet, { paddingBottom: 28 + bottomInset }]}>
+            <View style={styles.grabber} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Add a vehicle</Text>
+              <IconCircle icon="x" variant="grey" size={38} onPress={() => setShowAddVehicleModal(false)} />
             </View>
-            <Text style={styles.addVehicleSubtitle}>
-              You need a registered vehicle to make a booking.
-            </Text>
+            <Text style={styles.sheetSubtitle}>You need a registered vehicle to make a booking.</Text>
 
-            <Text style={styles.addVehicleLabel}>Registration Number</Text>
-            <TextInput
-              style={styles.addVehicleInput}
+            <Field
+              label="Registration number"
+              icon="hash"
               placeholder="e.g. MH12AB1234"
-              placeholderTextColor="#6B7280"
               value={addVehicleReg}
               onChangeText={(v) => setAddVehicleReg(v.toUpperCase())}
               autoCapitalize="characters"
               returnKeyType="done"
+              style={styles.sheetField}
             />
 
-            <Text style={styles.addVehicleLabel}>Vehicle Type</Text>
+            <Text style={styles.sheetLabel}>Vehicle type</Text>
             <View style={styles.vehicleTypePills}>
-              {ADD_VEHICLE_TYPES.map((vt) => (
-                <TouchableOpacity
-                  key={vt.apiType}
-                  style={[
-                    styles.vehicleTypePill,
-                    addVehicleType === vt.apiType && styles.vehicleTypePillSelected,
-                  ]}
-                  onPress={() => setAddVehicleType(vt.apiType)}
-                >
-                  <Text
-                    style={[
-                      styles.vehicleTypePillText,
-                      addVehicleType === vt.apiType && styles.vehicleTypePillTextSelected,
-                    ]}
-                  >
-                    {vt.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {ADD_VEHICLE_TYPES.map((vt) => {
+                const active = addVehicleType === vt.apiType;
+                return (
+                  <Chip
+                    key={vt.apiType}
+                    label={vt.label}
+                    selected={active}
+                    onPress={() => setAddVehicleType(vt.apiType)}
+                    style={[styles.quickChip, !active && styles.quickChipIdle]}
+                  />
+                );
+              })}
             </View>
 
-            {addVehicleError ? (
-              <Text style={styles.addVehicleError}>{addVehicleError}</Text>
-            ) : null}
+            {addVehicleError ? <Text style={styles.addVehicleError}>{addVehicleError}</Text> : null}
 
-            <TouchableOpacity
-              style={[
-                styles.addVehicleSaveButton,
-                addVehicleSaving && styles.bookButtonDisabled,
-              ]}
+            <PillButton
+              label="Save & Book"
+              variant="ink"
               onPress={handleAddVehicleSave}
-              disabled={addVehicleSaving}
-            >
-              {addVehicleSaving ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.addVehicleSaveText}>Save & Book</Text>
-              )}
-            </TouchableOpacity>
+              loading={addVehicleSaving}
+              style={styles.sheetButton}
+            />
           </View>
         </View>
       </Modal>
 
-      {/* Time Picker Modal */}
+      {/* Time Picker Sheet */}
       <Modal
         visible={showTimeModal}
         transparent
@@ -1569,1197 +1412,474 @@ const ParkingDetailsPage = ({ navigation, route }) => {
         statusBarTranslucent
         onRequestClose={() => setShowTimeModal(false)}
       >
-        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
+        <View style={styles.modalOverlay}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
-          <View style={styles.timeModalContent}>
-            <View style={styles.timeModalHeader}>
-              <Text style={styles.timeModalTitle}>
-                Select {timeModalType === 'start' ? 'Start' : 'End'} Time
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowTimeModal(false)}
+          />
+          <View style={[styles.sheet, styles.timeSheet, { paddingBottom: 16 + bottomInset }]}>
+            <View style={styles.grabber} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>
+                Select {timeModalType === 'start' ? 'start' : 'end'} time
               </Text>
-              <TouchableOpacity onPress={() => setShowTimeModal(false)}>
-                <Icon name="x" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
+              <IconCircle icon="x" variant="grey" size={38} onPress={() => setShowTimeModal(false)} />
             </View>
-            <ScrollView style={styles.timeSlotsList}>
+            <ScrollView style={styles.timeSlotsList} showsVerticalScrollIndicator={false}>
               {timeSlots.map((slot) => {
                 // A start time earlier today is rejected by the backend, so
                 // don't offer it.
                 const past = timeModalType === 'start'
                   && isToday(selectedDate)
                   && parseInt(slot.value.split(':')[0], 10) <= new Date().getHours();
+                const active = (timeModalType === 'start' ? selectedStartTime : selectedEndTime) === slot.value;
                 return (
-                <TouchableOpacity
-                  key={slot.value}
-                  disabled={past}
-                  style={[
-                    styles.timeSlotItem,
-                    (timeModalType === 'start' ? selectedStartTime : selectedEndTime) === slot.value && styles.timeSlotItemActive,
-                    past && styles.timeSlotItemPast,
-                  ]}
-                  onPress={() => selectTime(slot.value)}
-                >
-                  <Text style={[
-                    styles.timeSlotText,
-                    (timeModalType === 'start' ? selectedStartTime : selectedEndTime) === slot.value && styles.timeSlotTextActive,
-                  ]}>
-                    {slot.label}
-                  </Text>
-                  {(timeModalType === 'start' ? selectedStartTime : selectedEndTime) === slot.value && (
-                    <Icon name="check" size={20} color={palette.primary} />
-                  )}
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    key={slot.value}
+                    disabled={past}
+                    style={[
+                      styles.timeSlotItem,
+                      active && styles.timeSlotItemActive,
+                      past && styles.timeSlotItemPast,
+                    ]}
+                    onPress={() => selectTime(slot.value)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.timeSlotText, active && styles.timeSlotTextActive]}>
+                      {slot.label}
+                    </Text>
+                    {active && <Icon name="check" size={18} color={palette.textInverse} />}
+                  </TouchableOpacity>
                 );
               })}
             </ScrollView>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: palette.bg,
-  },
-  header: {
+  container: { flex: 1, backgroundColor: palette.bg },
+  scrollView: { flex: 1 },
+
+  // Hero
+  hero: { width: '100%', backgroundColor: palette.peachSoft, overflow: 'hidden' },
+  heroPlaceholder: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  heroScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)' },
+  heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'transparent',
+    paddingHorizontal: spacing.xl,
   },
-  headerButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: palette.surface,
+  heroActions: { flexDirection: 'row', alignItems: 'center' },
+  heroActionGap: { marginLeft: 10 },
+  glassBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  headerTitle: {
-    fontFamily: fontStacks.medium,
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    color: palette.text,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  // Clears the taller sticky bottom bar (price + button + cancellation line).
-  scrollFooterSpacer: {
-    height: 160,
-  },
-
-  // Image Gallery
-  imageGallery: {
-    paddingHorizontal: 16,
-  },
-  mainImageContainer: {
-    height: 230,
-    position: 'relative',
-    borderRadius: radii.md,
-    overflow: 'hidden',
-    backgroundColor: palette.bgSoft,
-  },
-  mainImage: {
-    width: '100%',
-    height: '100%',
-  },
-  imagePlaceholder: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: palette.bgSoft,
-  },
-  imagePlaceholderText: {
-    marginTop: 8,
-    fontSize: 16,
-    fontWeight: '600',
-    color: palette.textMuted,
-  },
-  availabilityBadge: {
+  heroBottom: {
     position: 'absolute',
-    top: 12,
-    left: 12,
+    left: spacing.xl,
+    right: spacing.xl,
+    bottom: 48,
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.success,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
   },
-  availabilityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: palette.textInverse,
-    marginRight: 6,
-  },
-  availabilityText: {
-    color: palette.textInverse,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  imageCounter: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(26,26,46,0.65)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radii.sm,
-  },
-  imageCounterText: {
-    color: palette.textInverse,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  heroAmenityRow: {
-    position: 'absolute',
-    left: 10,
-    right: 10,
-    bottom: 10,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
+  heroAmenityRow: { flexDirection: 'row', flexWrap: 'wrap', flex: 1, marginRight: 10 },
   heroAmenityPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: radii.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginRight: 6,
+    marginTop: 6,
   },
-  heroAmenityText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: palette.text,
+  heroAmenityText: { ...fonts.semibold, fontSize: 11.5, color: palette.textInverse, marginLeft: 5 },
+  imageCounter: {
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: radii.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  thumbnailRow: {
-    paddingVertical: 12,
+  imageCounterText: { ...fonts.semibold, fontSize: 12, color: palette.textInverse },
+
+  // Details card
+  detailsCard: {
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    marginTop: -28,
+    marginHorizontal: spacing.lg,
+    padding: spacing.xl,
+    ...shadow.soft,
   },
+  thumbnailRow: { marginBottom: 16 },
   thumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: radii.xs,
-    backgroundColor: palette.bgSoft,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 58,
+    height: 58,
+    borderRadius: radii.md,
+    overflow: 'hidden',
     marginRight: 8,
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  thumbnailActive: {
-    borderColor: palette.primary,
+  thumbnailActive: { borderColor: palette.ink },
+  thumbnailImage: { width: '100%', height: '100%' },
+  titleTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  priceTag: { flexDirection: 'row', alignItems: 'baseline' },
+  priceAmount: { ...fonts.bold, fontSize: 20, color: palette.text, letterSpacing: -0.4 },
+  priceUnit: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginLeft: 2 },
+  parkingName: {
+    ...fonts.bold,
+    fontSize: 28,
+    lineHeight: 33,
+    letterSpacing: -0.7,
+    color: palette.text,
+    marginTop: 12,
   },
-  thumbnailImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 6,
+  addressRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 6 },
+  addressText: {
+    ...fonts.medium,
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 19,
+    color: palette.textMuted,
+    marginLeft: 6,
   },
+  cardDivider: { height: 1, backgroundColor: palette.line, marginVertical: 16 },
+  dimensionsBox: {
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    marginTop: 4,
+  },
+  cardSubTitle: { ...fonts.semibold, fontSize: 15.5, color: palette.text, marginTop: 18, marginBottom: 10 },
+  amenitiesWrap: { flexDirection: 'row', flexWrap: 'wrap' },
+  amenityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: palette.fill,
+    borderRadius: radii.pill,
+    paddingHorizontal: 14,
+    height: 38,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  amenityLabel: { ...fonts.semibold, fontSize: 13, color: palette.text, marginLeft: 6 },
 
   // Sections
-  section: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: palette.text,
-    marginBottom: 14,
-  },
-  subsectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: palette.text,
-    marginTop: 20,
-    marginBottom: 12,
-  },
+  section: { paddingHorizontal: spacing.lg, marginTop: 24 },
+  sectionSub: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginTop: -6, marginBottom: 12 },
+  whiteCard: { backgroundColor: palette.surface, borderRadius: radii.xl, padding: spacing.lg },
 
-  // Main Info
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 6,
-  },
-  titleContainer: {
-    flex: 1,
-    marginRight: 12,
-  },
-  parkingName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: palette.text,
-    marginBottom: 6,
-    letterSpacing: -0.4,
-  },
-  ratingRow: {
+  // Space selector
+  spaceCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    backgroundColor: palette.surface,
+    borderRadius: radii.lg,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: palette.surface,
   },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  reviewCount: {
-    fontSize: 13,
-    color: palette.textMuted,
-  },
-  priceTag: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    backgroundColor: palette.primarySoft,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radii.sm,
-  },
-  priceAmount: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: palette.primary,
-  },
-  priceUnit: {
-    fontSize: 13,
-    color: palette.textMuted,
-    marginLeft: 2,
-  },
-  addressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-    paddingVertical: 6,
-    gap: 6,
-  },
-  addressText: {
-    flex: 1,
-    fontSize: 14,
-    color: palette.textMuted,
-  },
-  directionsLink: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: palette.primary,
-  },
-
-  // Property Info Strip
-  infoStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.surfaceDim,
-    borderRadius: radii.md,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-  },
-  infoStripCell: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 4,
-  },
-  infoStripTextGroup: {
-    flex: 1,
-  },
-  infoStripValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: palette.text,
-    textTransform: 'capitalize',
-  },
-  infoStripLabel: {
-    fontSize: 11,
-    color: palette.textMuted,
-    marginTop: 1,
-  },
-  infoStripDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: palette.bgSoft,
-  },
-
-  // Dimensions
-  dimensionsCard: {
-    backgroundColor: palette.surfaceDim,
-    borderRadius: radii.md,
-    padding: 16,
-    marginTop: 16,
-  },
-  dimensionsTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: palette.text,
-    marginBottom: 12,
-  },
-  dimensionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dimensionItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  dimensionLabel: {
-    fontSize: 11,
-    color: palette.textMuted,
-    marginTop: 4,
-  },
-  dimensionValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: palette.text,
-    marginTop: 2,
-  },
-  dimensionDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: palette.bgSoft,
-  },
-
-  // Amenities
-  amenitiesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  amenityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.primarySoft,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: radii.pill,
-    gap: 6,
-  },
-  amenityLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: palette.primaryDeep,
-  },
-
-  // Date Selection
-  dateRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  dateCard: {
-    width: 70,
-    paddingVertical: 14,
-    borderRadius: radii.md,
-    backgroundColor: palette.surfaceDim,
-    alignItems: 'center',
-  },
-  dateCardActive: {
-    backgroundColor: palette.primary,
-  },
-  dateDayName: {
-    fontSize: 12,
-    color: palette.textMuted,
-    fontWeight: '600',
-  },
-  dateDay: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: palette.text,
-    marginVertical: 4,
-  },
-  dateMonth: {
-    fontSize: 12,
-    color: palette.textMuted,
-  },
-  dateTextActive: {
-    color: palette.textInverse,
-  },
-
-  // Duration Type
-  durationTypeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 18,
-  },
-  durationTypeButton: {
-    flex: 1,
-    flexDirection: 'row',
+  spaceCardSelected: { backgroundColor: palette.ink, borderColor: palette.ink },
+  spaceCardDisabled: { opacity: 0.5 },
+  spaceIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: palette.fill,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 13,
-    borderRadius: radii.sm,
-    backgroundColor: palette.surfaceDim,
-    gap: 6,
+    marginRight: 12,
   },
-  durationTypeButtonActive: {
-    backgroundColor: palette.primarySoft,
-    borderWidth: 1.5,
-    borderColor: palette.primary,
-  },
-  durationTypeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: palette.textMuted,
-  },
-  durationTypeTextActive: {
-    color: palette.primaryDeep,
-  },
+  spaceIconCircleSelected: { backgroundColor: palette.peach },
+  spaceCardBody: { flex: 1, marginRight: 8 },
+  spaceCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  spaceCardType: { ...fonts.bold, fontSize: 16 },
+  spaceCardPrice: { ...fonts.bold, fontSize: 15 },
+  spaceCardMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 6 },
+  spaceAvailableText: { ...fonts.medium, fontSize: 12.5 },
+  spaceTag: { marginLeft: 6 },
+  spaceVehicleTypes: { ...fonts.medium, fontSize: 12, marginTop: 4 },
 
-  // Time Selection
-  timeSelectionContainer: {
-    marginTop: 4,
+  // Dates
+  dateRow: { paddingRight: 8 },
+  dateCard: {
+    width: 64,
+    paddingVertical: 12,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surface,
+    alignItems: 'center',
+    marginRight: 8,
   },
+  dateCardActive: { backgroundColor: palette.ink },
+  dateDayName: { ...fonts.semibold, fontSize: 12, color: palette.textMuted },
+  dateDay: { ...fonts.bold, fontSize: 22, color: palette.text, marginVertical: 2 },
+  dateMonth: { ...fonts.medium, fontSize: 12, color: palette.textMuted },
+  dateTextActive: { color: palette.textInverse },
+  dateTextActiveMuted: { color: 'rgba(255,255,255,0.7)' },
+
+  // Time
+  timeBlock: { marginTop: 18 },
   selectTimeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  selectTimeTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  availabilityHint: {
-    fontSize: 12,
-    color: palette.textMuted,
-  },
-  timePickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  timePickerButton: {
+  selectTimeTitle: { ...fonts.semibold, fontSize: 15, color: palette.text },
+  availabilityHint: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted },
+  timePickerRow: { flexDirection: 'row', alignItems: 'center' },
+  timePill: {
     flex: 1,
-    backgroundColor: palette.surface,
-    borderRadius: radii.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: palette.bgSoft,
-  },
-  timePickerLabel: {
-    fontSize: 11,
-    color: palette.textMuted,
-    marginBottom: 4,
-  },
-  timePickerValue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  timePickerText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  timeArrow: {
-    paddingHorizontal: 2,
-  },
-
-  // Quick duration chips
-  quickHoursRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  quickHourChip: {
-    flex: 1,
-    paddingVertical: 11,
+    backgroundColor: palette.fill,
     borderRadius: radii.pill,
-    backgroundColor: palette.surfaceDim,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 9,
   },
-  quickHourChipActive: {
-    backgroundColor: palette.primary,
-  },
-  quickHourText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: palette.textMuted,
-  },
-  quickHourTextActive: {
-    color: palette.textInverse,
-    fontWeight: '700',
-  },
-  customDurationNote: {
-    fontSize: 12,
-    color: palette.textMuted,
-    marginTop: 10,
-    textAlign: 'center',
-  },
+  timePillLabel: { ...fonts.medium, fontSize: 11.5, color: palette.textMuted },
+  timePillValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 1 },
+  timePillValue: { ...fonts.bold, fontSize: 15.5, color: palette.text },
+  timeArrow: { paddingHorizontal: 8 },
+  quickHoursRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
+  quickChip: { height: 38, paddingHorizontal: 16, marginBottom: 8, marginRight: 8 },
+  quickChipIdle: { backgroundColor: palette.fill },
+  customDurationNote: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginTop: 4 },
 
-  // Price Breakdown
-  priceBreakdownCard: {
-    backgroundColor: palette.surface,
-    borderRadius: radii.md,
-    padding: 16,
+  // Price breakdown
+  priceCard: {
+    backgroundColor: palette.peachSoft,
+    borderRadius: radii.xl,
+    padding: spacing.xl,
+    overflow: 'hidden',
+    minHeight: 190,
   },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  priceRowLabel: {
-    fontSize: 14,
-    color: palette.textMuted,
-  },
-  priceRowValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: palette.text,
-  },
-  priceRowValueDiscount: {
-    color: palette.success,
-  },
-  priceDivider: {
-    height: 1,
-    backgroundColor: palette.bgSoft,
-    marginVertical: 12,
-  },
-  priceRowTotal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  priceTotalLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  priceTotalValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: palette.primary,
-  },
+  priceArt: { position: 'absolute', right: -30, bottom: -26 },
+  priceBody: { width: '68%' },
+  priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  priceRowLabel: { ...fonts.medium, flex: 1, fontSize: 13.5, color: palette.inkSoft, marginRight: 8 },
+  priceRowValue: { ...fonts.semibold, fontSize: 13.5, color: palette.text },
+  priceRowValueDiscount: { color: palette.success },
+  priceDivider: { height: 1, backgroundColor: '#F2CFA2', marginVertical: 6 },
+  priceTotalLabel: { ...fonts.semibold, fontSize: 13, color: palette.inkSoft, marginTop: 6 },
+  priceTotalValue: { ...fonts.bold, fontSize: 30, letterSpacing: -0.8, color: palette.text, marginTop: 2 },
 
-  // Payment Options (Cash / Online)
-  paymentOptionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+  // Payment
+  paymentOptionsRow: { flexDirection: 'row' },
   paymentOptionCard: {
     flex: 1,
+    backgroundColor: palette.surface,
+    borderRadius: radii.lg,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: palette.surface,
+    marginRight: 10,
+  },
+  paymentOptionCardActive: { borderColor: palette.ink },
+  paymentOptionCardDisabled: { backgroundColor: palette.bgSoft, borderColor: palette.bgSoft, opacity: 0.7 },
+  paymentTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  paymentIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: palette.fill,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 12,
-    backgroundColor: palette.surface,
-    borderRadius: radii.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    position: 'relative',
   },
-  paymentOptionCardActive: {
-    borderColor: palette.primary,
-    backgroundColor: palette.primarySoft,
-  },
-  paymentOptionCardDisabled: {
-    opacity: 0.45,
-  },
-  paymentOptionCheckBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-  },
-  paymentOptionLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: palette.text,
-    marginTop: 10,
-  },
-  paymentOptionLabelActive: {
-    color: palette.primaryDeep,
-  },
-  paymentOptionSubtitle: {
-    fontSize: 12,
-    color: palette.textMuted,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-
-  // Online confirm modal
-  onlineConfirmModalContent: {
-    backgroundColor: palette.bg,
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    padding: 24,
-    paddingBottom: 36,
-    width: '100%',
-    position: 'absolute',
-    bottom: 0,
-  },
-  onlineConfirmHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  onlineConfirmTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  confirmBreakdownCard: {
-    backgroundColor: palette.surface,
-    borderRadius: radii.md,
-    padding: 16,
-    marginBottom: 16,
-  },
-  onlineConfirmNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginBottom: 20,
-  },
-  onlineConfirmNoteText: {
-    flex: 1,
-    fontSize: 12,
-    color: palette.textMuted,
-    lineHeight: 18,
-  },
+  paymentIconActive: { backgroundColor: palette.ink },
+  paymentOptionLabel: { ...fonts.bold, fontSize: 16, color: palette.text, marginTop: 12 },
+  paymentTextDisabled: { color: palette.textMuted },
+  paymentOptionSubtitle: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginTop: 2 },
 
   // Map
-  mapContainer: {
-    height: 170,
-    borderRadius: radii.md,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  map: {
-    flex: 1,
-  },
+  mapContainer: { height: 190, borderRadius: radii.xl, overflow: 'hidden', backgroundColor: palette.surface },
+  map: { flex: 1 },
   mapMarker: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: palette.primary,
-    justifyContent: 'center',
+    backgroundColor: palette.ink,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 3,
     borderColor: palette.surface,
   },
-  directionsButton: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: radii.pill,
-    gap: 6,
-    ...shadow.press,
-  },
-  directionsButtonText: {
-    color: palette.primaryDeep,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  directionsButton: { position: 'absolute', right: 12, bottom: 12 },
 
   // Terms
-  termsCheckbox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
+  termsCheckbox: { flexDirection: 'row', alignItems: 'flex-start' },
   checkbox: {
     width: 22,
     height: 22,
-    borderRadius: 6,
+    borderRadius: 7,
     borderWidth: 2,
     borderColor: palette.textSubtle,
-    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 2,
+    justifyContent: 'center',
+    marginRight: 12,
+    marginTop: 1,
   },
-  checkboxChecked: {
-    backgroundColor: palette.primary,
-    borderColor: palette.primary,
-  },
-  termsText: {
-    flex: 1,
-    fontSize: 14,
-    color: palette.textMuted,
-    lineHeight: 20,
-  },
-  termsLink: {
-    color: palette.primary,
-    fontWeight: '600',
-  },
+  checkboxChecked: { backgroundColor: palette.ink, borderColor: palette.ink },
+  termsText: { ...fonts.medium, flex: 1, fontSize: 13.5, lineHeight: 20, color: palette.textMuted },
+  termsLink: { ...fonts.semibold, color: palette.text, textDecorationLine: 'underline' },
   cancellationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: palette.primarySoft,
-    borderRadius: radii.sm,
-    padding: 12,
-    marginTop: 16,
-    gap: 10,
+    backgroundColor: palette.peachWash,
+    borderRadius: radii.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 14,
   },
-  cancellationText: {
-    flex: 1,
-    fontSize: 13,
-    color: palette.primaryDeep,
-  },
+  cancellationText: { ...fonts.medium, flex: 1, fontSize: 12.5, color: palette.text, marginLeft: 8 },
 
-  // Bottom Bar
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: palette.surface,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 16,
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    shadowColor: palette.shadow,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  bottomBarMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bottomBreakdown: {
-    borderBottomWidth: 1,
-    borderBottomColor: palette.bgSoft,
-    paddingBottom: 10,
-    marginBottom: 12,
-  },
-  bottomBreakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  bottomBreakdownLabel: {
-    fontSize: 13,
-    color: palette.textMuted,
-  },
-  bottomBreakdownValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: palette.text,
-  },
-  bottomPriceContainer: {
-    flex: 1,
-    marginRight: 12,
-  },
-  bottomPriceLabel: {
-    fontSize: 12,
-    color: palette.textMuted,
-  },
-  bottomPricePlaceholder: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: palette.textMuted,
-  },
-  bottomPriceValue: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: palette.primary,
-    letterSpacing: -0.5,
-  },
-  bottomPriceDuration: {
-    fontSize: 12,
-    color: palette.textMuted,
-    marginTop: 1,
-  },
-  viewDetailsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  viewDetailsText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: palette.primary,
-  },
-  bottomActionColumn: {
-    alignItems: 'center',
-  },
-  bookButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: palette.primary,
-    paddingHorizontal: 28,
-    paddingVertical: 16,
-    borderRadius: radii.md,
-    gap: 8,
-    minWidth: 180,
-  },
-  bookButtonDisabled: {
-    backgroundColor: palette.textSubtle,
-  },
-  bookButtonText: {
-    color: palette.textInverse,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  bottomCancellationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 7,
-  },
-  bottomCancellationText: {
-    fontSize: 11,
-    color: palette.textMuted,
-  },
-
-  // Booking error banner
+  // Error
   bookingErrorBanner: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 150 : 132,
-    left: 16,
-    right: 16,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: radii.sm,
-    padding: 12,
-  },
-  bookingErrorText: {
-    fontSize: 13,
-    color: palette.danger,
-    textAlign: 'center',
-  },
-
-  // Success modal
-  successModalContent: {
-    backgroundColor: palette.surface,
-    borderRadius: radii.lg,
-    padding: 32,
-    margin: 24,
+    left: spacing.lg,
+    right: spacing.lg,
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: palette.dangerSoft,
+    borderRadius: radii.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  successIconContainer: {
-    marginBottom: 16,
-  },
-  successTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: palette.text,
-    marginBottom: 8,
-  },
-  successBookingNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: palette.textMuted,
-    marginBottom: 12,
-  },
-  successSubtitle: {
-    fontSize: 14,
-    color: palette.textMuted,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  successButton: {
-    backgroundColor: palette.primary,
-    borderRadius: radii.sm,
-    paddingVertical: 14,
-    paddingHorizontal: 48,
-  },
-  successButtonText: {
-    color: palette.textInverse,
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  bookingErrorText: { ...fonts.medium, flex: 1, fontSize: 13, color: palette.danger, marginLeft: 8 },
 
-  // Time Modal
-  modalOverlay: {
-    // Fills the root of a real <Modal>. Absolute positioning (and the
-    // leftover zIndex/elevation) is harmless there.
+  // Bottom bar
+  bottomBar: {
     position: 'absolute',
-    top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 9999,
-    elevation: 24,
-    // The tint lives on modalBackdrop. A translucent background on a view that
-    // also has elevation makes Android paint its shadow through it, which
-    // showed up as a lighter vertical strip behind the popup.
-    backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: spacing.xl,
+    paddingTop: 16,
+    ...shadow.lifted,
   },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(26,26,46,0.45)',
+  bottomBreakdown: {
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
+    padding: 14,
+    paddingBottom: 6,
+    marginBottom: 12,
   },
-  timeModalContent: {
-    backgroundColor: palette.bg,
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    maxHeight: '60%',
+  bottomBreakdownRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  bottomBreakdownLabel: { ...fonts.medium, fontSize: 13, color: palette.textMuted },
+  bottomBreakdownValue: { ...fonts.semibold, fontSize: 13, color: palette.text },
+  bottomBarMain: { flexDirection: 'row', alignItems: 'center' },
+  bottomPriceContainer: { flex: 1, marginRight: 12 },
+  bottomPriceLabel: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted },
+  bottomPricePlaceholder: { ...fonts.bold, fontSize: 18, color: palette.text, marginTop: 2 },
+  bottomPriceValue: { ...fonts.bold, fontSize: 26, letterSpacing: -0.6, color: palette.text },
+  viewDetailsButton: { flexDirection: 'row', alignItems: 'center', marginTop: 1 },
+  viewDetailsText: { ...fonts.semibold, fontSize: 12.5, color: palette.textMuted, marginRight: 2 },
+  bookButton: { minWidth: 150 },
+  bottomCancellationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  bottomCancellationText: { ...fonts.medium, fontSize: 11.5, color: palette.textMuted, marginLeft: 5 },
+
+  // Sheets
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: {
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: spacing.xl,
+    paddingTop: 12,
   },
-  timeModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  sheetCenter: { alignItems: 'center' },
+  timeSheet: { maxHeight: '72%' },
+  grabber: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    marginBottom: 16,
+  },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  sheetTitle: { ...fonts.semibold, fontSize: 22, color: palette.text },
+  sheetSubtitle: { ...fonts.medium, fontSize: 14, color: palette.textMuted, marginBottom: 16 },
+  sheetField: { marginBottom: 16 },
+  sheetLabel: { ...typography.caption, marginBottom: 8, marginLeft: 4 },
+  sheetButton: { alignSelf: 'stretch', marginTop: 18 },
+
+  successIconContainer: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: palette.successSoft,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  successTitle: { ...fonts.bold, fontSize: 24, letterSpacing: -0.4, color: palette.text, marginTop: 16 },
+  successTag: { alignSelf: 'center', marginTop: 10 },
+  successSubtitle: {
+    ...fonts.medium,
+    fontSize: 14,
+    lineHeight: 21,
+    color: palette.textMuted,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+
+  confirmBreakdownCard: {
+    backgroundColor: palette.peachSoft,
+    borderRadius: radii.lg,
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.bgSoft,
+    paddingBottom: 8,
+    marginTop: 8,
   },
-  timeModalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  timeSlotsList: {
-    padding: 16,
-  },
+  confirmRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  confirmRowLabel: { ...fonts.medium, fontSize: 13.5, color: palette.inkSoft },
+  confirmRowValue: { ...fonts.semibold, fontSize: 13.5, color: palette.text },
+  confirmDivider: { height: 1, backgroundColor: '#F2CFA2', marginVertical: 6 },
+  confirmTotalLabel: { ...fonts.bold, fontSize: 16, color: palette.text },
+  confirmTotalValue: { ...fonts.bold, fontSize: 18, color: palette.text },
+  onlineConfirmNote: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 12 },
+  onlineConfirmNoteText: { ...fonts.medium, flex: 1, fontSize: 12.5, lineHeight: 17, color: palette.textMuted, marginLeft: 6 },
+
+  vehicleTypePills: { flexDirection: 'row', flexWrap: 'wrap' },
+  addVehicleError: { ...fonts.medium, fontSize: 13, color: palette.danger, marginTop: 6 },
+
+  timeSlotsList: { marginTop: 4 },
   timeSlotItem: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: radii.sm,
-    marginBottom: 8,
-    backgroundColor: palette.surface,
-  },
-  timeSlotItemActive: {
-    backgroundColor: palette.primarySoft,
-  },
-  // Past start times can't be booked — the backend rejects them.
-  timeSlotItemPast: {
-    opacity: 0.35,
-  },
-  timeSlotText: {
-    fontSize: 16,
-    color: palette.text,
-  },
-  timeSlotTextActive: {
-    fontWeight: '700',
-    color: palette.primaryDeep,
-  },
-
-  // Space Selector
-  spaceSelectorSubtitle: {
-    fontSize: 13,
-    color: palette.textMuted,
-    marginBottom: 12,
-    marginTop: -4,
-  },
-  spaceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-    borderRadius: radii.md,
-    padding: 14,
-    marginBottom: 10,
-    backgroundColor: palette.surface,
-  },
-  spaceCardSelected: {
-    borderColor: palette.primary,
-    backgroundColor: palette.primarySoft,
-  },
-  spaceCardDisabled: {
-    opacity: 0.5,
-    backgroundColor: palette.surfaceDim,
-  },
-  spaceCardLeft: {
-    marginRight: 14,
-  },
-  spaceIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: palette.primarySoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  spaceIconCircleSelected: {
-    backgroundColor: palette.primary,
-  },
-  spaceCardTextDisabled: {
-    color: palette.textSubtle,
-  },
-  spaceBadgeRequest: {
-    backgroundColor: 'rgba(242,181,60,0.16)',
-  },
-  spaceBadgeTextRequest: {
-    color: '#92400E',
-  },
-  spaceCardBody: {
-    flex: 1,
-  },
-  spaceCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  spaceCardType: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  spaceCardPrice: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: palette.primary,
-  },
-  spaceCardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 4,
-  },
-  spaceAvailableText: {
-    fontSize: 12,
-    color: palette.success,
-    fontWeight: '600',
-  },
-  spaceFullBadge: {
-    backgroundColor: 'rgba(229,72,77,0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    height: 50,
     borderRadius: radii.pill,
-  },
-  spaceFullText: {
-    fontSize: 11,
-    color: palette.danger,
-    fontWeight: '600',
-  },
-  spaceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(46,174,107,0.12)',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: radii.pill,
-  },
-  spaceBadgeText: {
-    fontSize: 11,
-    color: palette.success,
-    fontWeight: '600',
-  },
-  spaceVehicleTypes: {
-    fontSize: 11,
-    color: palette.textSubtle,
-    textTransform: 'capitalize',
-  },
-  spaceCheckmark: {
-    marginLeft: 10,
-  },
-
-  // Add Vehicle Modal
-  addVehicleModalContent: {
-    backgroundColor: palette.bg,
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    padding: 24,
-    paddingBottom: 36,
-    width: '100%',
-    position: 'absolute',
-    bottom: 0,
-  },
-  addVehicleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: palette.fill,
     marginBottom: 8,
   },
-  addVehicleTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  addVehicleSubtitle: {
-    fontSize: 14,
-    color: palette.textMuted,
-    marginBottom: 20,
-  },
-  addVehicleLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: palette.textMuted,
-    marginBottom: 8,
-  },
-  addVehicleInput: {
-    borderWidth: 1.5,
-    borderColor: palette.bgSoft,
-    borderRadius: radii.sm,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: palette.text,
-    marginBottom: 16,
-    backgroundColor: palette.surface,
-  },
-  vehicleTypePills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  vehicleTypePill: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: radii.pill,
-    borderWidth: 1.5,
-    borderColor: palette.bgSoft,
-    backgroundColor: palette.surface,
-  },
-  vehicleTypePillSelected: {
-    borderColor: palette.primary,
-    backgroundColor: palette.primarySoft,
-  },
-  vehicleTypePillText: {
-    fontSize: 14,
-    color: palette.textMuted,
-    fontWeight: '600',
-  },
-  vehicleTypePillTextSelected: {
-    color: palette.primaryDeep,
-    fontWeight: '700',
-  },
-  addVehicleError: {
-    fontSize: 13,
-    color: palette.danger,
-    marginBottom: 12,
-  },
-  addVehicleSaveButton: {
-    backgroundColor: palette.primary,
-    borderRadius: radii.sm,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addVehicleSaveText: {
-    color: palette.textInverse,
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  timeSlotItemActive: { backgroundColor: palette.ink },
+  timeSlotItemPast: { opacity: 0.35 },
+  timeSlotText: { ...fonts.semibold, fontSize: 15, color: palette.text },
+  timeSlotTextActive: { color: palette.textInverse },
 });
 
 export default ParkingDetailsPage;

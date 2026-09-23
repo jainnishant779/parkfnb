@@ -8,14 +8,25 @@ import {
   ScrollView,
   Animated,
   Linking,
-  Platform,
-  ActivityIndicator,
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { palette, fontStacks } from '../../theme';
+import { palette, radii, spacing, fonts, typography } from '../../theme';
+import {
+  T,
+  Card,
+  PillButton,
+  SearchPill,
+  Field,
+  ScreenHeader,
+  SectionTitle,
+  StatusTag,
+  ListRow,
+  Chip,
+  EmptyState,
+  IsoBlock,
+} from '../../components/ui';
 
 // FAQ Data
 const faqData = [
@@ -87,7 +98,7 @@ const sampleTickets = [
 ];
 
 // FAQ Item Component
-const FAQItem = ({ item, isExpanded, onToggle }) => {
+const FAQItem = ({ item, isExpanded, onToggle, isLast }) => {
   const animatedHeight = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
 
@@ -104,7 +115,7 @@ const FAQItem = ({ item, isExpanded, onToggle }) => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [isExpanded]);
+  }, [isExpanded, animatedHeight, rotateAnim]);
 
   const rotate = rotateAnim.interpolate({
     inputRange: [0, 1],
@@ -113,7 +124,7 @@ const FAQItem = ({ item, isExpanded, onToggle }) => {
 
   return (
     <TouchableOpacity
-      style={styles.faqItem}
+      style={[styles.faqItem, !isLast && styles.faqDivider]}
       onPress={onToggle}
       activeOpacity={0.7}
       accessibilityRole="button"
@@ -122,19 +133,12 @@ const FAQItem = ({ item, isExpanded, onToggle }) => {
     >
       <View style={styles.faqHeader}>
         <Text style={styles.faqQuestion}>{item.question}</Text>
-        <Animated.View style={{ transform: [{ rotate }] }}>
-          <Icon name="chevron-down" size={20} color="#A1A1AA" />
+        <Animated.View style={[styles.faqChevron, { transform: [{ rotate }] }]}>
+          <Icon name="chevron-down" size={18} color={palette.text} />
         </Animated.View>
       </View>
       {isExpanded && (
-        <Animated.View
-          style={[
-            styles.faqAnswerContainer,
-            {
-              opacity: animatedHeight,
-            },
-          ]}
-        >
+        <Animated.View style={[styles.faqAnswerContainer, { opacity: animatedHeight }]}>
           <Text style={styles.faqAnswer}>{item.answer}</Text>
         </Animated.View>
       )}
@@ -142,35 +146,22 @@ const FAQItem = ({ item, isExpanded, onToggle }) => {
   );
 };
 
-// Ticket Status Badge Component
+// Ticket status -> StatusTag tone
+const STATUS_CONFIG = {
+  open: { tone: 'ink', label: 'Open' },
+  in_progress: { tone: 'warning', label: 'In Progress' },
+  closed: { tone: 'success', label: 'Closed' },
+};
+
 const StatusBadge = ({ status }) => {
-  const getStatusConfig = () => {
-    switch (status) {
-      case 'open':
-        return { color: '#3B82F6', bg: '#EFF6FF', label: 'Open' };
-      case 'in_progress':
-        return { color: '#F59E0B', bg: '#FFFBEB', label: 'In Progress' };
-      case 'closed':
-        return { color: '#10B981', bg: '#ECFDF5', label: 'Closed' };
-      default:
-        return { color: '#A1A1AA', bg: palette.surface, label: 'Unknown' };
-    }
-  };
-
-  const config = getStatusConfig();
-
-  return (
-    <View style={[styles.statusBadge, { backgroundColor: config.bg }]}>
-      <View style={[styles.statusDot, { backgroundColor: config.color }]} />
-      <Text style={[styles.statusText, { color: config.color }]}>{config.label}</Text>
-    </View>
-  );
+  const config = STATUS_CONFIG[status] || { tone: 'grey', label: 'Unknown' };
+  return <StatusTag label={config.label} tone={config.tone} />;
 };
 
 // Ticket Item Component
 const TicketItem = ({ ticket, onPress }) => {
   return (
-    <TouchableOpacity style={styles.ticketItem} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={styles.ticketItem} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.ticketHeader}>
         <Text style={styles.ticketId}>{ticket.id}</Text>
         <StatusBadge status={ticket.status} />
@@ -180,27 +171,9 @@ const TicketItem = ({ ticket, onPress }) => {
         {ticket.description}
       </Text>
       <View style={styles.ticketFooter}>
-        <Icon name="calendar" size={14} color="#6B7280" />
+        <Icon name="calendar" size={14} color={palette.textMuted} />
         <Text style={styles.ticketDate}>{ticket.date}</Text>
       </View>
-    </TouchableOpacity>
-  );
-};
-
-// Contact Option Component
-const ContactOption = ({ icon, iconType, title, subtitle, onPress, color }) => {
-  const IconComponent = iconType === 'material' ? MaterialIcon : Icon;
-
-  return (
-    <TouchableOpacity style={styles.contactOption} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.contactIconContainer, { backgroundColor: color + '15' }]}>
-        <IconComponent name={icon} size={22} color={color} />
-      </View>
-      <View style={styles.contactTextContainer}>
-        <Text style={styles.contactTitle}>{title}</Text>
-        <Text style={styles.contactSubtitle}>{subtitle}</Text>
-      </View>
-      <Icon name="chevron-right" size={20} color="#6B7280" />
     </TouchableOpacity>
   );
 };
@@ -224,6 +197,8 @@ const HelpSupportPage = ({ navigation }) => {
       faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
       faq.answer.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const openTicketCount = tickets.filter((t) => t.status !== 'closed').length;
 
   const handleFAQToggle = useCallback((id) => {
     setExpandedFAQ((prev) => (prev === id ? null : id));
@@ -280,92 +255,85 @@ const HelpSupportPage = ({ navigation }) => {
     { id: 'other', label: 'Other', icon: 'help-circle' },
   ];
 
+  const canSubmit = !!ticketSubject.trim() && !!ticketDescription.trim();
+
   // Render Submit Ticket Form
   const renderSubmitTicketForm = () => (
-    <View style={styles.formContainer}>
-      <Text style={styles.formLabel}>Category</Text>
-      <View style={styles.categoryGrid}>
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat.id}
-            style={[
-              styles.categoryChip,
-              ticketCategory === cat.id && styles.categoryChipActive,
-            ]}
-            onPress={() => setTicketCategory(cat.id)}
-          >
-            <Icon
-              name={cat.icon}
-              size={16}
-              color={ticketCategory === cat.id ? '#FFFFFF' : '#A1A1AA'}
+    <View style={styles.pad}>
+      <Card tone="blue" style={styles.formHero}>
+        <View style={styles.heroText}>
+          <T variant="h3">Tell us what went wrong</T>
+          <T variant="bodySmall" style={styles.heroSub}>
+            Our support team usually replies within 24 hours.
+          </T>
+        </View>
+        <View style={styles.heroArt} pointerEvents="none">
+          <IsoBlock size={120} tone="blue" />
+        </View>
+      </Card>
+
+      <Card style={styles.formCard}>
+        <Text style={styles.formLabel}>Category</Text>
+        <View style={styles.categoryGrid}>
+          {categories.map((cat) => (
+            <Chip
+              key={cat.id}
+              label={cat.label}
+              icon={cat.icon}
+              selected={ticketCategory === cat.id}
+              onPress={() => setTicketCategory(cat.id)}
+              style={styles.chipGap}
             />
-            <Text
-              style={[
-                styles.categoryChipText,
-                ticketCategory === cat.id && styles.categoryChipTextActive,
-              ]}
-            >
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          ))}
+        </View>
 
-      <Text style={styles.formLabel}>Subject</Text>
-      <TextInput
-        style={styles.textInput}
-        placeholder="Brief description of your issue"
-        placeholderTextColor="#6B7280"
-        value={ticketSubject}
-        onChangeText={setTicketSubject}
-        maxLength={100}
-      />
+        <Field
+          label="Subject"
+          icon="edit-3"
+          placeholder="Brief description of your issue"
+          value={ticketSubject}
+          onChangeText={setTicketSubject}
+          maxLength={100}
+          style={styles.fieldGap}
+        />
 
-      <Text style={styles.formLabel}>Description</Text>
-      <TextInput
-        style={[styles.textInput, styles.textArea]}
-        placeholder="Please provide details about your issue..."
-        placeholderTextColor="#6B7280"
-        value={ticketDescription}
-        onChangeText={setTicketDescription}
-        multiline
-        numberOfLines={6}
-        textAlignVertical="top"
-        maxLength={500}
-      />
-      <Text style={styles.charCount}>{ticketDescription.length}/500</Text>
+        <Text style={[styles.formLabel, styles.fieldGap]}>Description</Text>
+        <View style={styles.textAreaWrap}>
+          <TextInput
+            style={styles.textArea}
+            placeholder="Please provide details about your issue..."
+            placeholderTextColor={palette.textSubtle}
+            value={ticketDescription}
+            onChangeText={setTicketDescription}
+            multiline
+            numberOfLines={6}
+            textAlignVertical="top"
+            maxLength={500}
+          />
+        </View>
+        <Text style={styles.charCount}>{ticketDescription.length}/500</Text>
+      </Card>
 
-      <TouchableOpacity
-        style={[
-          styles.submitButton,
-          (!ticketSubject.trim() || !ticketDescription.trim()) && styles.submitButtonDisabled,
-        ]}
+      <PillButton
+        variant="ink"
+        icon="send"
+        label="Submit Ticket"
         onPress={handleSubmitTicket}
-        disabled={!ticketSubject.trim() || !ticketDescription.trim() || isSubmitting}
-      >
-        {isSubmitting ? (
-          <ActivityIndicator color="#FFFFFF" size="small" />
-        ) : (
-          <>
-            <Icon name="send" size={18} color="#FFFFFF" />
-            <Text style={styles.submitButtonText}>Submit Ticket</Text>
-          </>
-        )}
-      </TouchableOpacity>
+        loading={isSubmitting}
+        disabled={!canSubmit || isSubmitting}
+        style={styles.submitButton}
+      />
     </View>
   );
 
   // Render Tickets List
   const renderTicketsList = () => (
-    <View style={styles.ticketsContainer}>
+    <View style={styles.pad}>
       {tickets.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Icon name="inbox" size={48} color="rgba(255,255,255,0.10)" />
-          <Text style={styles.emptyStateTitle}>No tickets yet</Text>
-          <Text style={styles.emptyStateText}>
-            You haven't submitted any support tickets.
-          </Text>
-        </View>
+        <EmptyState
+          title="No tickets yet"
+          subtitle="You haven't submitted any support tickets."
+        />
       ) : (
         tickets.map((ticket) => (
           <TicketItem
@@ -380,131 +348,109 @@ const HelpSupportPage = ({ navigation }) => {
 
   // Render Main Content
   const renderMainContent = () => (
-    <>
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Icon name="search" size={20} color="#6B7280" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search FAQs..."
-            placeholderTextColor="#6B7280"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="x" size={18} color="#6B7280" />
-            </TouchableOpacity>
-          )}
+    <View style={styles.pad}>
+      {/* Hero + search */}
+      <Card tone="peach" style={styles.hero}>
+        <View style={styles.heroText}>
+          <T variant="h2">How can we{'\n'}help?</T>
+          <T variant="bodySmall" style={styles.heroSub}>
+            Search answers or reach our team.
+          </T>
         </View>
-      </View>
+        <View style={styles.heroArt} pointerEvents="none">
+          <IsoBlock size={140} tone="peach" />
+        </View>
+        <SearchPill
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search FAQs..."
+          style={styles.heroSearch}
+          right={
+            searchQuery.length > 0 ? (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+                <Icon name="x" size={18} color={palette.textMuted} />
+              </TouchableOpacity>
+            ) : null
+          }
+        />
+      </Card>
+
+      {/* Contact Support */}
+      <SectionTitle title="Contact support" style={styles.sectionTitle} />
+      <Card style={styles.listCard}>
+        <ListRow
+          icon="phone"
+          title="Call Support"
+          subtitle="+1 (234) 567-890"
+          onPress={handleCallSupport}
+        />
+        <ListRow
+          icon="mail"
+          title="Email Support"
+          subtitle="support@parkingapp.com"
+          onPress={handleEmailSupport}
+        />
+        <ListRow
+          icon="message-circle"
+          title="Live Chat"
+          subtitle="Available 24/7"
+          onPress={handleLiveChat}
+          isLast
+        />
+      </Card>
 
       {/* FAQ Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Icon name="help-circle" size={20} color="#1A73E8" />
-          <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
-        </View>
-
-        {filteredFAQs.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Icon name="search" size={40} color="rgba(255,255,255,0.10)" />
-            <Text style={styles.emptyStateTitle}>No results found</Text>
-            <Text style={styles.emptyStateText}>
-              Try searching with different keywords
-            </Text>
-          </View>
-        ) : (
-          filteredFAQs.map((faq) => (
+      <SectionTitle title="Frequently asked" style={styles.sectionTitle} />
+      {filteredFAQs.length === 0 ? (
+        <Card>
+          <EmptyState title="No results found" subtitle="Try searching with different keywords" />
+        </Card>
+      ) : (
+        <Card style={styles.listCard}>
+          {filteredFAQs.map((faq, index) => (
             <FAQItem
               key={faq.id}
               item={faq}
               isExpanded={expandedFAQ === faq.id}
               onToggle={() => handleFAQToggle(faq.id)}
+              isLast={index === filteredFAQs.length - 1}
             />
-          ))
-        )}
-      </View>
+          ))}
+        </Card>
+      )}
 
-      {/* Submit Ticket Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Icon name="file-text" size={20} color="#1A73E8" />
-          <Text style={styles.sectionTitle}>Submit a Ticket</Text>
-        </View>
-
-        <View style={styles.ticketCard}>
-          <Text style={styles.ticketCardText}>
-            Describe your issue and our support team will get back to you as soon as possible.
-          </Text>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => setActiveSection('submit')}
-          >
-            <Icon name="edit-3" size={18} color="#FFFFFF" />
-            <Text style={styles.primaryButtonText}>Submit a Support Ticket</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* View Ticket Status Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Icon name="list" size={20} color="#1A73E8" />
-          <Text style={styles.sectionTitle}>View Ticket Status</Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => setActiveSection('tickets')}
-        >
-          <Icon name="clock" size={18} color="#1A73E8" />
-          <Text style={styles.secondaryButtonText}>Check Ticket Status</Text>
-          {tickets.filter((t) => t.status !== 'closed').length > 0 && (
-            <View style={styles.ticketBadge}>
-              <Text style={styles.ticketBadgeText}>
-                {tickets.filter((t) => t.status !== 'closed').length}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Contact Support Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Icon name="phone" size={20} color="#1A73E8" />
-          <Text style={styles.sectionTitle}>Contact Support</Text>
-        </View>
-
-        <View style={styles.contactList}>
-          <ContactOption
-            icon="mail"
-            iconType="feather"
-            title="Email Support"
-            subtitle="support@parkingapp.com"
-            onPress={handleEmailSupport}
-            color="#3B82F6"
-          />
-          <ContactOption
-            icon="phone"
-            iconType="feather"
-            title="Call Support"
-            subtitle="+1 (234) 567-890"
-            onPress={handleCallSupport}
-            color="#10B981"
-          />
-          <ContactOption
-            icon="message-circle"
-            iconType="feather"
-            title="Live Chat"
-            subtitle="Available 24/7"
-            onPress={handleLiveChat}
-            color="#8B5CF6"
+      {/* Tickets */}
+      <SectionTitle title="Support tickets" style={styles.sectionTitle} />
+      <Card>
+        <T variant="bodySmall">
+          Describe your issue and our support team will get back to you as soon as possible.
+        </T>
+        <PillButton
+          variant="ink"
+          size="md"
+          icon="edit-3"
+          label="Submit a Support Ticket"
+          onPress={() => setActiveSection('submit')}
+          style={styles.ticketCta}
+        />
+        <View style={styles.ticketStatusRow}>
+          <ListRow
+            icon="clock"
+            title="Check Ticket Status"
+            subtitle={`${tickets.length} ticket${tickets.length === 1 ? '' : 's'}`}
+            onPress={() => setActiveSection('tickets')}
+            isLast
+            right={
+              <View style={styles.rowRight}>
+                {openTicketCount > 0 && (
+                  <StatusTag label={`${openTicketCount} open`} tone="ink" />
+                )}
+                <Icon name="chevron-right" size={20} color={palette.textSubtle} />
+              </View>
+            }
           />
         </View>
-      </View>
+      </Card>
 
       {/* Footer Links */}
       <View style={styles.footer}>
@@ -520,7 +466,7 @@ const HelpSupportPage = ({ navigation }) => {
           <Text style={styles.footerLinkText}>App Settings</Text>
         </TouchableOpacity>
       </View>
-    </>
+    </View>
   );
 
   const getHeaderTitle = () => {
@@ -536,31 +482,22 @@ const HelpSupportPage = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            if (activeSection !== 'main') {
-              setActiveSection('main');
-            } else {
-              navigation.goBack();
-            }
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Icon name="arrow-left" size={20} color={palette.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{getHeaderTitle()}</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <ScreenHeader
+        title={getHeaderTitle()}
+        onBack={() => {
+          if (activeSection !== 'main') {
+            setActiveSection('main');
+          } else {
+            navigation.goBack();
+          }
+        }}
+      />
 
-      {/* Content */}
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
         {activeSection === 'main' && renderMainContent()}
         {activeSection === 'submit' && renderSubmitTicketForm()}
@@ -579,12 +516,10 @@ const HelpSupportPage = ({ navigation }) => {
           <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.successModal}>
             <View style={styles.successIconContainer}>
-              <Icon name="check" size={32} color="#FFFFFF" />
+              <Icon name="check" size={30} color={palette.textInverse} />
             </View>
-            <Text style={styles.successTitle}>Ticket Submitted!</Text>
-            <Text style={styles.successText}>
-              We'll get back to you within 24 hours.
-            </Text>
+            <Text style={styles.successTitle}>Ticket Submitted</Text>
+            <Text style={styles.successText}>We'll get back to you within 24 hours.</Text>
           </View>
         </View>
       </Modal>
@@ -597,84 +532,58 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: palette.bg,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'transparent',
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: palette.surface,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontFamily: fontStacks.medium,
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    color: palette.text,
-  },
-  headerRight: {
-    width: 36,
-  },
   content: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 5,
+    paddingBottom: spacing.xxxl,
   },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  pad: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+  },
+
+  // Hero
+  hero: {
+    minHeight: 230,
+    paddingBottom: spacing.xl,
+  },
+  formHero: {
+    minHeight: 130,
+    marginBottom: spacing.lg,
+  },
+  heroText: {
+    maxWidth: '62%',
+  },
+  heroSub: {
+    marginTop: spacing.sm,
+    color: palette.inkSoft,
+  },
+  heroArt: {
+    position: 'absolute',
+    right: -30,
+    bottom: -26,
+  },
+  heroSearch: {
+    marginTop: 'auto',
     backgroundColor: palette.surface,
   },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.surface,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 46,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: palette.text,
-    marginLeft: 10,
-  },
-  section: {
-    marginTop: 16,
-    paddingHorizontal: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
+
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: palette.text,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.md,
   },
+  listCard: {
+    paddingVertical: spacing.xs,
+  },
+
+  // FAQ
   faqItem: {
-    backgroundColor: palette.surface,
-    borderRadius: 12,
-    marginBottom: 10,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    paddingVertical: spacing.lg,
+  },
+  faqDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
   },
   faqHeader: {
     flexDirection: 'row',
@@ -682,298 +591,154 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   faqQuestion: {
+    ...fonts.semibold,
     flex: 1,
     fontSize: 15,
-    fontWeight: '600',
+    lineHeight: 20,
     color: palette.text,
-    marginRight: 12,
+    marginRight: spacing.md,
+  },
+  faqChevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   faqAnswerContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: palette.surface,
+    marginTop: spacing.md,
   },
   faqAnswer: {
+    ...typography.bodySmall,
     fontSize: 14,
-    color: '#A1A1AA',
-    lineHeight: 22,
+    lineHeight: 21,
   },
-  ticketCard: {
-    backgroundColor: palette.surface,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+
+  // Tickets CTA
+  ticketCta: {
+    marginTop: spacing.lg,
   },
-  ticketCardText: {
-    fontSize: 14,
-    color: '#A1A1AA',
-    lineHeight: 20,
-    marginBottom: 16,
+  ticketStatusRow: {
+    marginTop: spacing.sm,
   },
-  primaryButton: {
+  rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FF2E40',
-    borderRadius: 12,
-    paddingVertical: 14,
-    gap: 8,
+    gap: spacing.sm,
   },
-  primaryButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#0B0F0C',
-  },
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: palette.surface,
-    borderRadius: 12,
-    paddingVertical: 14,
-    borderWidth: 1.5,
-    borderColor: '#FF2E40',
-    gap: 8,
-  },
-  secondaryButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FF2E40',
-  },
-  ticketBadge: {
-    backgroundColor: '#EF4444',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginLeft: 4,
-  },
-  ticketBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  contactList: {
-    backgroundColor: palette.surface,
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  contactOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.surface,
-  },
-  contactIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  contactTextContainer: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  contactTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: palette.text,
-  },
-  contactSubtitle: {
-    fontSize: 13,
-    color: '#A1A1AA',
-    marginTop: 2,
-  },
+
+  // Footer
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 24,
-    marginTop: 16,
+    paddingVertical: spacing.xxl,
+    marginTop: spacing.sm,
   },
   footerLink: {
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing.md,
   },
   footerLinkText: {
+    ...fonts.medium,
     fontSize: 13,
-    color: '#A1A1AA',
+    color: palette.textMuted,
   },
   footerDivider: {
     width: 1,
     height: 12,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: palette.textSubtle,
   },
-  // Form Styles
-  formContainer: {
-    padding: 16,
+
+  // Form
+  formCard: {
+    paddingTop: spacing.lg,
   },
   formLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0B0F0C',
+    ...typography.caption,
     marginBottom: 8,
-    marginTop: 16,
+    marginLeft: 4,
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
   },
-  categoryChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: palette.surface,
-    gap: 6,
+  chipGap: {
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  categoryChipActive: {
-    backgroundColor: '#FF2E40',
+  fieldGap: {
+    marginTop: spacing.lg,
   },
-  categoryChipText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#A1A1AA',
-  },
-  categoryChipTextActive: {
-    color: '#FFFFFF',
-  },
-  textInput: {
-    backgroundColor: palette.surface,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: palette.text,
-    borderWidth: 1,
-    borderColor: palette.surface,
+  textAreaWrap: {
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
   },
   textArea: {
-    height: 140,
+    ...fonts.medium,
+    height: 130,
+    fontSize: 16,
+    color: palette.text,
+    padding: 0,
     textAlignVertical: 'top',
   },
   charCount: {
+    ...fonts.medium,
     fontSize: 12,
-    color: '#6B7280',
+    color: palette.textMuted,
     textAlign: 'right',
-    marginTop: 4,
+    marginTop: spacing.sm,
+    marginRight: 4,
   },
   submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FF2E40',
-    borderRadius: 12,
-    paddingVertical: 16,
-    marginTop: 24,
-    gap: 8,
+    marginTop: spacing.xl,
   },
-  submitButtonDisabled: {
-    backgroundColor: '#6B7280',
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0B0F0C',
-  },
-  // Tickets Styles
-  ticketsContainer: {
-    padding: 16,
-  },
+
+  // Ticket items
   ticketItem: {
     backgroundColor: palette.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderRadius: radii.xl,
+    padding: spacing.xl,
+    marginBottom: spacing.md,
   },
   ticketHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.md,
   },
   ticketId: {
+    ...fonts.semibold,
     fontSize: 12,
-    fontWeight: '600',
-    color: '#A1A1AA',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 6,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
+    color: palette.textMuted,
   },
   ticketSubject: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...fonts.bold,
+    fontSize: 17,
     color: palette.text,
     marginBottom: 4,
   },
   ticketDescription: {
-    fontSize: 13,
-    color: '#A1A1AA',
-    lineHeight: 18,
+    ...typography.bodySmall,
   },
   ticketFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: palette.surface,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
     gap: 6,
   },
   ticketDate: {
+    ...fonts.medium,
     fontSize: 12,
-    color: '#6B7280',
+    color: palette.textMuted,
   },
-  // Empty State Styles
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  emptyStateTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#A1A1AA',
-    marginTop: 12,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  // Modal Styles
+
+  // Modal
   modalOverlay: {
     // Fills the root of a real <Modal>. Absolute positioning (and the
     // leftover zIndex/elevation) is harmless there.
@@ -992,33 +757,34 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   successModal: {
     backgroundColor: palette.surface,
-    borderRadius: 20,
-    padding: 32,
+    borderRadius: radii.xxl,
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.xxl,
     alignItems: 'center',
-    marginHorizontal: 40,
+    marginHorizontal: spacing.xxxl,
   },
   successIconContainer: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#10B981',
+    backgroundColor: palette.ink,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   successTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    ...fonts.bold,
+    fontSize: 20,
     color: palette.text,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   successText: {
+    ...typography.bodySmall,
     fontSize: 14,
-    color: '#A1A1AA',
     textAlign: 'center',
   },
 });

@@ -9,7 +9,13 @@
 /* Begin PBXBuildFile section */
 		0C80B921A6F3F58F76C31292 /* libPods-ParkingApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-ParkingApp.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		20BAA70FC9CE4315BBC57154 /* Urbanist-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C482C86E45A84B7387AB3BE1 /* Urbanist-Bold.ttf */; };
+		409AF82C905D432F9E09A62E /* Urbanist-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D2AAF65944E5466984F62D17 /* Urbanist-Medium.ttf */; };
+		4C8DDA4037D4937142C51A87 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		56458988B61841A389145AA2 /* Urbanist-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = FBE50FAFFC3E43BC93D5E716 /* Urbanist-ExtraBold.ttf */; };
+		692ECF619658415A802B09B7 /* Urbanist-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DFCDF7A9B0294AA7AF18AC54 /* Urbanist-SemiBold.ttf */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		815F4466FBB94D3091DC035D /* Urbanist-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A61B947AC0954267A8DF9D4B /* Urbanist-Regular.ttf */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
@@ -23,7 +29,12 @@
 		5DCACB8F33CDC322A6C60F78 /* libPods-ParkingApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-ParkingApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = ParkingApp/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = ParkingApp/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		A61B947AC0954267A8DF9D4B /* Urbanist-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-Regular.ttf"; path = "../assets/fonts/Urbanist-Regular.ttf"; sourceTree = "<group>"; };
+		C482C86E45A84B7387AB3BE1 /* Urbanist-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-Bold.ttf"; path = "../assets/fonts/Urbanist-Bold.ttf"; sourceTree = "<group>"; };
+		D2AAF65944E5466984F62D17 /* Urbanist-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-Medium.ttf"; path = "../assets/fonts/Urbanist-Medium.ttf"; sourceTree = "<group>"; };
+		DFCDF7A9B0294AA7AF18AC54 /* Urbanist-SemiBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-SemiBold.ttf"; path = "../assets/fonts/Urbanist-SemiBold.ttf"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		FBE50FAFFC3E43BC93D5E716 /* Urbanist-ExtraBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-ExtraBold.ttf"; path = "../assets/fonts/Urbanist-ExtraBold.ttf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,6 +85,7 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
+				ABF6962FB9E6492D84D2F11A /* Resources */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -86,6 +98,19 @@
 				13B07F961A680F5B00A75B9A /* ParkingApp.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		ABF6962FB9E6492D84D2F11A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				C482C86E45A84B7387AB3BE1 /* Urbanist-Bold.ttf */,
+				A61B947AC0954267A8DF9D4B /* Urbanist-Regular.ttf */,
+				DFCDF7A9B0294AA7AF18AC54 /* Urbanist-SemiBold.ttf */,
+				FBE50FAFFC3E43BC93D5E716 /* Urbanist-ExtraBold.ttf */,
+				D2AAF65944E5466984F62D17 /* Urbanist-Medium.ttf */,
+			);
+			name = Resources;
+			path = "";
 			sourceTree = "<group>";
 		};
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
@@ -159,6 +184,12 @@
 			files = (
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
+				4C8DDA4037D4937142C51A87 /* PrivacyInfo.xcprivacy in Resources */,
+				20BAA70FC9CE4315BBC57154 /* Urbanist-Bold.ttf in Resources */,
+				815F4466FBB94D3091DC035D /* Urbanist-Regular.ttf in Resources */,
+				692ECF619658415A802B09B7 /* Urbanist-SemiBold.ttf in Resources */,
+				56458988B61841A389145AA2 /* Urbanist-ExtraBold.ttf in Resources */,
+				409AF82C905D432F9E09A62E /* Urbanist-Medium.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -374,7 +405,10 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				USE_HERMES = true;
 			};
 			name = Debug;
 		};
@@ -439,7 +473,9 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
+				USE_HERMES = true;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;

@@ -1,45 +1,56 @@
+/**
+ * UserOnboarding — first-run profile setup (name, vehicle, notifications).
+ *
+ * Behaviour: draft autosave, validation, profile update, default vehicle
+ * creation and "skip for now" are unchanged. Visuals follow the app kit:
+ * peach progress card, white rounded section cards, icon tiles for the
+ * vehicle type, ink toggles and a full-width black CTA.
+ */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Image,
-  FlatList,
-  ActivityIndicator,
+  Pressable,
+  TouchableOpacity,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
+import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 
 import { STORAGE_KEYS } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
 import * as userService from '../../services/userService';
 import * as api from '../../services/api';
-import { palette } from '../../theme';
+import { palette, fonts, radii, shadow } from '../../theme';
 import { resolveImageUri } from '../../utils/imageUri';
+import {
+  Field,
+  PillButton,
+  ListRow,
+} from '../../components/ui';
 
 const DRAFT_KEY = STORAGE_KEYS.ONBOARDING_DRAFT;
 const AUTOSAVE_DELAY = 800; // ms
 
 const vehicleTypes = [
-  { id: '1', name: 'Car', apiType: 'car', icon: 'truck' },
-  { id: '2', name: 'SUV', apiType: 'suv', icon: 'truck' },
-  { id: '3', name: 'Van', apiType: 'van', icon: 'truck' },
-  { id: '4', name: 'Motorcycle', apiType: 'motorcycle', icon: 'truck' },
+  { id: '1', name: 'Car', apiType: 'car', icon: 'car-side' },
+  { id: '2', name: 'SUV', apiType: 'suv', icon: 'car-estate' },
+  { id: '3', name: 'Van', apiType: 'van', icon: 'van-utility' },
+  { id: '4', name: 'Motorcycle', apiType: 'motorcycle', icon: 'motorbike' },
   { id: '5', name: 'Truck', apiType: 'truck', icon: 'truck' },
 ];
 
 const UserOnboarding = ({ navigation }) => {
   const auth = useAuth();
-  const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 3;
 
   // Form state
   const [profileImage, setProfileImage] = useState(null);
@@ -54,8 +65,13 @@ const UserOnboarding = ({ navigation }) => {
   const [termsAgreed, setTermsAgreed] = useState(false);
 
   // UI state
-  const [vehicleModalVisible, setVehicleModalVisible] = useState(false);
   const [imageModalVisible, setImageModalVisible] = useState(false);
+  // Field errors stay hidden until the field is touched or Continue is
+  // pressed, so a fresh form doesn't open covered in red.
+  const [touched, setTouched] = useState({});
+  const [attempted, setAttempted] = useState(false);
+  const touch = (key) => setTouched((t) => (t[key] ? t : { ...t, [key]: true }));
+  const errorFor = (key) => ((attempted || touched[key]) && errors[key]) || '';
   const [errors, setErrors] = useState({});
   const [isFormValid, setIsFormValid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -175,6 +191,7 @@ const UserOnboarding = ({ navigation }) => {
   const handleContinue = async () => {
     if (isSubmitting) return;
     if (!isFormValid) {
+      setAttempted(true);
       setSubmitError(firstMissingField());
       return;
     }
@@ -266,73 +283,20 @@ const UserOnboarding = ({ navigation }) => {
     });
   };
 
-  // ─── Render helpers ────────────────────────────────────────────────────────
-  const renderProgressBar = () => (
-    <View style={styles.progressContainer}>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${(currentStep / totalSteps) * 100}%` }]} />
-      </View>
-      <Text style={styles.progressText}>Step {currentStep} of {totalSteps}</Text>
-    </View>
-  );
+  // ─── Render ────────────────────────────────────────────────────────────────
+  const selectVehicle = (item) => {
+    setVehicleType(item.name);
+    setVehicleApiType(item.apiType);
+    touch('vehicleType');
+  };
 
-  // Rendered inside a real RN <Modal> so it floats above the screen's
-  // stacking context (headers / tab bar) instead of being painted over.
-  const renderVehicleModal = () => (
-    <Modal
-      visible={vehicleModalVisible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={() => setVehicleModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View pointerEvents="none" style={styles.modalBackdrop} />
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={() => setVehicleModalVisible(false)}
-        />
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Vehicle Type</Text>
-            <TouchableOpacity
-              onPress={() => setVehicleModalVisible(false)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Icon name="x" size={24} color="#1A1A2E" />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={vehicleTypes}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => {
-              const isSelected = vehicleType === item.name || vehicleApiType === item.apiType;
-              return (
-                <TouchableOpacity
-                  style={[styles.vehicleOption, isSelected && styles.vehicleOptionSelected]}
-                  onPress={() => {
-                    setVehicleType(item.name);
-                    setVehicleApiType(item.apiType);
-                    setVehicleModalVisible(false);
-                  }}
-                  activeOpacity={0.75}
-                >
-                  <Icon name={item.icon} size={20} color={isSelected ? '#FFFFFF' : '#0D7377'} />
-                  <Text style={[styles.vehicleOptionText, isSelected && styles.vehicleOptionTextSelected]}>
-                    {item.name}
-                  </Text>
-                  {isSelected && <Icon name="check" size={20} color="#FFFFFF" />}
-                </TouchableOpacity>
-              );
-            }}
-          />
-        </View>
-      </View>
-    </Modal>
-  );
+  const prefs = [
+    { label: 'Email', sub: 'Booking receipts and updates', icon: 'mail', value: emailNotifications, setter: setEmailNotifications },
+    { label: 'SMS', sub: 'Entry codes and reminders', icon: 'message-square', value: smsNotifications, setter: setSmsNotifications },
+    { label: 'Push', sub: 'Live status of your parking', icon: 'bell', value: pushNotifications, setter: setPushNotifications },
+  ];
 
-  // Same treatment as renderVehicleModal above.
+  // Real <Modal> so it floats above everything instead of being painted over.
   const renderImagePickerModal = () => (
     <Modal
       visible={imageModalVisible}
@@ -342,345 +306,320 @@ const UserOnboarding = ({ navigation }) => {
       onRequestClose={() => setImageModalVisible(false)}
     >
       <View style={styles.modalOverlay}>
-        <View pointerEvents="none" style={styles.modalBackdrop} />
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={() => setImageModalVisible(false)}
-        />
-        <View style={styles.imageModalContent}>
-          <Text style={styles.modalTitle}>Choose Photo</Text>
-          <TouchableOpacity style={styles.imageOption} onPress={takePhoto}>
-            <Icon name="camera" size={24} color="#0D7377" />
-            <Text style={styles.imageOptionText}>Take Photo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.imageOption} onPress={pickImageFromGallery}>
-            <Icon name="image" size={24} color="#0D7377" />
-            <Text style={styles.imageOptionText}>Choose from Gallery</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cancelButton} onPress={() => setImageModalVisible(false)}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
+        <Pressable style={styles.modalBackdrop} onPress={() => setImageModalVisible(false)} />
+        <View style={styles.sheet}>
+          <View style={styles.grabber} />
+          <Text style={styles.sheetTitle}>Profile photo</Text>
+          <ListRow icon="camera" title="Take photo" onPress={takePhoto} />
+          <ListRow icon="image" title="Choose from gallery" onPress={pickImageFromGallery} isLast />
+          <PillButton
+            label="Cancel"
+            variant="grey"
+            size="md"
+            onPress={() => setImageModalVisible(false)}
+            style={{ marginTop: 16 }}
+          />
         </View>
       </View>
     </Modal>
   );
 
-  // ─── Main render ───────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Complete Your Profile</Text>
-          <Text style={styles.subtitle}>Help us personalize your experience</Text>
-        </View>
-
-        {renderProgressBar()}
-
-        {/* Profile Picture */}
-        <View style={styles.profileSection}>
-          <TouchableOpacity style={styles.profileImageContainer} onPress={() => setImageModalVisible(true)}>
-            {profileImage ? (
-              <Image source={{ uri: resolveImageUri(profileImage) }} style={styles.profileImage} />
-            ) : (
-              <View style={styles.profilePlaceholder}>
-                <Icon name="user" size={40} color="#9CA3AF" />
-              </View>
-            )}
-            <View style={styles.cameraIcon}>
-              <Icon name="camera" size={16} color="#FFFFFF" />
+    <View style={styles.root}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      <SafeAreaView style={styles.flex} edges={['top']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.flex}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Top row */}
+            <View style={styles.topRow}>
+              <Text style={styles.brand}>
+                parkfnb.<Text style={styles.brandMark}>®</Text>
+              </Text>
+              <Pressable onPress={handleSkip} disabled={isSubmitting} hitSlop={10}>
+                <Text style={styles.skipTop}>Skip</Text>
+              </Pressable>
             </View>
-          </TouchableOpacity>
-          <Text style={styles.uploadText}>Tap to upload photo</Text>
-        </View>
 
-        {/* Full Name */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Full Name *</Text>
-          <View style={styles.inputWrapper}>
-            <Icon name="user" size={18} color="#9CA3AF" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your full name"
-              placeholderTextColor="#9CA3AF"
-              value={fullName}
-              onChangeText={setFullName}
-            />
-          </View>
-          {errors.fullName ? <Text style={styles.errorText}>{errors.fullName}</Text> : null}
-        </View>
+            {/* Photo */}
+            <View style={styles.avatarWrap}>
+              <Pressable onPress={() => setImageModalVisible(true)} style={styles.avatarBtn}>
+                {profileImage ? (
+                  <Image source={{ uri: resolveImageUri(profileImage) }} style={styles.avatarImg} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Icon name="user" size={38} color={palette.textSubtle} />
+                  </View>
+                )}
+                <View style={styles.cameraBadge}>
+                  <Icon name="camera" size={15} color={palette.textInverse} />
+                </View>
+              </Pressable>
+              <Text style={styles.avatarHint}>Add a photo</Text>
+            </View>
 
-        {/* Vehicle Type */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Vehicle Type *</Text>
-          <TouchableOpacity style={styles.selectWrapper} onPress={() => setVehicleModalVisible(true)}>
-            <Icon name="truck" size={18} color="#0D7377" style={styles.inputIcon} />
-            <Text style={[styles.selectText, !vehicleType && styles.placeholderText]}>
-              {vehicleType || 'Select vehicle type'}
-            </Text>
-            <Icon name="chevron-down" size={18} color="#9CA3AF" />
-          </TouchableOpacity>
-          <View style={styles.vehiclePillsRow}>
-            {vehicleTypes.map((item) => {
-              const isSelected = vehicleType === item.name || vehicleApiType === item.apiType;
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.vehiclePill, isSelected && styles.vehiclePillActive]}
-                  onPress={() => {
-                    setVehicleType(item.name);
-                    setVehicleApiType(item.apiType);
-                  }}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[styles.vehiclePillText, isSelected && styles.vehiclePillTextActive]}>
-                    {item.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          {errors.vehicleType ? <Text style={styles.errorText}>{errors.vehicleType}</Text> : null}
-        </View>
+            {/* About you */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>About you</Text>
+              <Field
+                label="Full name"
+                icon="user"
+                placeholder="Enter your full name"
+                value={fullName}
+                onChangeText={setFullName}
+                onBlur={() => touch('fullName')}
+                autoCapitalize="words"
+              />
+              {errorFor('fullName') ? <Text style={styles.errorText}>{errorFor('fullName')}</Text> : null}
+              <Field
+                label="City or area (optional)"
+                icon="map-pin"
+                placeholder="Where do you usually park?"
+                value={location}
+                onChangeText={setLocation}
+                style={styles.fieldGap}
+              />
+            </View>
 
-        {/* Registration Number */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Vehicle Registration Number *</Text>
-          <View style={styles.inputWrapper}>
-            <Icon name="hash" size={18} color="#9CA3AF" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. KA01AB1234"
-              placeholderTextColor="#9CA3AF"
-              value={registrationNumber}
-              onChangeText={setRegistrationNumber}
-              autoCapitalize="characters"
-            />
-          </View>
-          {errors.registrationNumber ? <Text style={styles.errorText}>{errors.registrationNumber}</Text> : null}
-        </View>
+            {/* Vehicle */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Your vehicle</Text>
+              <View style={styles.vehicleGrid}>
+                {vehicleTypes.map((item, idx) => {
+                  const isSelected = vehicleType === item.name || vehicleApiType === item.apiType;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      activeOpacity={0.8}
+                      style={[
+                        styles.vehicleTile,
+                        idx % 3 !== 2 && styles.vehicleTileGap,
+                        isSelected && styles.vehicleTileActive,
+                      ]}
+                      onPress={() => selectVehicle(item)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: isSelected }}
+                    >
+                      <MaterialIcon
+                        name={item.icon}
+                        size={26}
+                        color={isSelected ? palette.textInverse : palette.text}
+                      />
+                      <Text style={[styles.vehicleTileText, isSelected && styles.vehicleTileTextActive]}>
+                        {item.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {errorFor('vehicleType') ? <Text style={styles.errorText}>{errorFor('vehicleType')}</Text> : null}
+              <Field
+                label="Registration number"
+                icon="hash"
+                placeholder="e.g. KA01AB1234"
+                value={registrationNumber}
+                onChangeText={setRegistrationNumber}
+                onBlur={() => touch('registrationNumber')}
+                autoCapitalize="characters"
+                style={styles.fieldGap}
+              />
+              {errorFor('registrationNumber') ? (
+                <Text style={styles.errorText}>{errorFor('registrationNumber')}</Text>
+              ) : null}
+            </View>
 
-        {/* Location (optional) */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Location (Optional)</Text>
-          <View style={styles.inputWrapper}>
-            <Icon name="map-pin" size={18} color="#9CA3AF" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your city or area"
-              placeholderTextColor="#9CA3AF"
-              value={location}
-              onChangeText={setLocation}
-            />
-          </View>
-        </View>
+            {/* Notifications */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Notifications</Text>
+              {prefs.map(({ label, sub, icon, value, setter }, i) => (
+                <ListRow
+                  key={label}
+                  icon={icon}
+                  title={label}
+                  subtitle={sub}
+                  onPress={() => setter(!value)}
+                  isLast={i === prefs.length - 1}
+                  right={
+                    <View style={[styles.toggle, value && styles.toggleOn]}>
+                      <View style={[styles.knob, value && styles.knobOn]} />
+                    </View>
+                  }
+                />
+              ))}
+            </View>
 
-        {/* Communication Preferences */}
-        <View style={styles.preferencesSection}>
-          <Text style={styles.sectionTitle}>Communication Preferences</Text>
-
-          {[
-            { label: 'Email Notifications', icon: 'mail', value: emailNotifications, setter: setEmailNotifications },
-            { label: 'SMS Notifications', icon: 'message-square', value: smsNotifications, setter: setSmsNotifications },
-            { label: 'Push Notifications', icon: 'bell', value: pushNotifications, setter: setPushNotifications },
-          ].map(({ label, icon, value, setter }) => (
-            <TouchableOpacity
-              key={label}
-              style={styles.preferenceItem}
-              onPress={() => setter(!value)}
+            {/* Terms */}
+            <Pressable
+              style={styles.terms}
+              onPress={() => setTermsAgreed(!termsAgreed)}
+              hitSlop={6}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: termsAgreed }}
             >
-              <View style={styles.preferenceInfo}>
-                <Icon name={icon} size={20} color="#0D7377" />
-                <Text style={styles.preferenceText}>{label}</Text>
+              <View style={[styles.checkbox, termsAgreed && styles.checkboxChecked]}>
+                {termsAgreed ? <Icon name="check" size={13} color={palette.textInverse} /> : null}
               </View>
-              <View style={[styles.toggle, value && styles.toggleActive]}>
-                <View style={[styles.toggleCircle, value && styles.toggleCircleActive]} />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+              <Text style={styles.termsText}>
+                I agree to the <Text style={styles.termsLink}>Terms and Conditions</Text>
+              </Text>
+            </Pressable>
 
-        {/* Terms */}
-        <TouchableOpacity style={styles.termsContainer} onPress={() => setTermsAgreed(!termsAgreed)}>
-          <View style={[styles.checkbox, termsAgreed && styles.checkboxChecked]}>
-            {termsAgreed && <Icon name="check" size={14} color="#FFFFFF" />}
-          </View>
-          <Text style={styles.termsText}>
-            I agree to the <Text style={styles.termsLink}>Terms and Conditions</Text>
-          </Text>
-        </TouchableOpacity>
+            {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
 
-        {/* Submit error */}
-        {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
+            <PillButton
+              label="Continue"
+              iconRight="arrow-right"
+              variant="ink"
+              onPress={handleContinue}
+              loading={isSubmitting}
+              style={[styles.cta, !isFormValid && styles.ctaDim]}
+            />
+            <Pressable onPress={handleSkip} disabled={isSubmitting} style={styles.skipBtn} hitSlop={6}>
+              <Text style={styles.skipText}>Skip for now</Text>
+            </Pressable>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
 
-        {/* Buttons */}
-        <View style={styles.buttonsContainer}>
-          <TouchableOpacity
-            style={[styles.continueButton, (!isFormValid || isSubmitting) && styles.continueButtonDisabled]}
-            onPress={handleContinue}
-            disabled={isSubmitting}
-            activeOpacity={0.8}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={styles.continueButtonText}>Continue</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.skipButton}
-            onPress={handleSkip}
-            disabled={isSubmitting}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.skipButtonText}>Skip for now</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-      </KeyboardAvoidingView>
-
-      {renderVehicleModal()}
       {renderImagePickerModal()}
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 },
-  header: { marginTop: 20, marginBottom: 20 },
-  title: { fontSize: 26, fontWeight: '700', color: '#1A1A2E', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#6B7280' },
-  progressContainer: { marginBottom: 24 },
-  progressBar: { height: 6, backgroundColor: '#E8F5F4', borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#0D7377', borderRadius: 3 },
-  progressText: { fontSize: 12, color: '#6B7280', marginTop: 8, textAlign: 'right' },
-  profileSection: { alignItems: 'center', marginBottom: 24 },
-  profileImageContainer: { position: 'relative' },
-  profileImage: { width: 100, height: 100, borderRadius: 50 },
-  profilePlaceholder: {
-    width: 100, height: 100, borderRadius: 50, backgroundColor: '#F3F4F6',
-    justifyContent: 'center', alignItems: 'center',
+  root: { flex: 1, backgroundColor: palette.bg },
+  flex: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 48 },
+
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    paddingBottom: 18,
   },
-  cameraIcon: {
-    position: 'absolute', bottom: 0, right: 0, width: 32, height: 32,
-    borderRadius: 16, backgroundColor: '#0D7377', justifyContent: 'center',
-    alignItems: 'center', borderWidth: 2, borderColor: '#FFFFFF',
+  brand: { ...fonts.bold, fontSize: 24, letterSpacing: -0.5, color: palette.text },
+  brandMark: { ...fonts.medium, fontSize: 11 },
+  skipTop: { ...fonts.semibold, fontSize: 15, color: palette.textMuted },
+
+  avatarWrap: { alignItems: 'center', marginTop: 8, marginBottom: 20 },
+  avatarBtn: { width: 104, height: 104 },
+  avatarImg: { width: 104, height: 104, borderRadius: 52, borderWidth: 3, borderColor: palette.ink },
+  avatarPlaceholder: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: palette.line,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  uploadText: { fontSize: 13, color: '#6B7280', marginTop: 8 },
-  inputGroup: { marginBottom: 20 },
-  inputLabel: { fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 },
-  inputWrapper: {
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB',
-    borderRadius: 12, paddingHorizontal: 16, backgroundColor: '#F9FAFB',
+  cameraBadge: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: palette.ink,
+    borderWidth: 3,
+    borderColor: palette.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  inputIcon: { marginRight: 12 },
-  input: { flex: 1, paddingVertical: 14, fontSize: 15, color: '#1A1A2E' },
-  selectWrapper: {
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB',
-    borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#F9FAFB',
+  avatarHint: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginTop: 10 },
+
+  card: {
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 20,
+    marginBottom: 14,
   },
-  selectText: { flex: 1, fontSize: 15, color: '#1A1A2E' },
-  placeholderText: { color: '#9CA3AF' },
-  vehiclePillsRow: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10,
+  cardTitle: { ...fonts.semibold, fontSize: 18, color: palette.text, marginBottom: 16 },
+  fieldGap: { marginTop: 16 },
+  errorText: { ...fonts.medium, fontSize: 12.5, color: palette.danger, marginTop: 8, marginLeft: 6 },
+
+  vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  vehicleTileGap: { marginRight: '2.75%' },
+  vehicleTile: {
+    width: '31.5%',
+    height: 86,
+    borderRadius: radii.lg,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
-  vehiclePill: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    borderWidth: 1.5, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB',
-  },
-  vehiclePillActive: {
-    borderColor: '#0D7377', backgroundColor: '#0D7377',
-  },
-  vehiclePillText: {
-    fontSize: 13, fontWeight: '500', color: '#4B5563',
-  },
-  vehiclePillTextActive: {
-    color: '#FFFFFF', fontWeight: '600',
-  },
-  errorText: { fontSize: 12, color: '#EF4444', marginTop: 4 },
-  preferencesSection: { marginTop: 8, marginBottom: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#1A1A2E', marginBottom: 12 },
-  preferenceItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
-  },
-  preferenceInfo: { flexDirection: 'row', alignItems: 'center' },
-  preferenceText: { fontSize: 15, color: '#1A1A2E', marginLeft: 12 },
+  vehicleTileActive: { backgroundColor: palette.ink },
+  vehicleTileText: { ...fonts.semibold, fontSize: 13, color: palette.text, marginTop: 6 },
+  vehicleTileTextActive: { color: palette.textInverse },
+
   toggle: {
-    width: 44, height: 24, borderRadius: 12, backgroundColor: '#E5E7EB',
-    padding: 2, justifyContent: 'center',
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#E2E2E2',
+    padding: 3,
+    justifyContent: 'center',
   },
-  toggleActive: { backgroundColor: '#0D7377' },
-  toggleCircle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFFFFF' },
-  toggleCircleActive: { alignSelf: 'flex-end' },
-  termsContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
+  toggleOn: { backgroundColor: palette.ink },
+  knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: palette.surface, ...shadow.press },
+  knobOn: { alignSelf: 'flex-end' },
+
+  terms: { flexDirection: 'row', alignItems: 'center', marginTop: 8, marginBottom: 6, paddingHorizontal: 4 },
   checkbox: {
-    width: 20, height: 20, borderWidth: 2, borderColor: '#0D7377',
-    borderRadius: 4, marginRight: 12, justifyContent: 'center', alignItems: 'center',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: palette.textSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  checkboxChecked: { backgroundColor: '#0D7377' },
-  termsText: { fontSize: 14, color: '#6B7280', flex: 1 },
-  termsLink: { color: '#0D7377', fontWeight: '500' },
-  submitError: { fontSize: 13, color: '#EF4444', marginBottom: 12, textAlign: 'center' },
-  buttonsContainer: { gap: 12, marginTop: 16 },
-  continueButton: {
-    backgroundColor: '#0D7377', borderRadius: 12, paddingVertical: 16,
-    alignItems: 'center', justifyContent: 'center', minHeight: 52,
+  checkboxChecked: { backgroundColor: palette.ink, borderColor: palette.ink },
+  termsText: { ...fonts.medium, flex: 1, fontSize: 14, color: palette.textMuted },
+  termsLink: { ...fonts.semibold, color: palette.text },
+
+  submitError: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.danger,
+    textAlign: 'center',
+    marginTop: 12,
   },
-  continueButtonDisabled: { backgroundColor: '#9CA3AF' },
-  continueButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  skipButton: { paddingVertical: 12, alignItems: 'center' },
-  skipButtonText: { color: '#6B7280', fontSize: 14, fontWeight: '500' },
-  // Modal styles — the overlay fills the root of a real <Modal>.
-  modalOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    // The tint lives on modalBackdrop: a translucent background on this
-    // elevated view let Android's shadow paint through as a lighter strip.
-    backgroundColor: 'transparent', justifyContent: 'flex-end',
-    zIndex: 99999, elevation: 25,
+  cta: { marginTop: 18 },
+  ctaDim: { opacity: 0.55 },
+  skipBtn: { alignItems: 'center', paddingVertical: 16 },
+  skipText: { ...fonts.semibold, fontSize: 15, color: palette.textMuted },
+
+  // Modal — the overlay fills the root of a real <Modal>.
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  sheet: {
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 40,
   },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+  grabber: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    marginBottom: 18,
   },
-  modalContent: {
-    backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingTop: 20, paddingBottom: 40, maxHeight: '75%',
-  },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 24, marginBottom: 16,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '600', color: '#1A1A2E' },
-  vehicleOption: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 14, paddingHorizontal: 24,
-    borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
-  },
-  vehicleOptionSelected: { backgroundColor: '#0D7377' },
-  vehicleOptionText: { fontSize: 15, color: '#1A1A2E', marginLeft: 12, flex: 1 },
-  vehicleOptionTextSelected: { color: '#FFFFFF', fontWeight: '600' },
-  imageModalContent: {
-    backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24,
-  },
-  imageOption: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
-  },
-  imageOptionText: { fontSize: 15, color: '#1A1A2E', marginLeft: 16 },
-  cancelButton: { marginTop: 16, paddingVertical: 12, alignItems: 'center' },
-  cancelButtonText: { fontSize: 15, color: '#6B7280', fontWeight: '500' },
+  sheetTitle: { ...fonts.semibold, fontSize: 19, color: palette.text, marginBottom: 6 },
 });
 
 export default UserOnboarding;

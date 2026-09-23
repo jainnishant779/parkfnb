@@ -2,42 +2,40 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ScrollView,
   Modal,
   Platform,
   PermissionsAndroid,
-  FlatList,
   Linking,
   ActivityIndicator,
   Image,
-  Dimensions,
-  Animated,
-  Easing,
-  LayoutAnimation,
-  UIManager,
 } from 'react-native';
-
-// Enable LayoutAnimation on Android. Required so the recommendations
-// section can grow / shrink smoothly when "View All" is toggled.
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
 import { AppAlert } from '../../components/AppAlert';
 import Geolocation from '@react-native-community/geolocation';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
-import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, UrlTile, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as parkingService from '../../services/parkingService';
 import { useAuth } from '../../context/AuthContext';
-import { palette, radii, fontStacks } from '../../theme';
-import { VehicleIcon, ParkingPinIcon } from '../../components/glass/VehicleIcons';
+import { palette, radii, fonts, shadow } from '../../theme';
 import { resolveImageUri } from '../../utils/imageUri';
+import {
+  Avatar,
+  IconCircle,
+  PillButton,
+  SearchPill,
+  SectionTitle,
+  StatusTag,
+  ProgressTrack,
+  IsoBlock,
+  InfoGrid,
+  Chip,
+  EmptyState,
+} from '../../components/ui';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -60,27 +58,6 @@ const travelEstimate = (distanceKm) => {
     return `${Math.max(1, Math.round((distanceKm / 5) * 60))} min walk`;
   }
   return `${Math.max(1, Math.round((distanceKm / 20) * 60))} min drive`;
-};
-
-// Amenity id → short chip label for the nearby cards. Only ids we
-// actually derive from backend fields are listed; anything else falls
-// back to a de-underscored version of the id.
-const amenityChipLabels = {
-  ev_charging: 'EV Friendly',
-  covered: 'Covered',
-  security: 'Guarded',
-  cctv: 'CCTV',
-  accessible: 'Accessible',
-  valet: 'Valet',
-};
-
-const amenityChipIcons = {
-  ev_charging: 'flash',
-  covered: 'weather-sunny',
-  security: 'shield-check-outline',
-  cctv: 'cctv',
-  accessible: 'wheelchair-accessibility',
-  valet: 'account-tie-outline',
 };
 
 // Haversine distance in km between two lat/lng points
@@ -247,15 +224,6 @@ const amenityOptions = [
 ];
 
 
-// The three-step explainer under the headline. Purely descriptive — these
-// are not filters and nothing routes off them, so they stay a static array
-// rather than becoming pressable like `categories` above.
-const journeySteps = [
-  { id: 'find', icon: 'map-search-outline', label: 'FIND' },
-  { id: 'book', icon: 'calendar-check-outline', label: 'BOOK' },
-  { id: 'park', icon: 'car-outline', label: 'PARK' },
-];
-
 // Default to Delhi, India for demo
 const initialRegion = {
   latitude: 28.6139,
@@ -264,115 +232,12 @@ const initialRegion = {
   longitudeDelta: 0.02,
 };
 
-// Custom map style for light, clean appearance
-const mapStyle = [
-  {
-    elementType: 'geometry',
-    stylers: [{ color: '#f5f5f5' }],
-  },
-  {
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#616161' }],
-  },
-  {
-    elementType: 'labels.text.stroke',
-    stylers: [{ color: '#f5f5f5' }],
-  },
-  {
-    featureType: 'administrative.land_parcel',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#bdbdbd' }],
-  },
-  {
-    featureType: 'poi',
-    elementType: 'geometry',
-    stylers: [{ color: '#eeeeee' }],
-  },
-  {
-    featureType: 'poi',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#757575' }],
-  },
-  {
-    featureType: 'poi.park',
-    elementType: 'geometry',
-    stylers: [{ color: '#e5e5e5' }],
-  },
-  {
-    featureType: 'poi.park',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#9e9e9e' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry',
-    stylers: [{ color: '#ffffff' }],
-  },
-  {
-    featureType: 'road.arterial',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#757575' }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'geometry',
-    stylers: [{ color: '#dadada' }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#616161' }],
-  },
-  {
-    featureType: 'road.local',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#9e9e9e' }],
-  },
-  {
-    featureType: 'transit.line',
-    elementType: 'geometry',
-    stylers: [{ color: '#e5e5e5' }],
-  },
-  {
-    featureType: 'transit.station',
-    elementType: 'geometry',
-    stylers: [{ color: '#eeeeee' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'geometry',
-    stylers: [{ color: '#c9c9c9' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#9e9e9e' }],
-  },
-];
-
 const HomePage = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const auth = useAuth();
-  // Floating glass tab bar height (64) + outer padding (max(insets.bottom, 12)) + a little air.
-  const tabBarHeight = 64 + Math.max(insets.bottom, 12) + 12;
-
   // Greeting is computed once per mount — re-deriving it on every render
   // would churn the header for a string that changes a few times a day.
   const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
-  const avatarInitial = (auth?.user?.legalName || auth?.user?.email || '?')
-    .trim()
-    .charAt(0)
-    .toUpperCase() || '?';
-
-  // First name only — the greeting is a one-liner and a full legal name
-  // would wrap or truncate next to the eco card. Falls back to an empty
-  // string (not a placeholder name) so the greeting reads "Good morning 👋"
-  // rather than inventing a user who isn't signed in yet.
-  const firstName = useMemo(() => {
-    const name = (auth?.user?.legalName || '').trim();
-    return name ? name.split(/\s+/)[0] : '';
-  }, [auth?.user?.legalName]);
-
   // Favourites are UI-only for now — the backend has no favourites
   // endpoint, so the heart state lives with the screen (same approach as
   // ParkingDetailsPage) rather than pretending to persist.
@@ -388,48 +253,18 @@ const HomePage = ({ navigation }) => {
   const [selectedSpot, setSelectedSpot] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedParkingData, setSelectedParkingData] = useState(null);
-  const [viewMode, setViewMode] = useState('map'); // 'map' or 'list'
+  const viewMode = 'map'; // list view removed; map is always shown
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // Map card: expanded height + street route to the selected lot.
+  const [mapExpanded, setMapExpanded] = useState(false);
+  const [routeCoords, setRouteCoords] = useState([]);
+  const [routeInfo, setRouteInfo] = useState(null);
 
   // Filter states
   const [filterModalVisible, setFilterModalVisible] = useState(false);
-  // The Nearby Parking section toggles between a compact (one row of
-  // horizontal cards) and an expanded (full-screen vertical list) state
-  // *in place* — there is no separate modal sheet that opens.
-  const [recommendationsExpanded, setRecommendationsExpanded] = useState(false);
-
-  // Drives the section's height between compact (intrinsic) and
-  // expanded (full visible area above the menu). LayoutAnimation is a
-  // no-op on Fabric, so we animate the height value directly with
-  // useNativeDriver:false (height isn't native-driver compatible).
-  const SCREEN_HEIGHT = Dimensions.get('window').height;
-  const expandAnim = useRef(new Animated.Value(0)).current;
-  // Measured height of the map area (the section's parent). Used as
-  // the upper bound for the expanded section so its top edge never
-  // climbs above the parent — without this, the section would render
-  // off-screen at the top when fully expanded.
-  const [mapAreaHeight, setMapAreaHeight] = useState(0);
-
-  const openAllRecommendations = useCallback(() => {
-    setRecommendationsExpanded(true);
-    Animated.timing(expandAnim, {
-      toValue: 1,
-      duration: 420,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [expandAnim]);
-
-  const closeAllRecommendations = useCallback(() => {
-    Animated.timing(expandAnim, {
-      toValue: 0,
-      duration: 320,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished) setRecommendationsExpanded(false);
-    });
-  }, [expandAnim]);
+  // Nearby list shows the closest few until "See all" is tapped.
+  const [showAllSpots, setShowAllSpots] = useState(false);
 
   const [selectedPriceRange, setSelectedPriceRange] = useState('all');
   const [selectedDuration, setSelectedDuration] = useState('all');
@@ -453,13 +288,6 @@ const HomePage = ({ navigation }) => {
   const [parkingSpots, setParkingSpots] = useState([]);
   const [isLoadingSpots, setIsLoadingSpots] = useState(false);
   const [spotsError, setSpotsError] = useState('');
-
-  // Measured height of the "Nearby Parking" bottom sheet — used to pin the
-  // floating list-toggle and my-location buttons just above it. The sheet
-  // has dynamic height (loading state vs. cards vs. error), so a hardcoded
-  // bottom offset would either overlap the sheet or float in mid-screen.
-  const [bottomSheetHeight, setBottomSheetHeight] = useState(0);
-  const FLOATING_BUTTON_GAP = 12;
 
   // Hide/show bottom tab bar based on search focus
   useEffect(() => {
@@ -607,7 +435,7 @@ const HomePage = ({ navigation }) => {
   // pin the fallback to Delhi so the user always sees *some* listings, and
   // we set a clear `locationName` so they know the location wasn't real.
   useEffect(() => {
-    const useFallbackLocation = (label) => {
+    const applyFallbackLocation = (label) => {
       if (locationResolvedRef.current) return;
       locationResolvedRef.current = true;
       // Don't overwrite the map region — keep `initialRegion` (Delhi) so
@@ -659,7 +487,7 @@ const HomePage = ({ navigation }) => {
             error?.code === 2 ? 'Turn on location' :
             error?.code === 3 ? 'Location timed out' :
             'Location unavailable';
-          useFallbackLocation(label);
+          applyFallbackLocation(label);
           // Code 2 = device location services are OFF. Permission alone
           // can't fix this — the user has to enable location in system
           // settings. Pop a prompt with a deep link.
@@ -698,7 +526,7 @@ const HomePage = ({ navigation }) => {
           if (result === PermissionsAndroid.RESULTS.GRANTED) {
             getCurrentLocation();
           } else if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
-            useFallbackLocation('Location disabled');
+            applyFallbackLocation('Location disabled');
             AppAlert.alert(
               'Location Permission Required',
               'Please enable location access in Settings to see nearby parking spots.',
@@ -708,11 +536,11 @@ const HomePage = ({ navigation }) => {
               ]
             );
           } else {
-            useFallbackLocation('Location disabled');
+            applyFallbackLocation('Location disabled');
           }
         } catch (err) {
           console.warn('[Location] permission error:', err);
-          useFallbackLocation('Location unavailable');
+          applyFallbackLocation('Location unavailable');
         }
       } else {
         getCurrentLocation();
@@ -902,453 +730,220 @@ const HomePage = ({ navigation }) => {
     setSelectedSpot(null);
   };
 
-  // Nearby Parking card — shared by the compact horizontal strip and the
-  // expanded vertical list so the two modes can't drift apart. `onPress`
-  // differs between them (the expanded list collapses first), so it's
-  // passed in rather than baked in.
-  const renderNearbyCard = (spot, { onPress, style }) => {
+  // ─── Render helpers ────────────────────────────────────────────────────────
+
+  const displayName = (auth?.user?.legalName || '').trim() || greeting;
+  // The route is drawn to the lot the user picked, else the closest one.
+  const routeSpot = filteredSpots.find((sp) => sp.id === selectedSpot) || filteredSpots[0] || null;
+  // Rounded so small GPS jitter doesn't refetch the route.
+  const fromKey = userLocation
+    ? `${userLocation.latitude.toFixed(3)},${userLocation.longitude.toFixed(3)}`
+    : '';
+
+  // Street-following route from OSRM; falls back to a straight line.
+  useEffect(() => {
+    if (!userLocation || !routeSpot) {
+      setRouteCoords([]);
+      setRouteInfo(null);
+      return undefined;
+    }
+    const from = { latitude: userLocation.latitude, longitude: userLocation.longitude };
+    const to = { latitude: routeSpot.latitude, longitude: routeSpot.longitude };
+    setRouteCoords([from, to]);
+    setRouteInfo(null);
+    const controller = new AbortController();
+    fetch(
+      `https://router.project-osrm.org/route/v1/driving/${from.longitude},${from.latitude};${to.longitude},${to.latitude}?overview=full&geometries=geojson`,
+      { signal: controller.signal },
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        const route = data?.routes?.[0];
+        if (!route) return;
+        setRouteCoords(route.geometry.coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng })));
+        setRouteInfo({
+          km: (route.distance / 1000).toFixed(1),
+          min: Math.max(1, Math.round(route.duration / 60)),
+        });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromKey, routeSpot?.id]);
+  // Map mode shows the closest few until "See all"; list mode shows everything.
+  const visibleSpots = viewMode === 'list' || showAllSpots ? filteredSpots : filteredSpots.slice(0, 3);
+
+  const availabilityLabel = (spot) =>
+    spot.available === 0 ? 'Booked' : spot.available < 5 ? `${spot.available} left` : `${spot.available} free`;
+
+  // Feature card in the "Current tracking" style: status pill, big name,
+  // a dotted track for how full the lot is, distance / price underneath and
+  // the isometric block peeking in from the right.
+  const renderSpotCard = (spot, index) => {
+    const tone = index % 2 === 0 ? 'peach' : 'blue';
     const isFavorite = favoriteSpotIds.includes(spot.id);
-    const thumbnail = spot.images?.[0];
-    // The backend has no review count — only `average_rating`, which is 0
-    // until someone actually rates the space. Showing a star with no
-    // rating behind it would be inventing social proof, so unrated
-    // listings read "New" instead.
+    const occupied = spot.spots > 0 ? (spot.spots - spot.available) / spot.spots : 0;
+    const fullness = Math.min(3, Math.max(0, Math.round(occupied * 3)));
     const hasRating = spot.rating > 0;
 
     return (
       <TouchableOpacity
-        // Keyed here rather than at each call site: the compact list maps over
-        // spots directly, and FlatList is happy to receive one too.
         key={spot.id}
-        style={[styles.recommendationCard, style]}
-        onPress={onPress}
         activeOpacity={0.9}
+        onPress={() => handleSpotPress(spot)}
+        style={[
+          styles.spotCard,
+          { backgroundColor: tone === 'peach' ? palette.peachSoft : palette.blueSoft },
+          selectedSpot === spot.id && styles.spotCardSelected,
+        ]}
       >
-        <View style={styles.recommendationImageLeft}>
-          {thumbnail ? (
-            <Image source={{ uri: resolveImageUri(thumbnail) }} style={styles.recommendationThumbnail} />
-          ) : (
-            <ParkingPinIcon size={28} color={palette.primary} />
-          )}
+        <View style={styles.spotArt} pointerEvents="none">
+          <IsoBlock size={150} tone={tone} />
+        </View>
+
+        <View style={styles.spotTop}>
+          <StatusTag label={availabilityLabel(spot)} tone={spot.available === 0 ? 'danger' : 'ink'} />
           <TouchableOpacity
-            style={styles.favoriteButton}
             onPress={() => toggleFavorite(spot.id)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            hitSlop={10}
+            activeOpacity={0.7}
+            style={styles.heartBtn}
           >
             <MaterialIcon
               name={isFavorite ? 'heart' : 'heart-outline'}
-              size={16}
-              color={isFavorite ? palette.danger : '#FFFFFF'}
+              size={17}
+              color={isFavorite ? palette.danger : palette.text}
             />
           </TouchableOpacity>
-          {spot.available === 0 ? (
-            <View style={styles.lowAvailabilityBadge}>
-              <Text style={styles.lowAvailabilityText}>Booked</Text>
-            </View>
-          ) : spot.available < 5 && (
-            <View style={styles.lowAvailabilityBadge}>
-              <Text style={styles.lowAvailabilityText}>{spot.available} left</Text>
-            </View>
-          )}
         </View>
 
-        <View style={styles.recommendationContent}>
-          <Text style={styles.recommendationName} numberOfLines={1}>{spot.name}</Text>
-
-          <View style={styles.recommendationRating}>
-            {hasRating ? (
-              <>
-                <MaterialIcon name="star" size={13} color={palette.warning} />
-                <Text style={styles.recommendationRatingText}>{spot.rating.toFixed(1)}</Text>
-              </>
-            ) : (
-              <Text style={styles.recommendationNewBadge}>New</Text>
-            )}
-          </View>
-
-          <View style={styles.recommendationMeta}>
-            <Icon name="map-pin" size={12} color={palette.textSubtle} />
-            <Text style={styles.recommendationDistance}>{spot.distance}</Text>
-            {spot.travelTime && (
-              <>
-                <Text style={styles.recommendationDot}>•</Text>
-                <Text style={styles.recommendationSpots}>{spot.travelTime}</Text>
-              </>
-            )}
-          </View>
-
-          {spot.amenities?.length > 0 && (
-            <View style={styles.cardAmenityChipRow}>
-              {spot.amenities.slice(0, 3).map((amenity) => (
-                <View key={amenity} style={styles.cardAmenityChip}>
-                  <MaterialIcon
-                    name={amenityChipIcons[amenity] || 'check-circle-outline'}
-                    size={12}
-                    color={palette.primary}
-                  />
-                  <Text style={styles.cardAmenityChipText}>
-                    {amenityChipLabels[amenity] || amenity.replace(/_/g, ' ')}
-                  </Text>
-                </View>
-              ))}
+        <View style={styles.spotBody}>
+          <Text style={styles.spotName} numberOfLines={1}>{spot.name}</Text>
+          <ProgressTrack
+            steps={4}
+            current={fullness}
+            trackColor={tone === 'peach' ? '#F7D3A6' : '#BCD0F4'}
+            style={styles.spotTrack}
+          />
+          <View style={styles.spotMetaRow}>
+            <View style={styles.spotMetaCol}>
+              <Text style={styles.spotMetaTitle}>{spot.distance}</Text>
+              <Text style={styles.spotMetaSub} numberOfLines={1}>
+                {spot.travelTime || spot.city || 'Nearby'}
+              </Text>
             </View>
-          )}
-        </View>
-
-        <View style={styles.recommendationPriceColumn}>
-          <Text style={styles.recommendationPrice}>
-            {spot.price}<Text style={styles.recommendationPriceUnit}>/hr</Text>
-          </Text>
-          <Icon name="chevron-right" size={18} color={palette.textSubtle} />
+            <View style={styles.spotMetaCol}>
+              <Text style={styles.spotMetaTitle}>{spot.price}/hr</Text>
+              <Text style={styles.spotMetaSub}>
+                {hasRating ? `${spot.rating.toFixed(1)} rating` : 'New'}
+              </Text>
+            </View>
+          </View>
         </View>
       </TouchableOpacity>
     );
   };
 
-  // Render list view header — results count and view toggle only
-  const renderListHeader = () => (
-    <View style={styles.listHeaderContainer}>
-      <View style={styles.listResultsRow}>
-        <View style={styles.resultsInfo}>
-          <Text style={styles.resultsCount}>{filteredSpots.length} parking spots</Text>
+  const renderSpotsContent = () => {
+    if (isLoadingSpots) {
+      return (
+        <View style={styles.stateBox}>
+          <ActivityIndicator color={palette.ink} />
+          <Text style={styles.stateText}>Finding parking near you</Text>
         </View>
-        <View style={styles.viewToggle}>
-          <TouchableOpacity
-            style={[styles.viewToggleButton, viewMode === 'list' && styles.viewToggleButtonActive]}
-            onPress={() => setViewMode('list')}
-          >
-            <Icon name="list" size={18} color={viewMode === 'list' ? '#FFFFFF' : '#A1A1AA'} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewToggleButton, viewMode === 'map' && styles.viewToggleButtonActive]}
-            onPress={() => setViewMode('map')}
-          >
-            <Icon name="map" size={18} color={viewMode === 'map' ? '#FFFFFF' : '#A1A1AA'} />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-
-  // Render parking card for list view
-  const renderParkingCard = ({ item }) => (
-    <TouchableOpacity
-      style={styles.parkingCard}
-      onPress={() => handleSpotPress(item)}
-    >
-      <View style={styles.parkingCardImage}>
-        <ParkingPinIcon size={36} color={palette.primary} />
-        {item.available === 0 ? (
-          <View style={[styles.lowAvailabilityBadgeCard, { backgroundColor: '#EF4444' }]}>
-            <Text style={styles.lowAvailabilityTextCard}>Fully Booked</Text>
-          </View>
-        ) : item.available < 5 && (
-          <View style={styles.lowAvailabilityBadgeCard}>
-            <Text style={styles.lowAvailabilityTextCard}>{item.available} left</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.parkingCardContent}>
-        <View style={styles.parkingCardHeader}>
-          <Text style={styles.parkingCardName} numberOfLines={1}>{item.name}</Text>
-          {item.rating > 0 ? (
-            <View style={styles.parkingCardRating}>
-              <Icon name="star" size={12} color="#F59E0B" />
-              <Text style={styles.parkingCardRatingText}>{item.rating}</Text>
-            </View>
-          ) : (
-            <Text style={styles.newTag}>New</Text>
-          )}
-        </View>
-        <Text style={styles.parkingCardAddress} numberOfLines={1}>{item.address}</Text>
-        <View style={styles.parkingCardMeta}>
-          <View style={styles.metaItem}>
-            <Icon name="navigation" size={12} color={palette.primary} />
-            <Text style={styles.metaText}>{item.distance}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <VehicleIcon type={item.type} size={12} color={palette.primary} />
-            <Text style={[styles.metaText, item.available === 0 && { color: '#EF4444' }]}>
-              {item.available === 0 ? 'No spots left' : `${item.available} spots`}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.parkingCardAmenities}>
-          {item.amenities.slice(0, 3).map((amenity, index) => (
-            <View key={index} style={styles.amenityBadge}>
-              <Text style={styles.amenityBadgeText}>{amenity.replace('_', ' ')}</Text>
-            </View>
-          ))}
-          {item.amenities.length > 3 && (
-            <View style={styles.amenityBadge}>
-              <Text style={styles.amenityBadgeText}>+{item.amenities.length - 3}</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.parkingCardFooter}>
-          <View>
-            <Text style={styles.parkingCardPrice}>{item.price}<Text style={styles.parkingCardPriceUnit}>/hr</Text></Text>
-          </View>
-          {item.available === 0 ? (
-            <View style={[styles.parkingCardBookButton, { backgroundColor: '#6B7280' }]}>
-              <Text style={styles.parkingCardBookButtonText}>Booked</Text>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.parkingCardBookButton}
-              onPress={() => navigation.navigate('ParkingDetails', { parkingData: item })}
-            >
-              <Text style={styles.parkingCardBookButtonText}>Book Now</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  // Render recommendations section for list view
-  const renderListRecommendations = () => (
-    <View style={styles.listRecommendationsSection}>
-      <View style={styles.listRecommendationsHeader}>
-        <View style={styles.recommendationsTitleRow}>
-          <Text style={styles.recommendationsTitle}>Nearby Parking</Text>
-        </View>
-        <TouchableOpacity onPress={openAllRecommendations} activeOpacity={0.7}>
-          <Text style={styles.viewAllText}>View All</Text>
-        </TouchableOpacity>
-      </View>
-
-      {isLoadingSpots ? (
-        <ActivityIndicator color="#1A73E8" style={{ marginVertical: 16 }} />
-      ) : spotsError ? (
-        <Text style={styles.spotsErrorText}>{spotsError}</Text>
-      ) : (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.listRecommendationsScrollContent}
-      >
-        {filteredSpots.slice(0, 6).map((spot) => (
-          <TouchableOpacity
-            key={spot.id}
-            style={[
-              styles.listRecommendationCard,
-              selectedSpot === spot.id && styles.recommendationCardSelected,
-            ]}
-            onPress={() => handleSpotPress(spot)}
-            activeOpacity={0.9}
-          >
-            <View style={styles.recommendationImageLeft}>
-              <ParkingPinIcon size={24} color={palette.primary} />
-              {spot.available === 0 ? (
-                <View style={[styles.lowAvailabilityBadge, { backgroundColor: '#EF4444' }]}>
-                  <Text style={styles.lowAvailabilityText}>Booked</Text>
-                </View>
-              ) : spot.available < 5 && (
-                <View style={styles.lowAvailabilityBadge}>
-                  <Text style={styles.lowAvailabilityText}>{spot.available} left</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.recommendationContent}>
-              <View style={styles.recommendationCardHeader}>
-                <Text style={styles.recommendationName} numberOfLines={1}>{spot.name}</Text>
-              </View>
-
-              <View style={styles.recommendationMeta}>
-                <Icon name="navigation" size={12} color={palette.primary} />
-                <Text style={styles.recommendationDistance}>{spot.distance}</Text>
-                <Text style={styles.recommendationDot}>•</Text>
-                <Text style={[styles.recommendationSpots, spot.available === 0 && { color: '#EF4444' }]}>
-                  {spot.available === 0 ? 'No spots left' : `${spot.available} spots`}
-                </Text>
-              </View>
-
-              <View style={styles.recommendationFooter}>
-                <Text style={styles.recommendationPrice}>{spot.price}<Text style={styles.recommendationPriceUnit}>/hr</Text></Text>
-                {spot.available === 0 ? (
-                  <View style={[styles.recommendationBookButton, { backgroundColor: '#6B7280' }]}>
-                    <Text style={styles.recommendationBookButtonText}>Booked</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.recommendationBookButton}
-                    onPress={() => {
-                      navigation.navigate('ParkingDetails', { parkingData: spot });
-                    }}
-                  >
-                    <Text style={styles.recommendationBookButtonText}>Book</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-      )}
-    </View>
-  );
-
-  // Render "All Parking" section title
-  const renderAllParkingTitle = () => (
-    <View style={styles.allParkingTitleContainer}>
-      <Icon name="grid" size={18} color="#1A73E8" />
-      <Text style={styles.allParkingTitle}>All Parking</Text>
-    </View>
-  );
-
-  // Render list view
-  const renderListView = () => (
-    <FlatList
-      data={filteredSpots}
-      renderItem={renderParkingCard}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.listContent}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={
-        <>
-          {renderListHeader()}
-          {!isSearchFocused && renderListRecommendations()}
-          {renderAllParkingTitle()}
-        </>
-      }
-      ListEmptyComponent={
-        isLoadingSpots ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color="#1A73E8" />
-            <Text style={[styles.emptySubtitle, { marginTop: 16 }]}>Finding parking spots nearby...</Text>
-          </View>
-        ) : spotsError ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconContainer}>
-              <Icon name="wifi-off" size={40} color="#6B7280" />
-            </View>
-            <Text style={styles.emptyTitle}>Could Not Load Spots</Text>
-            <Text style={styles.emptySubtitle}>{spotsError}</Text>
-            <TouchableOpacity style={styles.emptyButton} onPress={() => userLocation && fetchSpots(userLocation.latitude, userLocation.longitude)}>
-              <Text style={styles.emptyButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : !userLocation ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconContainer}>
-              <Icon name="map-pin" size={40} color="#6B7280" />
-            </View>
-            <Text style={styles.emptyTitle}>Waiting for Location</Text>
-            <Text style={styles.emptySubtitle}>Allow location access to see nearby parking spots</Text>
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconContainer}>
-              <Icon name="search" size={40} color="#6B7280" />
-            </View>
-            <Text style={styles.emptyTitle}>No Parking Found</Text>
-            <Text style={styles.emptySubtitle}>
-              Try adjusting your filters or search in a different area
-            </Text>
-            <TouchableOpacity style={styles.emptyButton} onPress={resetFilters}>
-              <Text style={styles.emptyButtonText}>Reset Filters</Text>
-            </TouchableOpacity>
-          </View>
-        )
-      }
-    />
-  );
+      );
+    }
+    if (spotsError) {
+      return (
+        <EmptyState
+          title="Could not load spots"
+          subtitle={spotsError}
+          action="Retry"
+          onAction={() => userLocation && fetchSpots(userLocation.latitude, userLocation.longitude)}
+        />
+      );
+    }
+    if (!userLocation) {
+      return (
+        <EmptyState
+          title="Waiting for location"
+          subtitle="Allow location access to see parking near you."
+          tone="blue"
+        />
+      );
+    }
+    if (filteredSpots.length === 0) {
+      return (
+        <EmptyState
+          title="No parking found"
+          subtitle="Try other filters or search a different area."
+          action="Reset filters"
+          onAction={resetFilters}
+        />
+      );
+    }
+    return visibleSpots.map(renderSpotCard);
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']} mode="padding">
-      {/* Header Panel - covers brand row, greeting, search bar, and category buttons */}
-      <View style={styles.headerPanel}>
-        {/* Brand Row — logo mark + wordmark on the left, bell and avatar right */}
-        <View style={styles.header}>
-          <View style={styles.brandLockup}>
-            <Image
-              source={require('../../assets/logo-mark.png')}
-              style={styles.brandMark}
-              resizeMode="contain"
-            />
-            <View>
-              <Text style={styles.brandWordmark}>PARKFNB</Text>
-              <Text style={styles.brandTagline}>SMART PARKING / BRIGHTER CITIES</Text>
-            </View>
-          </View>
-          <View style={styles.headerRight}>
-            {/* The bell that used to sit here had no handler and a permanent
-                "unread" dot: the consumer app has no notifications screen yet
-                (NotificationCenter.js is empty). Bring it back with the feature. */}
-            {/* The avatar is the only route into the profile from here, and
-                Profile is a sibling tab rather than a stack screen. */}
-            <TouchableOpacity
-              style={styles.avatarButton}
-              onPress={() => navigation.navigate('Profile')}
-            >
-              <Text style={styles.avatarInitial}>{avatarInitial}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Compact Greeting */}
-        <View style={styles.greetingSection}>
-          <Text style={styles.greetingLabel} numberOfLines={1}>
-            {greeting}{firstName ? `, ${firstName}` : ''} 👋
-          </Text>
-          <Text style={styles.greetingSubtitle}>Find & book parking spots near you</Text>
-        </View>
-
-        {/* Search Section */}
-        <View style={styles.searchSection}>
-          <View style={styles.searchBar}>
-            <Icon name="search" size={20} color={palette.primary} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search area or landmark"
-              placeholderTextColor={palette.textSubtle}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-              onSubmitEditing={handleLocationSearch}
-              returnKeyType="search"
-              underlineColorAndroid="transparent"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Icon name="x" size={18} color={palette.textSubtle} />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.gpsButtonMap} onPress={centerOnUserLocation}>
-              <Icon name="crosshair" size={18} color={palette.primary} />
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={styles.searchButton} onPress={() => setFilterModalVisible(true)}>
-            <Icon name="sliders" size={20} color="#FFFFFF" />
-            {activeFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={{ paddingTop: insets.top + 8 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Profile row */}
+        <View style={styles.topRow}>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
+            <Avatar name={auth?.user?.legalName || ''} size={58} />
           </TouchableOpacity>
+          <View style={styles.topText}>
+            <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
+            <TouchableOpacity onPress={handleLocationPillPress} activeOpacity={0.7} style={styles.locRow}>
+              <Text style={styles.locText} numberOfLines={1}>{locationName}</Text>
+              <Icon name="chevron-down" size={16} color={palette.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <IconCircle
+            icon="sliders"
+            size={50}
+            badge={activeFilterCount > 0}
+            onPress={() => setFilterModalVisible(true)}
+          />
         </View>
 
-        {/* Category Filters — all share the same colour family as the
-            header (white circle, teal glyph). Active state inverts:
-            teal circle, white glyph. Mirrors the active-tab look. */}
-        <View style={styles.categorySection}>
+        {/* Content panel */}
+        <View style={[styles.panel, { paddingBottom: insets.bottom + 120 }]}>
+          <SearchPill
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search area or landmark"
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
+            onSubmitEditing={handleLocationSearch}
+            returnKeyType="search"
+            right={
+              searchQuery.length > 0 ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={10}>
+                  <Icon name="x" size={18} color={palette.textMuted} />
+                </TouchableOpacity>
+              ) : null
+            }
+          />
+
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryScrollContent}
+            contentContainerStyle={styles.chipsRow}
           >
             {categories.map((category) => {
               const active = selectedCategory === category.id;
               return (
                 <TouchableOpacity
                   key={category.id}
-                  style={[
-                    styles.categoryButton,
-                    active && styles.categoryButtonActive,
-                  ]}
+                  activeOpacity={0.8}
+                  style={[styles.catChip, active && styles.catChipActive]}
                   onPress={() => {
                     setSelectedCategory(category.id);
                     if (userLocation) {
@@ -1358,410 +953,261 @@ const HomePage = ({ navigation }) => {
                 >
                   <MaterialIcon
                     name={category.icon}
-                    size={20}
+                    size={18}
                     color={active ? palette.textInverse : palette.text}
                   />
-                  <Text
-                    style={[
-                      styles.categoryButtonLabel,
-                      active && styles.categoryButtonLabelActive,
-                    ]}
-                  >
+                  <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
                     {category.label}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
-        </View>
-      </View>
 
-      {/* Map + List Area */}
-      <View
-        style={[styles.mapArea, { paddingBottom: tabBarHeight }]}
-        onLayout={(e) => {
-          const h = e.nativeEvent.layout.height;
-          if (h && Math.abs(h - mapAreaHeight) > 1) setMapAreaHeight(h);
-        }}
-      >
-        {/* Map Container - Always Mounted to prevent black flash on Android */}
-        <View
-          style={[
-            styles.mapContainerAlwaysMounted,
-            viewMode !== 'map' && styles.hiddenContainer
-          ]}
-          pointerEvents={viewMode === 'map' ? 'auto' : 'none'}
-        >
-          <View style={styles.mapWrapper}>
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-              provider={PROVIDER_GOOGLE}
-              initialRegion={mapRegion}
-              showsUserLocation={true}
-              showsMyLocationButton={false}
-              followsUserLocation={true}
-              onUserLocationChange={handleUserLocationChange}
-              customMapStyle={mapStyle}
-              loadingEnabled={true}
-              loadingIndicatorColor="#1A73E8"
-              loadingBackgroundColor="#FFFFFF"
-              renderToHardwareTextureAndroid={true}
-              moveOnMarkerPress={false}
-            >
-            {/* User Location Marker */}
-            {userLocation && (
-              <>
-                {/* Outer pulsing circle */}
-                <Circle
-                  center={userLocation}
-                  radius={100}
-                  strokeColor="rgba(26, 115, 232, 0.3)"
-                  fillColor="rgba(26, 115, 232, 0.1)"
-                />
-                {/* User location marker */}
-                <Marker
-                  coordinate={userLocation}
-                  anchor={{ x: 0.5, y: 0.5 }}
-                >
-                  <View style={styles.userLocationMarker}>
-                    <View style={styles.userLocationOuter}>
-                      <View style={styles.userLocationInner} />
-                    </View>
-                  </View>
-                </Marker>
-              </>
-            )}
-            {filteredSpots.map((spot) => {
-              const isRange = spot.minPrice != null && spot.maxPrice != null && spot.minPrice !== spot.maxPrice;
-              const active = selectedSpot === spot.id;
-              return (
-                <Marker
-                  key={spot.id}
-                  coordinate={{
-                    latitude: spot.latitude,
-                    longitude: spot.longitude,
-                  }}
-                  onPress={() => handleSpotPress(spot)}
-                  tracksViewChanges={Platform.OS === 'ios'}
-                >
-                  <View style={styles.pinWrapper}>
-                    <View style={[styles.pinContainer, active && styles.pinContainerActive]}>
-                      {isRange ? (
-                        <View style={[styles.pinBox, active && styles.pinBoxActive]}>
-                          <Text style={[styles.pinBoxPrice, active && styles.pinPriceActive]}>
-                            {'₹'}{spot.minPrice}{'–'}{'₹'}{spot.maxPrice}
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={[styles.pinCircle, active && styles.pinCircleActive]}>
-                          <Text style={[styles.pinPrice, active && styles.pinPriceActive]}>
-                            {spot.price}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={[styles.pinTail, active && styles.pinTailActive]} />
-                    </View>
-                  </View>
-                </Marker>
-              );
-            })}
-          </MapView>
-          </View>
-
-          {/* List View Toggle Button — pinned just above the bottom sheet */}
-          {!isSearchFocused && bottomSheetHeight > 0 && (
-            <TouchableOpacity
-              style={[styles.listToggleButton, { bottom: bottomSheetHeight + FLOATING_BUTTON_GAP }]}
-              onPress={() => setViewMode('list')}
-            >
-              <Icon name="list" size={20} color="#1A73E8" />
-            </TouchableOpacity>
-          )}
-
-          {/* My Location Button — pinned just above the bottom sheet */}
-          {!isSearchFocused && bottomSheetHeight > 0 && (
-            <TouchableOpacity
-              style={[styles.myLocationButton, { bottom: bottomSheetHeight + FLOATING_BUTTON_GAP }]}
-              onPress={centerOnUserLocation}
-            >
-              <Icon name="navigation" size={20} color="#1A73E8" />
-            </TouchableOpacity>
-          )}
-
-          {/* Parking Recommendations Section.
-              Compact mode: horizontal strip of cards.
-              Expanded mode: full-screen vertical list (toggled in place
-              by tapping "View All"; LayoutAnimation handles the grow). */}
-          {!isSearchFocused && (
-          <Animated.View
-            style={[
-              styles.recommendationsSection,
-              {
-                bottom: -tabBarHeight,
-                paddingBottom: tabBarHeight + 8,
-                // Compact: intrinsic height (use measured bottomSheetHeight,
-                // fall back to 280 before first layout).
-                // Expanded: just under the parent's height so the
-                // section's top sits a hair below the search bar/header
-                // — leaves a small peek of map at the top so it's clear
-                // we're still on the home page.
-                height: expandAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [
-                    // 360 ≈ location row + header + two stacked cards; only
-                    // used for the single frame before onLayout measures.
-                    bottomSheetHeight || 360,
-                    Math.max((mapAreaHeight || SCREEN_HEIGHT * 0.7) - 60, 320),
-                  ],
-                }),
-              },
-            ]}
-            onLayout={(e) => {
-              if (recommendationsExpanded) return;
-              const h = e.nativeEvent.layout.height;
-              if (h && Math.abs(h - bottomSheetHeight) > 1) setBottomSheetHeight(h);
-            }}
-          >
-            {/* Resolved location. Hidden while expanded — the section then
-                covers the map, and a "current location" row above a
-                full-screen list reads as a filter it isn't. */}
-            {!recommendationsExpanded && (
-              <View style={styles.locationRow}>
-                <View style={styles.locationIconWrapper}>
-                  <Icon name="map-pin" size={18} color={palette.primary} />
-                </View>
-                <View style={styles.locationRowText}>
-                  <Text style={styles.locationName} numberOfLines={1}>{locationName}</Text>
-                  <Text style={styles.locationLabel}>Near your current location</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.locationChangeButton}
-                  onPress={handleLocationPillPress}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.locationChangeText}>Change</Text>
-                  <Icon name="repeat" size={14} color={palette.primary} />
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <View style={styles.recommendationsHeader}>
-              <View style={styles.recommendationsTitleRow}>
-                <Text style={styles.recommendationsTitle}>Nearby Parking</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.viewAllButton}
-                onPress={recommendationsExpanded ? closeAllRecommendations : openAllRecommendations}
-                activeOpacity={0.7}
+          {viewMode === 'map' ? (
+            <View style={[styles.mapCard, mapExpanded && styles.mapCardExpanded]}>
+              <MapView
+                ref={mapRef}
+                style={StyleSheet.absoluteFill}
+                provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                initialRegion={mapRegion}
+                mapType={Platform.OS === 'android' ? 'none' : 'mutedStandard'}
+                userInterfaceStyle="dark"
+                showsUserLocation={false}
+                showsMyLocationButton={false}
+                showsPointsOfInterests={false}
+                showsCompass={false}
+                showsBuildings={false}
+                showsTraffic={false}
+                maxZoomLevel={16}
+                onUserLocationChange={handleUserLocationChange}
+                moveOnMarkerPress={false}
+                renderToHardwareTextureAndroid
               >
-                <Text style={styles.viewAllText}>
-                  {recommendationsExpanded ? 'View Less' : 'See All'}
-                </Text>
-                <Icon
-                  name={recommendationsExpanded ? 'chevron-up' : 'chevron-right'}
-                  size={16}
-                  color={palette.primary}
+                {/* Flat charcoal basemap with no labels, drawn over the
+                    platform map so iOS and Android look identical. */}
+                <UrlTile
+                  urlTemplate="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                  maximumZ={16}
+                  shouldReplaceMapContent
+                  zIndex={-1}
                 />
-              </TouchableOpacity>
-            </View>
 
-            {isLoadingSpots ? (
-              <ActivityIndicator color={palette.primary} style={{ marginVertical: 16, marginHorizontal: 16 }} />
-            ) : spotsError ? (
-              <Text style={[styles.spotsErrorText, { marginHorizontal: 16 }]}>{spotsError}</Text>
-            ) : recommendationsExpanded ? (
-              <FlatList
-                data={filteredSpots}
-                keyExtractor={(item) => item.id}
-                showsVerticalScrollIndicator={false}
-                style={{ alignSelf: 'stretch' }}
-                contentContainerStyle={styles.allRecommendationsListContent}
-                renderItem={({ item }) => renderNearbyCard(item, {
-                  onPress: () => {
-                    closeAllRecommendations();
-                    handleSpotPress(item);
-                  },
-                  // alignSelf: stretch + the list's paddingHorizontal:16 keep
-                  // the card at the same left edge it had in the horizontal
-                  // strip, so there's no left→center drift on expand.
-                  style: { alignSelf: 'stretch', width: '100%', marginRight: 0 },
-                })}
-                ListEmptyComponent={
-                  <View style={styles.emptyState}>
-                    <View style={styles.emptyIconContainer}>
-                      <Icon name="search" size={40} color="#6B7280" />
+                {routeCoords.length > 1 ? (
+                  <>
+                    <Polyline coordinates={routeCoords} strokeColor="rgba(246,203,145,0.25)" strokeWidth={12} />
+                    <Polyline coordinates={routeCoords} strokeColor={palette.peach} strokeWidth={3.5} />
+                  </>
+                ) : null}
+
+                {/* Distance bubble at the middle of the route */}
+                {routeCoords.length > 1 && routeInfo ? (
+                  <Marker
+                    coordinate={routeCoords[Math.floor(routeCoords.length / 2)]}
+                    anchor={{ x: 0.5, y: 1 }}
+                    tracksViewChanges={Platform.OS === 'ios'}
+                  >
+                    <View style={styles.pinWrap}>
+                      <View style={styles.bubble}>
+                        <Text style={styles.bubbleText}>{routeInfo.km} km</Text>
+                      </View>
+                      <View style={styles.bubbleTail} />
                     </View>
-                    <Text style={styles.emptyTitle}>No Parking Found</Text>
-                    <Text style={styles.emptySubtitle}>
-                      Try adjusting your filters
-                    </Text>
-                  </View>
-                }
+                  </Marker>
+                ) : null}
+
+                {userLocation ? (
+                  <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+                    <View style={styles.glowOuter}>
+                      <View style={styles.glowInner} />
+                    </View>
+                  </Marker>
+                ) : null}
+
+                {filteredSpots.map((spot) => {
+                  const active = routeSpot?.id === spot.id;
+                  return (
+                    <Marker
+                      key={spot.id}
+                      coordinate={{ latitude: spot.latitude, longitude: spot.longitude }}
+                      onPress={() => setSelectedSpot(spot.id)}
+                      anchor={{ x: 0.5, y: 0.5 }}
+                      tracksViewChanges={Platform.OS === 'ios'}
+                    >
+                      <View style={[styles.glowOuter, !active && styles.glowOuterDim]}>
+                        <View style={[styles.glowInner, !active && styles.glowInnerDim]} />
+                      </View>
+                    </Marker>
+                  );
+                })}
+              </MapView>
+
+              <IconCircle
+                icon="crosshair"
+                size={52}
+                onPress={handleLocationPillPress}
+                style={styles.mapLocate}
               />
-            ) : (
-            /* Compact mode stacks the two closest lots vertically. A plain
-               View (not a list) keeps the section's intrinsic height
-               measurable, which the expand animation depends on. */
-            <View style={styles.recommendationsScrollContent}>
-              {filteredSpots.slice(0, 2).map((spot) => renderNearbyCard(spot, {
-                onPress: () => handleSpotPress(spot),
-                style: [
-                  { alignSelf: 'stretch', width: '100%', marginRight: 0 },
-                  selectedSpot === spot.id && styles.recommendationCardSelected,
-                ],
-              }))}
+
+              {routeSpot ? (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={styles.routeCard}
+                  onPress={() => handleSpotPress(routeSpot)}
+                >
+                  {routeSpot.images?.[0] ? (
+                    <Image source={{ uri: resolveImageUri(routeSpot.images[0]) }} style={styles.routeThumb} />
+                  ) : (
+                    <View style={[styles.routeThumb, styles.routeThumbEmpty]}>
+                      <IsoBlock size={58} tone="peach" />
+                    </View>
+                  )}
+                  <View style={styles.flex}>
+                    <Text style={styles.routeName} numberOfLines={1}>{routeSpot.name}</Text>
+                    <View style={styles.routeStats}>
+                      <View>
+                        <Text style={styles.routeLabel}>Distance</Text>
+                        <Text style={styles.routeValue}>{routeInfo ? `${routeInfo.km} km` : routeSpot.distance}</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.routeLabel}>Duration</Text>
+                        <Text style={styles.routeValue}>
+                          {routeInfo ? `${routeInfo.min} min` : routeSpot.travelTime || '--'}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={styles.routeLabel}>Price</Text>
+                        <Text style={styles.routeValue}>{routeSpot.price}/hr</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <IconCircle
+                    icon="arrow-up-right"
+                    size={36}
+                    variant="grey"
+                    onPress={() => navigation.navigate('ParkingDetails', { parkingData: routeSpot })}
+                    style={styles.routeGo}
+                  />
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.expandBtn}
+                onPress={() => setMapExpanded((v) => !v)}
+              >
+                <Icon name={mapExpanded ? 'minimize-2' : 'maximize-2'} size={19} color={palette.textInverse} />
+              </TouchableOpacity>
+
+              <Text style={styles.mapCredit}>Esri, HERE, Garmin, OpenStreetMap</Text>
             </View>
-            )}
-          </Animated.View>
-          )}
+          ) : null}
+
+          <SectionTitle
+            title={viewMode === 'list' ? 'All parking' : 'Nearby parking'}
+            action={viewMode === 'map' && filteredSpots.length > 3 ? (showAllSpots ? 'Show less' : 'See all') : null}
+            onAction={() => setShowAllSpots((v) => !v)}
+            style={styles.sectionGap}
+          />
+
+          {renderSpotsContent()}
         </View>
+      </ScrollView>
 
-        {/* List View - Overlay on map area */}
-        {viewMode === 'list' && (
-          <View style={styles.listViewOverlay}>
-            {renderListView()}
-          </View>
-        )}
-      </View>
-
-      {/* Parking Details Modal */}
+      {/* Spot preview sheet */}
       <Modal
         visible={modalVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         statusBarTranslucent
         onRequestClose={closeModal}
       >
-        <View style={styles.modalOverlay}>
-          <View pointerEvents="none" style={styles.modalBackdrop} />
-          <View style={[styles.modalContent, { paddingBottom: 24 + 64 + insets.bottom }]}>
+        <View style={styles.sheetOverlay}>
+          <Pressable style={styles.sheetBackdrop} onPress={closeModal} />
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.grabber} />
             {selectedParkingData && (
               <>
-                {/* Modal Header */}
-                <View style={styles.modalHeader}>
-                  <View style={styles.modalDragIndicator} />
-                </View>
-                <TouchableOpacity style={styles.modalCloseButton} onPress={closeModal}>
-                  <View style={styles.closeButtonCircle}>
-                    <Icon name="x" size={18} color="#FFFFFF" />
-                  </View>
-                </TouchableOpacity>
-
-                <ScrollView
-                  style={styles.modalScroll}
-                  contentContainerStyle={styles.modalScrollContent}
-                  showsVerticalScrollIndicator={false}
-                  bounces={false}
-                >
-                  {/* Parking Image */}
-                  <View style={styles.parkingImageContainer}>
-                    {Array.isArray(selectedParkingData.images) && selectedParkingData.images.length > 0 ? (
-                      selectedParkingData.images.length === 1 ? (
+                <View style={styles.previewMedia}>
+                  {Array.isArray(selectedParkingData.images) && selectedParkingData.images.length > 0 ? (
+                    <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+                      {selectedParkingData.images.map((uri, idx) => (
                         <Image
-                          source={{ uri: resolveImageUri(selectedParkingData.images[0]) }}
-                          style={styles.parkingImage}
+                          key={`${uri}-${idx}`}
+                          source={{ uri: resolveImageUri(uri) }}
+                          style={styles.previewImage}
                           resizeMode="cover"
                         />
-                      ) : (
-                        <ScrollView
-                          horizontal
-                          pagingEnabled
-                          showsHorizontalScrollIndicator={false}
-                          style={styles.parkingImageScroll}
-                        >
-                          {selectedParkingData.images.map((uri, idx) => (
-                            <Image
-                              key={`${uri}-${idx}`}
-                              source={{ uri: resolveImageUri(uri) }}
-                              style={styles.parkingImage}
-                              resizeMode="cover"
-                            />
-                          ))}
-                        </ScrollView>
-                      )
-                    ) : (
-                      <View style={styles.parkingImagePlaceholder}>
-                        <MaterialIcon name="parking" size={40} color="#1A73E8" />
-                      </View>
-                    )}
-                    <View style={[styles.availabilityBadge, selectedParkingData.available === 0 && { backgroundColor: '#EF4444' }]}>
-                      <Text style={styles.availabilityText}>
-                        {selectedParkingData.available === 0 ? 'Fully Booked' : `${selectedParkingData.available} spots left`}
-                      </Text>
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <View style={styles.previewPlaceholder}>
+                      <IsoBlock size={140} tone="peach" />
                     </View>
-                  </View>
+                  )}
+                  <StatusTag
+                    label={selectedParkingData.available === 0 ? 'Fully booked' : `${selectedParkingData.available} spots left`}
+                    tone={selectedParkingData.available === 0 ? 'danger' : 'ink'}
+                    style={styles.previewTag}
+                  />
+                </View>
 
-                  {/* Parking Info */}
-                  <View style={styles.parkingInfo}>
-                    <View style={styles.parkingTitleRow}>
-                      <Text style={styles.parkingName}>{selectedParkingData.name}</Text>
-                      {selectedParkingData.rating > 0 ? (
-                        <View style={styles.ratingContainer}>
-                          <Icon name="star" size={14} color="#F59E0B" />
-                          <Text style={styles.ratingText}>{selectedParkingData.rating}</Text>
-                        </View>
-                      ) : (
-                        <Text style={styles.newTag}>New</Text>
-                      )}
+                <View style={styles.previewTitleRow}>
+                  <Text style={styles.previewName} numberOfLines={2}>{selectedParkingData.name}</Text>
+                  {selectedParkingData.rating > 0 ? (
+                    <View style={styles.ratingPill}>
+                      <Icon name="star" size={13} color={palette.warning} />
+                      <Text style={styles.ratingText}>{selectedParkingData.rating}</Text>
                     </View>
-
-                    <View style={styles.parkingAddressRow}>
-                      <Icon name="map-pin" size={14} color="#A1A1AA" />
-                      <Text style={styles.parkingAddress}>{selectedParkingData.address}</Text>
-                    </View>
-
-                    <View style={styles.parkingDetailsRow}>
-                      <TouchableOpacity style={styles.detailItem} onPress={() => openDirections(selectedParkingData)}>
-                        <Icon name="navigation" size={14} color="#1A73E8" />
-                        <Text style={styles.detailText}>{selectedParkingData.distance}</Text>
-                      </TouchableOpacity>
-                      <View style={styles.detailItem}>
-                        <MaterialIcon name="car-outline" size={16} color="#1A73E8" />
-                        <Text style={styles.detailText}>{selectedParkingData.spots} spots</Text>
-                      </View>
-                      <View style={styles.detailItem}>
-                        <Icon name="clock" size={14} color="#1A73E8" />
-                        <Text style={styles.detailText}>24/7</Text>
-                      </View>
-                    </View>
+                  ) : (
+                    <StatusTag label="New" tone="grey" />
+                  )}
+                </View>
+                {selectedParkingData.address ? (
+                  <View style={styles.previewAddrRow}>
+                    <Icon name="map-pin" size={14} color={palette.textMuted} />
+                    <Text style={styles.previewAddr} numberOfLines={2}>{selectedParkingData.address}</Text>
                   </View>
-                </ScrollView>
+                ) : null}
 
-                {/* Price and Book Button */}
-                <View style={styles.modalFooter}>
-                  <View style={styles.priceContainer}>
-                    <Text style={styles.priceLabel}>Price</Text>
-                    <Text style={styles.priceValue}>
-                      {selectedParkingData.minPrice != null && selectedParkingData.maxPrice != null && selectedParkingData.minPrice !== selectedParkingData.maxPrice
-                        ? `₹${selectedParkingData.minPrice} – ₹${selectedParkingData.maxPrice}`
-                        : `₹${selectedParkingData.pricePerHour}`}
-                      <Text style={styles.priceUnit}>/hr</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.modalButtonsRow}>
-                    <TouchableOpacity
-                      style={styles.directionsButton}
-                      onPress={() => openDirections(selectedParkingData)}
-                    >
-                      <Icon name="navigation" size={18} color="#1A73E8" />
-                    </TouchableOpacity>
-                    {selectedParkingData.available === 0 ? (
-                      <View style={[styles.bookButton, { backgroundColor: '#6B7280' }]}>
-                        <Text style={styles.bookButtonText}>Booked</Text>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.bookButton}
-                        onPress={() => {
-                          closeModal();
-                          navigation.navigate('ParkingDetails', { parkingData: selectedParkingData });
-                        }}
-                      >
-                        <Text style={styles.bookButtonText}>Book Now</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                <View style={styles.previewGrid}>
+                  <InfoGrid
+                    columns={4}
+                    items={[
+                      { label: 'Distance', value: selectedParkingData.distance },
+                      { label: 'Spots', value: `${selectedParkingData.spots}` },
+                      { label: 'Open', value: '24/7' },
+                      {
+                        label: 'Price',
+                        value:
+                          selectedParkingData.minPrice != null &&
+                          selectedParkingData.maxPrice != null &&
+                          selectedParkingData.minPrice !== selectedParkingData.maxPrice
+                            ? `₹${selectedParkingData.minPrice}-${selectedParkingData.maxPrice}/hr`
+                            : `₹${selectedParkingData.pricePerHour}/hr`,
+                      },
+                    ]}
+                  />
+                </View>
+
+                <View style={styles.previewActions}>
+                  <IconCircle
+                    icon="navigation"
+                    size={58}
+                    variant="grey"
+                    onPress={() => openDirections(selectedParkingData)}
+                  />
+                  <PillButton
+                    label={selectedParkingData.available === 0 ? 'Fully booked' : 'Book now'}
+                    iconRight={selectedParkingData.available === 0 ? undefined : 'arrow-right'}
+                    variant="ink"
+                    disabled={selectedParkingData.available === 0}
+                    onPress={() => {
+                      closeModal();
+                      navigation.navigate('ParkingDetails', { parkingData: selectedParkingData });
+                    }}
+                    style={styles.previewBook}
+                  />
                 </View>
               </>
             )}
@@ -1769,125 +1215,72 @@ const HomePage = ({ navigation }) => {
         </View>
       </Modal>
 
-      {/* Filter Modal */}
+      {/* Filter sheet */}
       <Modal
         visible={filterModalVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         statusBarTranslucent
         onRequestClose={() => setFilterModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View pointerEvents="none" style={styles.modalBackdrop} />
-          <View style={[styles.filterModalContent, { paddingBottom: 30 + 64 + insets.bottom }]}>
-            {/* Filter Header */}
+        <View style={styles.sheetOverlay}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setFilterModalVisible(false)} />
+          <View style={[styles.sheet, styles.filterSheet, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.grabber} />
             <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Filters</Text>
-              <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
-                <View style={styles.closeButtonCircle}>
-                  <Icon name="x" size={18} color="#FFFFFF" />
-                </View>
-              </TouchableOpacity>
+              <Text style={styles.sheetTitle}>Filters</Text>
+              <IconCircle icon="x" size={40} variant="grey" onPress={() => setFilterModalVisible(false)} />
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Price Range Filter */}
-              <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Price Range</Text>
-                <View style={styles.filterOptionsRow}>
-                  {priceRanges.map((range) => (
-                    <TouchableOpacity
-                      key={range.id}
-                      style={[
-                        styles.filterChip,
-                        selectedPriceRange === range.id && styles.filterChipActive,
-                      ]}
-                      onPress={() => setSelectedPriceRange(range.id)}
-                    >
-                      <Text
-                        style={[
-                          styles.filterChipText,
-                          selectedPriceRange === range.id && styles.filterChipTextActive,
-                        ]}
-                      >
-                        {range.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+              <Text style={styles.filterLabel}>Price per hour</Text>
+              <View style={styles.chipWrap}>
+                {priceRanges.map((range) => (
+                  <Chip
+                    key={range.id}
+                    label={range.label}
+                    selected={selectedPriceRange === range.id}
+                    onPress={() => setSelectedPriceRange(range.id)}
+                    style={styles.chipGap}
+                  />
+                ))}
               </View>
 
-              {/* Duration Filter */}
-              <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Duration</Text>
-                <View style={styles.filterOptionsRow}>
-                  {durationOptions.map((duration) => (
-                    <TouchableOpacity
-                      key={duration.id}
-                      style={[
-                        styles.filterChip,
-                        selectedDuration === duration.id && styles.filterChipActive,
-                      ]}
-                      onPress={() => setSelectedDuration(duration.id)}
-                    >
-                      <Icon
-                        name={duration.icon}
-                        size={14}
-                        color={selectedDuration === duration.id ? '#FFFFFF' : '#A1A1AA'}
-                        style={styles.filterChipIcon}
-                      />
-                      <Text
-                        style={[
-                          styles.filterChipText,
-                          selectedDuration === duration.id && styles.filterChipTextActive,
-                        ]}
-                      >
-                        {duration.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+              <Text style={styles.filterLabel}>Duration</Text>
+              <View style={styles.chipWrap}>
+                {durationOptions.map((duration) => (
+                  <Chip
+                    key={duration.id}
+                    label={duration.label}
+                    icon={duration.icon}
+                    selected={selectedDuration === duration.id}
+                    onPress={() => setSelectedDuration(duration.id)}
+                    style={styles.chipGap}
+                  />
+                ))}
               </View>
 
-              {/* Amenities Filter */}
-              <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Amenities</Text>
-                <View style={styles.amenitiesGrid}>
-                  {amenityOptions.map((amenity) => (
-                    <TouchableOpacity
-                      key={amenity.id}
-                      style={[
-                        styles.amenityChip,
-                        selectedAmenities.includes(amenity.id) && styles.amenityChipActive,
-                      ]}
-                      onPress={() => toggleAmenity(amenity.id)}
-                    >
-                      <Icon
-                        name={amenity.icon}
-                        size={16}
-                        color={selectedAmenities.includes(amenity.id) ? '#FFFFFF' : palette.primary}
-                      />
-                      <Text
-                        style={[
-                          styles.amenityChipText,
-                          selectedAmenities.includes(amenity.id) && styles.amenityChipTextActive,
-                        ]}
-                      >
-                        {amenity.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+              <Text style={styles.filterLabel}>Amenities</Text>
+              <View style={styles.chipWrap}>
+                {amenityOptions.map((amenity) => (
+                  <Chip
+                    key={amenity.id}
+                    label={amenity.label}
+                    icon={amenity.icon}
+                    selected={selectedAmenities.includes(amenity.id)}
+                    onPress={() => toggleAmenity(amenity.id)}
+                    style={styles.chipGap}
+                  />
+                ))}
               </View>
             </ScrollView>
 
-            {/* Filter Actions */}
             <View style={styles.filterActions}>
-              <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
-                <Text style={styles.resetButtonText}>Reset</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.applyButton}
+              <PillButton label="Reset" variant="grey" onPress={resetFilters} style={styles.actionLeft} />
+              <PillButton
+                label={`Show ${filteredSpots.length} results`}
+                variant="ink"
+                style={styles.filterApply}
                 onPress={() => {
                   setFilterModalVisible(false);
                   if (userLocation) {
@@ -1897,1559 +1290,239 @@ const HomePage = ({ navigation }) => {
                     });
                   }
                 }}
-              >
-                <Text style={styles.applyButtonText}>
-                  Apply ({filteredSpots.length} results)
-                </Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         </View>
       </Modal>
-
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: palette.bg,
-  },
-  headerPanel: {
-    backgroundColor: 'transparent',
-    paddingBottom: 8,
-    zIndex: 10,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  brandLockup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  brandMark: {
-    width: 28,
-    height: 28,
-  },
-  brandWordmark: {
-    fontFamily: fontStacks.medium,
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: palette.text,
-  },
-  brandTagline: {
-    display: 'none',
-  },
-  avatarButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: palette.primarySoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-  },
-  avatarInitial: {
-    fontFamily: fontStacks.medium,
-    fontSize: 14,
-    fontWeight: '700',
-    color: palette.primary,
-  },
-  greetingSection: {
-    paddingHorizontal: 16,
-    marginTop: 4,
-    marginBottom: 6,
-  },
-  greetingLabel: {
-    fontFamily: fontStacks.medium,
-    fontSize: 15,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  greetingSubtitle: {
-    fontFamily: fontStacks.regular,
-    fontSize: 12,
-    color: palette.textMuted,
-    marginTop: 1,
-  },
-  greetingHeadline: {
-    fontFamily: fontStacks.medium,
-    fontSize: 25,
-    fontWeight: '700',
-    letterSpacing: -0.8,
-    lineHeight: 30,
-    color: palette.text,
-    marginTop: 10,
-  },
-  // Second line of the headline only. Nested <Text> inherits the size and
-  // weight above, so this carries the colour shift and nothing else.
-  greetingHeadlineAccent: {
-    color: palette.primary,
-  },
-  ecoCard: {
-    width: 158,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: palette.primarySoft,
-    borderRadius: radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    // Sits against the headline block, not the greeting line above it —
-    // the card is shorter than the text column beside it, so the offset
-    // is what keeps their optical centres roughly aligned.
-    marginTop: 34,
-  },
-  ecoCardText: {
-    flex: 1,
-  },
-  ecoCardTitle: {
-    fontFamily: fontStacks.medium,
-    fontSize: 13,
-    fontWeight: '600',
-    color: palette.text,
-  },
-  ecoCardSubtitle: {
-    fontFamily: fontStacks.regular,
-    fontSize: 12,
-    color: palette.textMuted,
-  },
-  journeyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginTop: 14,
-    paddingVertical: 10,
-    backgroundColor: palette.surface,
-    borderRadius: radii.md,
-  },
-  journeyStep: {
-    // Equal flex on each step keeps the three labels evenly spaced
-    // regardless of word length, so the dividers land on thirds.
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-  },
-  journeyStepLabel: {
-    fontFamily: fontStacks.medium,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    color: palette.text,
-  },
-  journeyDivider: {
-    width: 1,
-    height: 18,
-    backgroundColor: palette.bgSoft,
-  },
-  mapArea: {
-    flex: 1,
-  },
-  listViewOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: palette.bg,
-    zIndex: 2,
-  },
-  // Resolved-location row, sits between the map and the Nearby list.
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 16,
-    marginBottom: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: palette.surface,
-    borderRadius: radii.md,
-  },
-  locationRowText: {
-    flex: 1,
-  },
-  locationIconWrapper: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.sm,
-    backgroundColor: palette.primarySoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  locationLabel: {
-    fontFamily: fontStacks.regular,
-    fontSize: 12,
-    color: palette.textMuted,
-    marginTop: 1,
-  },
-  locationName: {
-    fontFamily: fontStacks.medium,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-    color: palette.text,
-  },
-  locationChangeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: palette.primarySoft,
-    backgroundColor: palette.surface,
-  },
-  locationChangeText: {
-    fontFamily: fontStacks.medium,
-    fontSize: 13,
-    fontWeight: '600',
-    color: palette.text,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  notificationButton: {
-    position: 'relative',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: palette.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: palette.danger,
-    borderWidth: 1.5,
-    borderColor: palette.surface,
-  },
+  container: { flex: 1, backgroundColor: palette.bg },
+  flex: { flex: 1 },
 
-  // List Header with Search Bar and Map Toggle
-  listHeaderContainer: {
-    paddingVertical: 12,
-    marginBottom: 12,
-  },
-  listSearchSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  listSearchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.surface,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginRight: 10,
-  },
-  listSearchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: palette.text,
-    marginLeft: 8,
-    padding: 0,
-  },
-  gpsButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: 'rgba(217,255,90,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  gpsButtonMap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: 'rgba(217,255,90,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  listFilterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: palette.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  listResultsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  resultsInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  resultsCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: palette.text,
-  },
-  viewToggle: {
-    flexDirection: 'row',
-    backgroundColor: palette.surface,
-    borderRadius: 8,
-    padding: 2,
-  },
-  viewToggleButton: {
-    width: 36,
-    height: 32,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  viewToggleButtonActive: {
-    backgroundColor: palette.primary,
-  },
-  mapToggleButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: palette.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  // List Toggle Button on Map. `bottom` is set inline from the measured
-  // bottom-sheet height so the button always sits just above the sheet.
-  listToggleButton: {
-    position: 'absolute',
-    left: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: palette.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
+  topRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 },
+  topText: { flex: 1, marginLeft: 14, marginRight: 10 },
+  userName: { ...fonts.semibold, fontSize: 20, color: palette.text, letterSpacing: -0.3 },
+  locRow: { flexDirection: 'row', alignItems: 'center', marginTop: 3, alignSelf: 'flex-start' },
+  locText: { ...fonts.medium, fontSize: 15, color: palette.textMuted, marginRight: 4, maxWidth: 200 },
 
-  // List View
-  listContent: {
-    paddingHorizontal: 16,
-    // Extra bottom padding so the last card scrolls clear of the floating
-    // glass menu (64px bar + ~24px safe-area + breathing room).
-    paddingBottom: 130,
-  },
-  listRecommendationsSection: {
-    marginBottom: 20,
-  },
-  listRecommendationsHeader: {
+  countRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  listRecommendationsScrollContent: {
-    paddingRight: 0,
-  },
-  listRecommendationCard: {
-    width: 320,
-    height: 120,
-    backgroundColor: palette.surface,
-    borderRadius: 12,
-    marginRight: 12,
-    marginVertical: 6,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  allParkingTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  allParkingTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: palette.text,
-  },
-
-  // Parking Card — soft teal surface, lighter than the deep
-  // palette.primary so it sits closer in tone to the mint header bg.
-  // The book button is a contrasting lime pill that still pops.
-  parkingCard: {
-    backgroundColor: '#DDEDE9',
-    borderRadius: 24,
-    marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: '#B8E632',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.14,
-    shadowRadius: 22,
-    elevation: 5,
-  },
-  parkingCardImage: {
-    height: 100,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  lowAvailabilityBadgeCard: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  lowAvailabilityTextCard: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: palette.text,
-  },
-  parkingCardContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  parkingCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    alignSelf: 'stretch',
-  },
-  parkingCardName: {
-    fontFamily: fontStacks.medium,
-    fontSize: 17,
-    fontWeight: '500',
-    letterSpacing: -0.2,
-    color: palette.text,
-    textAlign: 'center',
-    flexShrink: 1,
-  },
-  parkingCardRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(13,115,119,0.10)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  parkingCardRatingText: {
-    fontFamily: fontStacks.medium,
-    fontSize: 12,
-    fontWeight: '600',
-    color: palette.primary,
-    marginLeft: 4,
-  },
-  parkingCardAddress: {
-    fontFamily: fontStacks.regular,
-    fontSize: 13,
-    color: palette.textMuted,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  parkingCardMeta: {
-    flexDirection: 'row',
-    marginTop: 8,
-    gap: 16,
-    justifyContent: 'center',
-    alignSelf: 'stretch',
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metaText: {
-    fontFamily: fontStacks.regular,
-    fontSize: 12,
-    color: palette.textMuted,
-    marginLeft: 4,
-  },
-  parkingCardAmenities: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 10,
-    gap: 6,
-    justifyContent: 'center',
-    alignSelf: 'stretch',
-  },
-  amenityBadge: {
-    backgroundColor: 'rgba(13,115,119,0.10)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  amenityBadgeText: {
-    fontFamily: fontStacks.medium,
-    fontSize: 10,
-    fontWeight: '500',
-    color: palette.primary,
-    textTransform: 'capitalize',
-  },
-  parkingCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 14,
-    alignSelf: 'stretch',
-  },
-  parkingCardPrice: {
-    fontFamily: fontStacks.regular,
-    fontSize: 24,
-    fontWeight: '400',
-    letterSpacing: -0.5,
-    color: palette.primary,
-  },
-  parkingCardPriceUnit: {
-    fontFamily: fontStacks.regular,
-    fontSize: 12,
-    fontWeight: '400',
-    color: palette.textMuted,
-  },
-  // Book button — solid teal pill, white text. High contrast on the
-  // light mint card.
-  parkingCardBookButton: {
-    backgroundColor: palette.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
-  },
-  parkingCardBookButtonText: {
-    fontFamily: fontStacks.medium,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0B0F0C',
-  },
-
-  spotsErrorText: {
-    fontSize: 13,
-    color: '#EF4444',
-    marginVertical: 12,
-    textAlign: 'center',
-  },
-
-  // Empty State
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: palette.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: palette.text,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#A1A1AA',
-    textAlign: 'center',
-    paddingHorizontal: 32,
-    marginBottom: 20,
-  },
-  emptyButton: {
-    backgroundColor: palette.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  emptyButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0B0F0C',
-  },
-
-  searchSection: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-    // The journey row above carries its own top margin, so this only
-    // needs to separate the two bands rather than clear the greeting.
-    marginTop: 12,
-  },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: 16,
-    height: 54,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: fontStacks.regular,
-    fontSize: 15,
-    color: palette.text,
-    marginLeft: 10,
-    backgroundColor: 'transparent',
-    padding: 0,
-    includeFontPadding: false,
-  },
-  searchButton: {
-    width: 54,
-    height: 54,
-    borderRadius: radii.md,
-    backgroundColor: palette.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  categorySection: {
-    marginTop: 12,
-  },
-  categoryScrollContent: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-  },
-  // Labelled pills, not icon-only circles — with five vehicle types the
-  // glyphs alone (van vs truck especially) aren't distinguishable.
-  categoryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    height: 48,
-    paddingHorizontal: 18,
-    borderRadius: radii.md,
-    backgroundColor: palette.surface,
-    justifyContent: 'center',
-  },
-  categoryButtonActive: {
-    backgroundColor: palette.accent,
-  },
-  categoryButtonLabel: {
-    fontFamily: fontStacks.medium,
-    fontSize: 14,
-    fontWeight: '600',
-    color: palette.text,
-  },
-  categoryButtonLabelActive: {
-    color: palette.textInverse,
-  },
-  mapContainer: {
-    flex: 1,
-    marginBottom: 55,
-    backgroundColor: palette.surface,
-  },
-  // Always mounted map container - prevents black flash on Android
-  mapContainerAlwaysMounted: {
-    flex: 1,
-    backgroundColor: palette.surface,
-    zIndex: 1,
-  },
-  // Hidden container style - keeps component mounted but invisible
-  hiddenContainer: {
-    opacity: 0,
-    zIndex: -1,
-  },
-  mapWrapper: {
-    flex: 1,
-    backgroundColor: palette.surface,
-    overflow: 'hidden',
-  },
-  map: {
-    flex: 1,
-    backgroundColor: palette.surface,
-  },
-  // My Location Button. `bottom` is set inline from the measured
-  // bottom-sheet height so the button always sits just above the sheet.
-  myLocationButton: {
-    position: 'absolute',
-    right: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: palette.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  // Recommendations Section — anchored at bottom: 0 so its background
-  // extends down through the menu area (no visible mint gap between the
-  // section and the floating glass menu). paddingBottom is set inline
-  // on the component because it depends on the live insets.
-  recommendationsSection: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: palette.bg,
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    paddingTop: 16,
-    shadowColor: palette.shadow,
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  // When expanded, the section grows to fill the screen above the menu.
-  recommendationsSectionExpanded: {
-    top: 0,
-  },
-  recommendationsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  recommendationsTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  recommendationsTitle: {
-    fontFamily: fontStacks.medium,
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    color: palette.text,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  viewAllText: {
-    fontFamily: fontStacks.medium,
-    fontSize: 14,
-    fontWeight: '600',
-    color: palette.primary,
-  },
-  recommendationsScrollContent: {
-    paddingHorizontal: 16,
-  },
-  recommendationCard: {
-    backgroundColor: palette.surface,
-    borderRadius: radii.md,
-    marginBottom: 12,
-    padding: 10,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: palette.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.10,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  recommendationCardSelected: {
-    borderColor: palette.primary,
-    borderWidth: 2,
-    shadowOpacity: 0.20,
-    shadowRadius: 18,
-    elevation: 6,
-  },
-  recommendationImage: {
-    height: 80,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  lowAvailabilityBadge: {
-    position: 'absolute',
-    bottom: 6,
-    left: 6,
-    backgroundColor: palette.danger,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radii.xs,
-  },
-  lowAvailabilityText: {
-    fontFamily: fontStacks.medium,
-    fontSize: 9,
-    fontWeight: '600',
-    color: palette.textInverse,
-  },
-  recommendationContent: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 3,
-  },
-  recommendationImageRight: {
-    width: 120,
-    backgroundColor: palette.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  recommendationImageLeft: {
-    width: 96,
-    height: 96,
-    borderRadius: radii.sm,
-    overflow: 'hidden',
-    backgroundColor: palette.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  recommendationThumbnail: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  favoriteButton: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    // Dark scrim so the white heart stays legible over any photo.
-    backgroundColor: palette.glassDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardAmenityChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
-  },
-  cardAmenityChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radii.xs,
-    backgroundColor: palette.primarySoft,
-  },
-  cardAmenityChipText: {
-    fontFamily: fontStacks.regular,
-    fontSize: 10,
-    color: palette.textMuted,
-  },
-  recommendationPriceColumn: {
     alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: 6,
+    paddingHorizontal: 20,
+    marginTop: 26,
   },
-  recommendationNewBadge: {
-    fontFamily: fontStacks.medium,
-    fontSize: 11,
-    fontWeight: '600',
-    color: palette.textSubtle,
-  },
-  recommendationCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  recommendationName: {
-    fontFamily: fontStacks.medium,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-    color: palette.text,
-  },
-  recommendationRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    minHeight: 16,
-  },
-  recommendationRatingText: {
-    fontFamily: fontStacks.medium,
-    fontSize: 12,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  recommendationMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  recommendationDistance: {
-    fontFamily: fontStacks.regular,
-    fontSize: 12,
-    color: palette.textMuted,
-    marginLeft: 4,
-  },
-  recommendationDot: {
-    fontSize: 12,
-    color: palette.textSubtle,
-    marginHorizontal: 4,
-  },
-  recommendationSpots: {
-    fontFamily: fontStacks.regular,
-    fontSize: 12,
-    color: palette.textMuted,
-  },
-  recommendationFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 0,
-    marginTop: 4,
-  },
-  recommendationPrice: {
-    fontFamily: fontStacks.medium,
-    fontSize: 19,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  recommendationPriceUnit: {
-    fontFamily: fontStacks.regular,
-    fontSize: 13,
-    color: palette.textMuted,
-  },
-  recommendationBookButton: {
-    backgroundColor: palette.primary,
+  countLabel: { ...fonts.medium, fontSize: 15, color: palette.text },
+  countValueRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 4 },
+  countValue: { ...fonts.semibold, fontSize: 38, letterSpacing: -1, color: palette.text },
+  countUnit: { ...fonts.medium, fontSize: 18, color: palette.textMuted },
+
+  actionsRow: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 20 },
+  actionLeft: { flex: 1, marginRight: 10 },
+
+  panel: {
+    marginTop: 20,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
+    paddingTop: 18,
+    minHeight: 500,
   },
-  recommendationBookButtonText: {
-    fontFamily: fontStacks.medium,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0B0F0C',
+
+  chipsRow: { paddingVertical: 14 },
+  catChip: {
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
   },
-  userLocationMarker: {
+  catChipActive: { backgroundColor: palette.ink },
+  catChipText: { ...fonts.semibold, fontSize: 14, color: palette.text, marginLeft: 7 },
+  catChipTextActive: { color: palette.textInverse },
+
+  mapCard: {
+    height: 330,
+    borderRadius: radii.xl,
+    overflow: 'hidden',
+    backgroundColor: '#1B1B1B',
+  },
+  mapCardExpanded: { height: 560 },
+  mapLocate: { position: 'absolute', right: 12, bottom: 12 },
+  routeCard: {
+    position: 'absolute',
+    left: 12,
+    right: 74,
+    bottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: palette.surface,
+    borderRadius: radii.lg,
+    padding: 8,
+  },
+  routeThumb: { width: 62, height: 62, borderRadius: 16, marginRight: 10 },
+  routeThumbEmpty: { backgroundColor: palette.peachSoft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  routeName: { ...fonts.bold, fontSize: 14.5, color: palette.text, paddingRight: 30 },
+  routeStats: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingRight: 4 },
+  routeLabel: { ...fonts.medium, fontSize: 11, color: palette.textMuted },
+  routeValue: { ...fonts.bold, fontSize: 13, color: palette.text, marginTop: 1 },
+  routeGo: { position: 'absolute', top: 8, right: 8 },
+  expandBtn: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  userLocationOuter: {
-    width: 24,
-    height: 24,
+  mapCredit: {
+    ...fonts.medium,
+    position: 'absolute',
+    left: 14,
+    top: 10,
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.45)',
+  },
+  pinWrap: { alignItems: 'center' },
+  bubble: {
+    backgroundColor: palette.surface,
     borderRadius: 12,
-    backgroundColor: 'rgba(26, 115, 232, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(26, 115, 232, 0.3)',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    ...shadow.press,
   },
-  userLocationInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: palette.primary,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: palette.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  pinWrapper: {
-    alignItems: 'center',
-  },
-  pinContainer: {
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  pinContainerActive: {
-    shadowOpacity: 0.2,
-    elevation: 5,
-  },
-  pinCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: palette.primary,
-    borderWidth: 2,
-    borderColor: palette.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 2,
-  },
-  pinCircleActive: {
-    backgroundColor: palette.accent,
-    borderColor: palette.primary,
-  },
-  pinPrice: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: palette.textInverse,
-    textAlign: 'center',
-  },
-  pinPriceActive: {
-    color: '#FFFFFF',
-  },
-  // Range price pin — wider pill/box shape
-  pinBox: {
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: palette.primary,
-    borderWidth: 2,
-    borderColor: palette.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 7,
-    zIndex: 2,
-  },
-  pinBoxActive: {
-    backgroundColor: palette.accent,
-    borderColor: palette.primary,
-  },
-  pinBoxPrice: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: palette.textInverse,
-    textAlign: 'center',
-    letterSpacing: -0.3,
-  },
-  pinTail: {
+  bubbleActive: { paddingHorizontal: 14, paddingVertical: 8 },
+  bubbleText: { ...fonts.semibold, fontSize: 13, color: palette.text },
+  bubbleTail: {
     width: 0,
     height: 0,
     borderLeftWidth: 6,
     borderRightWidth: 6,
-    borderTopWidth: 10,
+    borderTopWidth: 7,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: palette.primary,
-    marginTop: -2,
-    zIndex: 1,
+    borderTopColor: palette.surface,
+    marginBottom: 3,
   },
-  pinTailActive: {
-    borderTopColor: palette.primary,
-  },
-  // Modal Styles
-  modalOverlay: {
-    // These sheets render inside a real <Modal>, so this fills the modal's
-    // own root. The absolute positioning is kept (harmless there) along with
-    // the zIndex/elevation left over from when they rendered inline.
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 9999,
-    elevation: 24,
-    // The tint lives on modalBackdrop, not here: a translucent background on
-    // a view that also carries elevation let Android's shadow paint through
-    // it as a visible lighter strip.
-    backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  // Used by the All Recommendations sheet — softer teal-tinted backdrop.
-  modalOverlayDimmed: {
-    backgroundColor: 'rgba(15, 40, 40, 0.45)',
-  },
-  modalContent: {
-    backgroundColor: palette.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    // 96 was a guess at clearing the tab bar (64 + a typical inset); it fell
-    // short on any device with a taller gesture-nav inset. The render side
-    // now pads for real with the actual inset (see contentBottomPad).
-    paddingBottom: 24,
-    // A percentage would resolve against the absolutely-positioned backdrop
-    // rather than the screen, so cap in points instead.
-    maxHeight: Dimensions.get('window').height * 0.85,
-  },
-  modalScroll: {
-    // The sheet must be allowed to grow to its content instead of being
-    // clipped by flex constraints.
-    flexGrow: 1,
-    flexShrink: 1,
-  },
-  modalScrollContent: {
-    paddingBottom: 12,
-  },
-  modalHeader: {
+  glowOuter: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(246,203,145,0.35)',
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  modalDragIndicator: {
-    width: 40,
-    height: 4,
-    backgroundColor: palette.surface,
-    borderRadius: 2,
-  },
-  modalCloseButton: {
-    position: 'absolute',
-    right: 16,
-    top: 16,
-    zIndex: 10,
-  },
-  closeButtonCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: palette.surface,
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  parkingImageContainer: {
-    position: 'relative',
-    marginBottom: 16,
-    borderRadius: 16,
+  glowOuterDim: { width: 16, height: 16, borderRadius: 8, backgroundColor: 'rgba(246,203,145,0.14)' },
+  glowInnerDim: { width: 7, height: 7, borderRadius: 4, borderWidth: 0, opacity: 0.7 },
+  glowInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: palette.peach,
+    borderWidth: 1.5,
+    borderColor: '#FFF3E0',
+  },
+
+  sectionGap: { marginTop: 22 },
+
+  spotCard: {
+    borderRadius: radii.xl,
+    padding: 18,
+    marginBottom: 12,
+    minHeight: 160,
     overflow: 'hidden',
   },
-  parkingImagePlaceholder: {
-    width: '100%',
-    height: 110,
-    backgroundColor: palette.surface,
-    borderRadius: 16,
-    justifyContent: 'center',
+  spotCardSelected: { borderWidth: 2, borderColor: palette.ink },
+  spotArt: { position: 'absolute', right: -30, bottom: -26 },
+  spotTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heartBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.75)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  parkingImage: {
-    // Image takes full modal width minus the modal's 20px horizontal padding
-    width: SCREEN_WIDTH - 40,
-    height: 180,
-    borderRadius: 16,
-    backgroundColor: palette.surface,
-  },
-  parkingImageScroll: {
-    width: SCREEN_WIDTH - 40,
-    height: 180,
-  },
-  availabilityBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: '#10B981',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  availabilityText: {
+  spotBody: { width: '66%' },
+  spotName: {
+    ...fonts.bold,
+    fontSize: 22,
+    letterSpacing: -0.5,
     color: palette.text,
-    fontSize: 12,
-    fontWeight: '600',
+    marginTop: 12,
   },
-  parkingInfo: {
-    marginBottom: 20,
-  },
-  parkingTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  parkingName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: palette.text,
-    flex: 1,
-  },
-  newTag: {
-    fontFamily: fontStacks.medium,
-    fontSize: 12,
-    color: palette.textMuted,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(242,181,60,0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
-  },
-  ratingText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#D97706',
-  },
-  parkingAddressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 6,
-  },
-  parkingAddress: {
-    fontSize: 14,
-    color: '#A1A1AA',
-    flex: 1,
-  },
-  parkingDetailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    gap: 20,
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  detailText: {
-    fontSize: 13,
-    color: '#A1A1AA',
-    fontWeight: '500',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: palette.surface,
-  },
-  priceContainer: {
-    flex: 1,
-  },
-  priceLabel: {
-    fontSize: 12,
-    color: '#A1A1AA',
-    marginBottom: 2,
-  },
-  priceValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: palette.primary,
-  },
-  priceUnit: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#A1A1AA',
-  },
-  modalButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  directionsButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(217,255,90,0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  bookButton: {
-    backgroundColor: palette.primary,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  bookButtonText: {
-    color: '#0B0F0C',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  // Filter Modal Styles
-  filterBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#EF4444',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filterBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  filterModalContent: {
+  spotTrack: { marginTop: 14 },
+  spotMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
+  spotMetaCol: { maxWidth: '55%' },
+  spotMetaTitle: { ...fonts.semibold, fontSize: 13.5, color: palette.text },
+  spotMetaSub: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 2 },
+
+  stateBox: { alignItems: 'center', paddingVertical: 36 },
+  stateText: { ...fonts.medium, fontSize: 14, color: palette.textMuted, marginTop: 12 },
+
+  // Sheets
+  sheetOverlay: { flex: 1, justifyContent: 'flex-end' },
+  sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: {
     backgroundColor: palette.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
     paddingHorizontal: 20,
-    paddingBottom: 30,
-    maxHeight: '80%',
+    paddingTop: 12,
   },
-  filterHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.surface,
-  },
-  filterTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  filterSection: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.surface,
-  },
-  filterSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: palette.text,
-    marginBottom: 12,
-  },
-  filterOptionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: palette.surface,
-    borderWidth: 1,
-    borderColor: palette.surface,
-  },
-  filterChipActive: {
-    backgroundColor: palette.primary,
-    borderColor: palette.primary,
-  },
-  filterChipIcon: {
-    marginRight: 6,
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#A1A1AA',
-  },
-  filterChipTextActive: {
-    color: '#FFFFFF',
-  },
-  amenitiesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  amenityChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(217,255,90,0.12)',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    gap: 8,
-  },
-  amenityChipActive: {
-    backgroundColor: palette.primary,
-    borderColor: palette.primary,
-  },
-  amenityChipText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: palette.primary,
-  },
-  amenityChipTextActive: {
-    color: '#FFFFFF',
-  },
-  filterActions: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingTop: 20,
-  },
-  resetButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: palette.surface,
-    alignItems: 'center',
-  },
-  resetButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#A1A1AA',
-  },
-  applyButton: {
-    flex: 2,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: palette.primary,
-    alignItems: 'center',
-  },
-  applyButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0B0F0C',
-  },
-  // All Recommendations sheet — visually anchored to the same place as
-  // the inline `recommendationsSection` so it reads as that section
-  // expanding upward, not as a new sheet.
-  allRecommendationsModalContent: {
-    backgroundColor: palette.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 16,
-    // Bottom padding leaves room for the floating glass menu.
-    paddingBottom: 96,
-    flex: 1,
-    marginTop: 60,
-    shadowColor: '#B8E632',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 12,
-  },
-  sheetHandle: {
+  filterSheet: { maxHeight: '82%' },
+  grabber: {
     alignSelf: 'center',
     width: 44,
     height: 5,
     borderRadius: 3,
-    backgroundColor: 'rgba(15, 40, 40, 0.18)',
-    marginTop: 10,
-    marginBottom: 4,
+    backgroundColor: palette.line,
+    marginBottom: 16,
   },
-  allRecommendationsHeader: {
+  sheetTitle: { ...fonts.semibold, fontSize: 22, color: palette.text },
+
+  previewMedia: { height: 190, borderRadius: radii.lg, overflow: 'hidden', backgroundColor: palette.peachSoft },
+  previewImage: { width: 360, height: 190 },
+  previewPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  previewTag: { position: 'absolute', left: 12, top: 12 },
+  previewTitleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16 },
+  previewName: { ...fonts.bold, flex: 1, fontSize: 22, letterSpacing: -0.4, color: palette.text, marginRight: 10 },
+  ratingPill: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: palette.warningSoft,
+    borderRadius: radii.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  ratingText: { ...fonts.bold, fontSize: 12, color: palette.text, marginLeft: 4 },
+  previewAddrRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  previewAddr: { ...fonts.medium, flex: 1, fontSize: 13.5, color: palette.textMuted, marginLeft: 6 },
+  previewGrid: {
+    marginTop: 16,
     paddingTop: 14,
-    paddingBottom: 12,
+    paddingHorizontal: 14,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surfaceDim,
   },
-  allRecommendationsTitle: {
-    fontFamily: fontStacks.regular,
-    fontSize: 22,
-    fontWeight: '300',
-    letterSpacing: -0.4,
-    color: palette.text,
-  },
-  allRecommendationsCount: {
-    fontFamily: fontStacks.regular,
-    fontSize: 13,
-    color: palette.textMuted,
-    paddingBottom: 14,
-  },
-  // Match the compact horizontal scroll's paddingHorizontal so the first
-  // card sits at the same X position in both modes — no left/center
-  // shift when switching between compact and expanded.
-  allRecommendationsListContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  allRecommendationsCard: {
-    flexDirection: 'row',
-    backgroundColor: '#DDEDE9',
-    borderRadius: 18,
-    marginBottom: 12,
-    overflow: 'hidden',
-    shadowColor: '#B8E632',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  allRecommendationsCardImage: {
-    width: 90,
-    backgroundColor: 'rgba(13,115,119,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  allRecommendationsCardContent: {
-    flex: 1,
-    padding: 12,
-  },
-  allRecommendationsCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  allRecommendationsCardName: {
-    flex: 1,
-    fontFamily: fontStacks.medium,
-    fontSize: 15,
-    fontWeight: '600',
-    color: palette.text,
-    marginRight: 8,
-  },
-  allRecommendationsCardAddress: {
-    fontFamily: fontStacks.regular,
-    fontSize: 12,
-    color: palette.textMuted,
-    marginTop: 2,
-  },
-  allRecommendationsCardMeta: {
-    flexDirection: 'row',
-    marginTop: 6,
-    gap: 12,
-  },
-  allRecommendationsCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  allRecommendationsCardPrice: {
-    fontFamily: fontStacks.regular,
-    fontSize: 18,
-    fontWeight: '700',
-    color: palette.primary,
-  },
-  allRecommendationsBookButton: {
-    backgroundColor: palette.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  allRecommendationsBookButtonText: {
-    fontFamily: fontStacks.medium,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0B0F0C',
-  },
+  previewActions: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
+  previewBook: { flex: 1, marginLeft: 12 },
+
+  filterHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  filterLabel: { ...fonts.semibold, fontSize: 15, color: palette.text, marginTop: 18, marginBottom: 10 },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap' },
+  chipGap: { marginBottom: 10, backgroundColor: palette.fill },
+  filterActions: { flexDirection: 'row', marginTop: 16 },
+  filterApply: { flex: 1.6 },
 });
 
 export default HomePage;

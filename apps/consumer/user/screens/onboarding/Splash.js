@@ -3,7 +3,7 @@
  *
  * Animation timeline (≈1900ms total before onDone fires):
  *   0   ms  page bg appears
- *   60  ms  soft teal halo pulses up behind the pin
+ *   60  ms  soft peach halo pulses up behind the pin
  *   80  ms  pin drops in from above the centre with a spring
  *   500 ms  brand mark + tagline fade up from below
  *   1000ms  "loading" rail under the brand fills left → right
@@ -24,7 +24,7 @@ import {
   StatusBar,
 } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
-import { palette, fontStacks } from '../../theme';
+import { palette, fonts } from '../../theme';
 import { PinFill } from '../../components/glass/Icons';
 
 /**
@@ -66,7 +66,7 @@ const Splash = ({ onDone }) => {
   const pinDrop = useRef(new Animated.Value(0)).current;
   const pinScale = useRef(new Animated.Value(0)).current;
 
-  // Halo (teal-tinted bloom behind the pin)
+  // Halo (peach bloom behind the pin)
   const haloOpacity = useRef(new Animated.Value(0)).current;
   const haloScale = useRef(new Animated.Value(0.6)).current;
 
@@ -147,7 +147,7 @@ const Splash = ({ onDone }) => {
 
       {/* Real radial-gradient blooms — alpha fades to 0 in every
           direction from the centre, so there is no visible shape edge,
-          just a soft teal glow. Drawn as full-area SVGs whose centre is
+          just a soft peach glow. Drawn as full-area SVGs whose centre is
           anchored in (or just past) each corner. */}
       <View pointerEvents="none" style={[styles.bloomGroup, styles.bloomTopLeftGroup]}>
         <RadialBloom
@@ -157,8 +157,8 @@ const Splash = ({ onDone }) => {
           cy={BLOOM * 0.4}
           rx={BLOOM * 0.55}
           ry={BLOOM * 0.55}
-          color={palette.primary}
-          peakOpacity={0.22}
+          color={palette.peach}
+          peakOpacity={0.45}
         />
       </View>
       <View pointerEvents="none" style={[styles.bloomGroup, styles.bloomBottomRightGroup]}>
@@ -169,8 +169,8 @@ const Splash = ({ onDone }) => {
           cy={BLOOM * 0.6}
           rx={BLOOM * 0.55}
           ry={BLOOM * 0.55}
-          color={palette.primary}
-          peakOpacity={0.18}
+          color={palette.peach}
+          peakOpacity={0.4}
         />
       </View>
 
@@ -196,8 +196,8 @@ const Splash = ({ onDone }) => {
               cy={HALO_SIZE / 2}
               rx={HALO_SIZE / 2}
               ry={HALO_SIZE / 2}
-              color={palette.primary}
-              peakOpacity={0.32}
+              color={palette.peach}
+              peakOpacity={0.6}
             />
           </Animated.View>
           <Animated.View
@@ -208,7 +208,7 @@ const Splash = ({ onDone }) => {
               },
             ]}
           >
-            <PinFill size={72} color={palette.primary} />
+            <PinFill size={72} color={palette.ink} />
           </Animated.View>
         </View>
 
@@ -221,7 +221,9 @@ const Splash = ({ onDone }) => {
             },
           ]}
         >
-          <Text style={styles.brand}>PARKFNB</Text>
+          <Text style={styles.brand}>
+            parkfnb.<Text style={styles.brandMark}>®</Text>
+          </Text>
           <Text style={styles.tagline}>Find a spot. Glide in.</Text>
 
           <View style={styles.railTrack}>
@@ -254,7 +256,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  // Diagonal teal-to-transparent gradient anchored in each corner.
+  // Diagonal peach-to-transparent gradient anchored in each corner.
   // The square (not circle) shape doesn't matter — the colour fades to
   // 0% well before the visible edge, so what you see is just the soft
   // glow, never a corner.
@@ -298,14 +300,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   brand: {
-    fontFamily: fontStacks.regular,
-    fontSize: 48,
-    fontWeight: '300',
-    letterSpacing: 8,
+    ...fonts.bold,
+    fontSize: 44,
+    letterSpacing: -1.2,
     color: palette.text,
   },
+  brandMark: { ...fonts.medium, fontSize: 16 },
   tagline: {
-    fontFamily: fontStacks.regular,
+    ...fonts.medium,
     fontSize: 13,
     color: palette.textMuted,
     marginTop: 8,
@@ -315,13 +317,13 @@ const styles = StyleSheet.create({
     width: 120,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: 'rgba(13, 115, 119, 0.14)',
+    backgroundColor: palette.peachSoft,
     marginTop: 22,
     overflow: 'hidden',
   },
   railFill: {
     height: '100%',
-    backgroundColor: palette.primary,
+    backgroundColor: palette.ink,
     borderRadius: 1.5,
   },
 });
