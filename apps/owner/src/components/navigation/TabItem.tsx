@@ -1,23 +1,13 @@
-import React, { memo, useMemo, useCallback, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Platform,
-} from 'react-native';
+import React, { memo, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withTiming,
-  interpolate,
-  Extrapolation,
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, fonts } from '../../theme/kit';
 
 // Tab icon mapping
 export type TabIconName = 'home' | 'list' | 'calendar' | 'wallet' | 'menu' | 'business' | 'people' | 'shield' | 'map';
@@ -34,7 +24,6 @@ const ICON_MAP: Record<TabIconName, { default: string; active: string }> = {
   map: { default: 'map-outline', active: 'map' },
 };
 
-// Animation configs
 const SPRING_CONFIG = {
   damping: 15,
   stiffness: 200,
@@ -51,6 +40,10 @@ export interface TabItemProps {
   testID?: string;
 }
 
+/**
+ * Icon-only tab for the floating pill tab bar. The focused tab sits in a
+ * solid ink circle with a white icon; the label is kept for accessibility.
+ */
 function TabItem({
   icon,
   label,
@@ -60,68 +53,34 @@ function TabItem({
   showDot,
   testID,
 }: TabItemProps) {
-  // Force light mode
-  const theme = useMemo(() => getTheme(false), []);
-
-  // Animation values
   const scale = useSharedValue(1);
   const activeValue = useSharedValue(isActive ? 1 : 0);
-  const pressOpacity = useSharedValue(1);
 
-  // Update active animation when isActive changes
   useEffect(() => {
-    activeValue.value = withSpring(isActive ? 1 : 0, SPRING_CONFIG);
+    activeValue.value = withTiming(isActive ? 1 : 0, { duration: 180 });
   }, [isActive, activeValue]);
 
-  // Handle press states
   const handlePressIn = useCallback(() => {
-    scale.value = withSpring(0.92, SPRING_CONFIG);
-    pressOpacity.value = withTiming(0.7, { duration: 100 });
-  }, [scale, pressOpacity]);
+    scale.value = withSpring(0.9, SPRING_CONFIG);
+  }, [scale]);
 
   const handlePressOut = useCallback(() => {
     scale.value = withSpring(1, SPRING_CONFIG);
-    pressOpacity.value = withTiming(1, { duration: 150 });
-  }, [scale, pressOpacity]);
+  }, [scale]);
 
-  // Animated styles
   const containerAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-    opacity: pressOpacity.value,
   }));
 
-  const iconAnimatedStyle = useAnimatedStyle(() => {
-    const iconScale = interpolate(
-      activeValue.value,
-      [0, 1],
-      [1, 1.08],
-      Extrapolation.CLAMP
-    );
-    return {
-      transform: [{ scale: iconScale }],
-    };
-  });
-
-  const indicatorAnimatedStyle = useAnimatedStyle(() => ({
+  const circleAnimatedStyle = useAnimatedStyle(() => ({
     opacity: activeValue.value,
-    transform: [
-      {
-        scale: interpolate(
-          activeValue.value,
-          [0, 1],
-          [0.8, 1],
-          Extrapolation.CLAMP
-        ),
-      },
-    ],
+    transform: [{ scale: 0.7 + activeValue.value * 0.3 }],
   }));
 
-  // Get icon names
   const iconConfig = ICON_MAP[icon];
   const iconName = isActive ? iconConfig.active : iconConfig.default;
-  const iconColor = isActive ? theme.primary : theme.textMuted;
+  const iconColor = isActive ? palette.textInverse : palette.text;
 
-  // Determine if we should show badge
   const showBadge = badgeCount !== undefined && badgeCount > 0;
   const badgeText = badgeCount && badgeCount > 99 ? '99+' : String(badgeCount);
 
@@ -131,110 +90,69 @@ function TabItem({
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={styles.touchable}
+      hitSlop={6}
       accessibilityRole="tab"
       accessibilityLabel={label}
       accessibilityState={{ selected: isActive }}
       testID={testID}
     >
-      <Animated.View style={[styles.container, containerAnimatedStyle]}>
-        {/* Active Indicator Pill */}
-        <Animated.View
-          style={[
-            styles.activeIndicator,
-            { backgroundColor: theme.primaryLight },
-            indicatorAnimatedStyle,
-          ]}
-        />
+      <Animated.View style={[styles.iconWrap, containerAnimatedStyle]}>
+        <Animated.View style={[styles.activeCircle, circleAnimatedStyle]} />
+        <Ionicons name={iconName} size={22} color={iconColor} />
 
-        {/* Icon Container */}
-        <Animated.View style={[styles.iconContainer, iconAnimatedStyle]}>
-          <Ionicons
-            name={iconName}
-            size={24}
-            color={iconColor}
-          />
+        {showBadge && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText} allowFontScaling={false} numberOfLines={1}>
+              {badgeText}
+            </Text>
+          </View>
+        )}
 
-          {/* Numeric Badge */}
-          {showBadge && (
-            <View style={[styles.badge, { backgroundColor: theme.danger }]}>
-              <Text
-                style={styles.badgeText}
-                allowFontScaling={false}
-                numberOfLines={1}
-              >
-                {badgeText}
-              </Text>
-            </View>
-          )}
-
-          {/* Dot Indicator */}
-          {showDot && !showBadge && (
-            <View style={[styles.dot, { backgroundColor: theme.danger }]} />
-          )}
-        </Animated.View>
-
-        {/* Label */}
-        <Text
-          style={[
-            styles.label,
-            { color: isActive ? theme.primary : theme.textMuted },
-            isActive && styles.labelActive,
-          ]}
-          numberOfLines={1}
-          allowFontScaling
-        >
-          {label}
-        </Text>
+        {showDot && !showBadge && <View style={styles.dot} />}
       </Animated.View>
     </Pressable>
   );
 }
 
+const CIRCLE = 56;
+
 const styles = StyleSheet.create({
   touchable: {
-    flex: 1,
-    minHeight: 56,
-    minWidth: 64,
+    width: 64,
+    height: 64,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  container: {
+  iconWrap: {
+    width: CIRCLE,
+    height: CIRCLE,
+    borderRadius: CIRCLE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[3],
-    position: 'relative',
   },
-  activeIndicator: {
-    position: 'absolute',
-    top: 0,
-    left: spacing[1],
-    right: spacing[1],
-    bottom: 0,
-    borderRadius: borderRadius.lg,
-  },
-  iconContainer: {
-    position: 'relative',
-    marginBottom: spacing[1],
-    zIndex: 1,
+  activeCircle: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: CIRCLE / 2,
+    backgroundColor: palette.ink,
   },
   badge: {
     position: 'absolute',
-    top: -6,
-    right: -10,
+    top: 8,
+    right: 6,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
+    backgroundColor: palette.danger,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: palette.surface,
   },
   badgeText: {
-    color: '#FFFFFF',
+    ...fonts.bold,
+    color: palette.textInverse,
     fontSize: 10,
-    fontWeight: '700',
     textAlign: 'center',
     includeFontPadding: false,
     ...Platform.select({
@@ -245,22 +163,14 @@ const styles = StyleSheet.create({
   },
   dot: {
     position: 'absolute',
-    top: -2,
-    right: -4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 13,
+    right: 13,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: palette.danger,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: fontWeight.medium as any,
-    textAlign: 'center',
-    zIndex: 1,
-  },
-  labelActive: {
-    fontWeight: fontWeight.semibold as any,
+    borderColor: palette.surface,
   },
 });
 

@@ -1,22 +1,30 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
   StatusBar,
-  Platform,
   Linking,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
+import {
+  PillButton,
+  IconCircle,
+  ScreenHeader,
+  StatusTag,
+  ProgressTrack,
+  InfoGrid,
+  TimelineItem,
+  ContactCard,
+  EmptyState,
+  IsoBlock,
+} from '../../components/ui';
 import type { RootStackScreenProps } from '../../navigation/types';
 import { bookingService } from '../../services/bookingService';
 import { transformBooking, getRefundPolicy, getCheckInWindow, formatBookingDate, formatBookingTime } from '../../utils/bookingTransform';
@@ -24,19 +32,20 @@ import type { ApiBooking } from '../../types/api';
 import type { FullBooking } from '../../types/models';
 
 type Props = RootStackScreenProps<'BookingDetails'>;
+type TagTone = 'ink' | 'warning' | 'success' | 'danger' | 'grey';
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
-function getStatusColor(status: FullBooking['status'], theme: ReturnType<typeof getTheme>) {
+function getStatusTone(status: FullBooking['status']): TagTone {
   switch (status) {
-    case 'REQUESTED':  return { bg: theme.warningLight,  text: theme.warning };
-    case 'UPCOMING':   return { bg: theme.primaryLight,  text: theme.primary };
-    case 'ACTIVE':     return { bg: theme.successLight,  text: theme.success };
-    case 'COMPLETED':  return { bg: theme.borderLight,   text: theme.textSecondary };
-    case 'CANCELLED':  return { bg: theme.dangerLight,   text: theme.danger };
-    case 'REJECTED':   return { bg: theme.dangerLight,   text: theme.danger };
-    case 'NO_SHOW':    return { bg: theme.warningLight,  text: theme.warning };
-    default:           return { bg: theme.borderLight,   text: theme.textSecondary };
+    case 'REQUESTED':  return 'warning';
+    case 'UPCOMING':   return 'ink';
+    case 'ACTIVE':     return 'ink';
+    case 'COMPLETED':  return 'grey';
+    case 'CANCELLED':  return 'danger';
+    case 'REJECTED':   return 'danger';
+    case 'NO_SHOW':    return 'danger';
+    default:           return 'grey';
   }
 }
 
@@ -53,56 +62,32 @@ function getStatusLabel(status: FullBooking['status']): string {
   }
 }
 
-function getPaymentLabel(paymentStatus: ApiBooking['paymentStatus']) {
-  switch (paymentStatus) {
-    case 'paid':               return { label: 'Paid', color: '#10B981', icon: 'checkmark-circle' };
-    case 'pending':            return { label: 'Pending', color: '#F59E0B', icon: 'time-outline' };
-    case 'failed':             return { label: 'Failed', color: '#EF4444', icon: 'close-circle' };
-    case 'refunded':           return { label: 'Refunded', color: '#0D7377', icon: 'return-up-back-outline' };
-    case 'partially_refunded': return { label: 'Partial Refund', color: '#0D7377', icon: 'return-up-back-outline' };
-    default:                   return { label: paymentStatus, color: '#94A3B8', icon: 'help-circle-outline' };
+// Position on the 4-step track (Requested → Approved → Parked → Done).
+function getTrackStep(status: FullBooking['status']): number {
+  switch (status) {
+    case 'REQUESTED': return 0;
+    case 'UPCOMING':  return 1;
+    case 'ACTIVE':    return 2;
+    default:          return 4;
   }
 }
 
-function getInitials(name: string): string {
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
-
-// ─── Section wrapper ──────────────────────────────────────────────────────────
-
-function Section({ title, children, theme }: { title: string; children: React.ReactNode; theme: ReturnType<typeof getTheme> }) {
-  return (
-    <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-function InfoRow({ icon, label, value, onPress, theme }: {
-  icon: string;
-  label?: string;
-  value: string;
-  onPress?: () => void;
-  theme: ReturnType<typeof getTheme>;
-}) {
-  return (
-    <Pressable style={styles.infoRow} onPress={onPress} disabled={!onPress}>
-      <Ionicons name={icon} size={16} color={theme.textMuted} style={styles.infoIcon} />
-      <View style={styles.infoText}>
-        {label && <Text style={[styles.infoLabel, { color: theme.textMuted }]}>{label}</Text>}
-        <Text style={[styles.infoValue, { color: onPress ? theme.primary : theme.text }]}>{value}</Text>
-      </View>
-      {onPress && <Ionicons name="chevron-forward" size={14} color={theme.textMuted} />}
-    </Pressable>
-  );
+function getPaymentLabel(paymentStatus: ApiBooking['paymentStatus']): { label: string; tone: TagTone } {
+  switch (paymentStatus) {
+    case 'paid':               return { label: 'Paid', tone: 'success' };
+    case 'pending':            return { label: 'Pending', tone: 'warning' };
+    case 'failed':             return { label: 'Failed', tone: 'danger' };
+    case 'refunded':           return { label: 'Refunded', tone: 'grey' };
+    case 'partially_refunded': return { label: 'Partial Refund', tone: 'grey' };
+    default:                   return { label: paymentStatus, tone: 'grey' };
+  }
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function BookingDetailsScreen({ route, navigation }: Props) {
   const { bookingId } = route.params;
-  const theme = useMemo(() => getTheme(false), []);
+  const insets = useSafeAreaInsets();
 
   const [rawBooking, setRawBooking] = useState<ApiBooking | null>(null);
   const [booking, setBooking] = useState<FullBooking | null>(null);
@@ -266,47 +251,35 @@ export default function BookingDetailsScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
-        <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
-          </Pressable>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Booking Details</Text>
-          <View style={styles.headerRight} />
-        </View>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={palette.bgCream} />
+        <ScreenHeader title="Details" onBack={() => navigation.goBack()} />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
+          <ActivityIndicator size="large" color={palette.ink} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (error || !booking || !rawBooking) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
-        <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
-          </Pressable>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Booking Details</Text>
-          <View style={styles.headerRight} />
-        </View>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={palette.bgCream} />
+        <ScreenHeader title="Details" onBack={() => navigation.goBack()} />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={56} color={theme.danger} />
-          <Text style={[styles.errorText, { color: theme.text }]}>{error || 'Something went wrong.'}</Text>
-          <Pressable style={[styles.retryButton, { backgroundColor: theme.primary }]} onPress={fetchBooking}>
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </Pressable>
+          <EmptyState
+            tone="grey"
+            title={error || 'Something went wrong.'}
+            action="Try Again"
+            onAction={fetchBooking}
+          />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // ─── Derived display values ──────────────────────────────────────────────
 
-  const statusColors = getStatusColor(booking.status, theme);
   const paymentInfo  = getPaymentLabel(rawBooking.paymentStatus);
   const checkInWindow = booking.status === 'UPCOMING' ? getCheckInWindow(booking.startAt) : null;
 
@@ -319,17 +292,49 @@ export default function BookingDetailsScreen({ route, navigation }: Props) {
     ? '1 hour'
     : `${rawBooking.durationHours % 1 === 0 ? rawBooking.durationHours : rawBooking.durationHours.toFixed(1)} hours`;
 
-  const renterInitials = getInitials(booking.renterName);
-
   const refundPolicy = booking.status === 'UPCOMING' ? getRefundPolicy(booking.startAt) : null;
+
+  // Timeline built only from timestamps the API returned, newest first.
+  const timeline: { key: string; title: string; subtitle?: string; at?: string }[] = [
+    {
+      key: 'created',
+      title: rawBooking.bookingMode === 'instant' ? 'Instant booking received' : 'Booking request received',
+      subtitle: rawBooking.bookingMode === 'instant' ? 'Instant Booking' : 'Request-based',
+      at: booking.createdAt,
+    },
+  ];
+  if (['UPCOMING', 'ACTIVE', 'COMPLETED'].includes(booking.status) || rawBooking.checkInTime) {
+    timeline.push({
+      key: 'confirmed',
+      title: 'Booking confirmed',
+      subtitle: `Scheduled for ${startDate} · ${startTime}`,
+      at: rawBooking.bookingMode === 'instant' ? booking.createdAt : undefined,
+    });
+  }
+  if (rawBooking.checkInTime) {
+    timeline.push({ key: 'checkin', title: 'Checked in', subtitle: booking.addressLine, at: rawBooking.checkInTime });
+  }
+  if (rawBooking.checkOutTime) {
+    timeline.push({ key: 'checkout', title: 'Checked out', subtitle: `Ends ${endDate} · ${endTime}`, at: rawBooking.checkOutTime });
+  }
+  if (['CANCELLED', 'REJECTED', 'NO_SHOW'].includes(booking.status)) {
+    timeline.push({
+      key: 'ended',
+      title: getStatusLabel(booking.status),
+      subtitle: booking.notes ? `Cancellation reason: ${booking.notes}` : undefined,
+      at: rawBooking.updatedAt,
+    });
+  }
+  timeline.reverse();
 
   // ─── Footer action buttons by status ────────────────────────────────────
 
   const renderFooterActions = () => {
+    const footerStyle = [styles.footer, { paddingBottom: insets.bottom + 12 }];
     if (actionLoading) {
       return (
-        <View style={[styles.footer, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
-          <ActivityIndicator size="small" color={theme.primary} style={styles.footerLoader} />
+        <View style={footerStyle}>
+          <ActivityIndicator size="small" color={palette.ink} style={styles.footerLoader} />
         </View>
       );
     }
@@ -337,39 +342,24 @@ export default function BookingDetailsScreen({ route, navigation }: Props) {
     switch (booking.status) {
       case 'REQUESTED':
         return (
-          <View style={[styles.footer, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
-            <Pressable style={[styles.footerButton, styles.footerButtonOutline, { borderColor: theme.danger }]} onPress={handleReject}>
-              <Text style={[styles.footerButtonText, { color: theme.danger }]}>Reject</Text>
-            </Pressable>
-            <Pressable style={[styles.footerButton, { backgroundColor: theme.success }]} onPress={handleApprove}>
-              <Text style={[styles.footerButtonText, { color: '#FFFFFF' }]}>Approve</Text>
-            </Pressable>
+          <View style={footerStyle}>
+            <PillButton variant="ink" icon="check" label="Approve" onPress={handleApprove} style={styles.footerMain} />
+            <PillButton variant="grey" icon="x" label="Reject" onPress={handleReject} style={styles.footerSide} />
           </View>
         );
       case 'UPCOMING':
         return (
-          <View style={[styles.footer, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
-            <Pressable style={[styles.footerButton, styles.footerButtonOutline, { borderColor: theme.border }]} onPress={handleCancel}>
-              <Text style={[styles.footerButtonText, { color: theme.textSecondary }]}>Cancel</Text>
-            </Pressable>
-            <Pressable style={[styles.footerButton, styles.footerButtonOutline, { borderColor: theme.primary }]} onPress={handleViewPass}>
-              <Ionicons name="qr-code-outline" size={16} color={theme.primary} style={{ marginRight: 4 }} />
-              <Text style={[styles.footerButtonText, { color: theme.primary }]}>Pass</Text>
-            </Pressable>
-            <Pressable style={[styles.footerButton, { backgroundColor: theme.primary }]} onPress={handleCheckIn}>
-              <Text style={[styles.footerButtonText, { color: '#FFFFFF' }]}>Check In</Text>
-            </Pressable>
+          <View style={footerStyle}>
+            <PillButton variant="ink" icon="log-in" label="Check In" onPress={handleCheckIn} style={styles.footerMain} />
+            <PillButton variant="grey" icon="grid" label="Pass" onPress={handleViewPass} style={styles.footerSide} />
+            <IconCircle icon="x" size={58} variant="grey" color={palette.danger} onPress={handleCancel} />
           </View>
         );
       case 'ACTIVE':
         return (
-          <View style={[styles.footer, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
-            <Pressable style={[styles.footerButton, styles.footerButtonOutline, { borderColor: theme.warning }]} onPress={handleMarkNoShow}>
-              <Text style={[styles.footerButtonText, { color: theme.warning }]}>No-Show</Text>
-            </Pressable>
-            <Pressable style={[styles.footerButton, { backgroundColor: theme.success }]} onPress={handleCheckOut}>
-              <Text style={[styles.footerButtonText, { color: '#FFFFFF' }]}>Check Out</Text>
-            </Pressable>
+          <View style={footerStyle}>
+            <PillButton variant="ink" icon="log-out" label="Check Out" onPress={handleCheckOut} style={styles.footerMain} />
+            <PillButton variant="grey" icon="alert-circle" label="No-Show" onPress={handleMarkNoShow} style={styles.footerSide} />
           </View>
         );
       default:
@@ -380,158 +370,137 @@ export default function BookingDetailsScreen({ route, navigation }: Props) {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.bgCream} />
 
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Booking Details</Text>
-        <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
-          <Text style={[styles.statusBadgeText, { color: statusColors.text }]}>
-            {getStatusLabel(booking.status)}
-          </Text>
-        </View>
-      </View>
+      <ScreenHeader title="Details" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Booking Reference */}
-        <Section title="BOOKING REFERENCE" theme={theme}>
-          <Text style={[styles.bookingNumber, { color: theme.text }]}>
-            #{rawBooking.bookingNumber}
-          </Text>
-          <Text style={[styles.bookingMeta, { color: theme.textSecondary }]}>
+        {/* Summary card */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryArt} pointerEvents="none">
+            <IsoBlock size={150} tone="peach" />
+          </View>
+          <View style={styles.summaryTop}>
+            <View style={styles.flex}>
+              <Text style={styles.gridLabelStrong}>Booking id</Text>
+              <Text style={styles.summaryRef} numberOfLines={1}>#{rawBooking.bookingNumber}</Text>
+            </View>
+            <View style={styles.statusCol}>
+              <Text style={styles.gridLabelStrong}>Status</Text>
+              <StatusTag
+                label={getStatusLabel(booking.status)}
+                tone={getStatusTone(booking.status)}
+                style={styles.statusTagGap}
+              />
+            </View>
+          </View>
+          <ProgressTrack steps={4} current={getTrackStep(booking.status)} style={styles.summaryTrack} />
+          <InfoGrid
+            style={styles.summaryGrid}
+            items={[
+              { label: 'Parking', value: booking.listingName },
+              { label: 'Mode', value: rawBooking.bookingMode === 'instant' ? 'Instant Booking' : 'Request-based' },
+              { label: 'Start', value: startDate, sub: startTime },
+              { label: 'End', value: endDate, sub: endTime },
+              { label: 'Duration', value: durationLabel },
+              { label: 'Vehicle', value: `${booking.vehicle.type} · ${booking.vehicle.plate}` },
+            ]}
+          />
+        </View>
+
+        {/* Sheet: timeline, guest, payment */}
+        <View style={styles.detailSheet}>
+          <View style={styles.grabber} />
+          <Text style={styles.sheetLead}>
             Booked on {formatBookingDate(booking.createdAt)} at {formatBookingTime(booking.createdAt)}
           </Text>
-          <View style={[styles.modeBadge, { backgroundColor: rawBooking.bookingMode === 'instant' ? theme.successLight : theme.primaryLight }]}>
-            <Ionicons
-              name={rawBooking.bookingMode === 'instant' ? 'flash-outline' : 'time-outline'}
-              size={12}
-              color={rawBooking.bookingMode === 'instant' ? theme.success : theme.primary}
-            />
-            <Text style={[styles.modeBadgeText, { color: rawBooking.bookingMode === 'instant' ? theme.success : theme.primary }]}>
-              {rawBooking.bookingMode === 'instant' ? 'Instant Booking' : 'Request-based'}
-            </Text>
-          </View>
-        </Section>
-
-        {/* Parking Space */}
-        <Section title="PARKING SPACE" theme={theme}>
-          <InfoRow icon="business-outline" value={booking.listingName} theme={theme} />
-          <InfoRow icon="location-outline" value={booking.addressLine} theme={theme} />
-        </Section>
-
-        {/* Timing */}
-        <Section title="TIMING" theme={theme}>
-          <InfoRow icon="calendar-outline" label="Start" value={`${startDate} · ${startTime}`} theme={theme} />
-          <InfoRow icon="calendar-outline" label="End"   value={`${endDate} · ${endTime}`} theme={theme} />
-          <InfoRow icon="timer-outline"    label="Duration" value={durationLabel} theme={theme} />
 
           {checkInWindow && (
-            <View style={[styles.checkInWindowBanner, { backgroundColor: theme.primaryLight, borderColor: theme.primary }]}>
-              <Ionicons name="information-circle-outline" size={14} color={theme.primary} />
-              <Text style={[styles.checkInWindowText, { color: theme.primary }]}>
+            <View style={styles.windowBanner}>
+              <Ionicons name="information-circle-outline" size={16} color={palette.text} />
+              <Text style={styles.windowText}>
                 Check-in window: {formatBookingTime(checkInWindow.opensAt)} – {formatBookingTime(checkInWindow.closesAt)}
               </Text>
             </View>
           )}
 
-          {rawBooking.checkInTime && (
-            <InfoRow icon="log-in-outline" label="Checked in" value={`${formatBookingDate(rawBooking.checkInTime)} at ${formatBookingTime(rawBooking.checkInTime)}`} theme={theme} />
-          )}
-          {rawBooking.checkOutTime && (
-            <InfoRow icon="log-out-outline" label="Checked out" value={`${formatBookingDate(rawBooking.checkOutTime)} at ${formatBookingTime(rawBooking.checkOutTime)}`} theme={theme} />
-          )}
-          {booking.notes && (
-            <InfoRow icon="close-circle-outline" label="Cancellation reason" value={booking.notes} theme={theme} />
-          )}
-        </Section>
+          {timeline.map((ev, i) => (
+            <TimelineItem
+              key={ev.key}
+              title={ev.title}
+              subtitle={ev.subtitle}
+              date={ev.at ? formatBookingDate(ev.at) : null}
+              time={ev.at ? formatBookingTime(ev.at) : null}
+              active={i === 0}
+              isLast={i === timeline.length - 1}
+            >
+              {i === 0 ? (
+                <View style={styles.placeCard}>
+                  <View style={styles.placeIcon}>
+                    <Ionicons name="business-outline" size={20} color={palette.text} />
+                  </View>
+                  <View style={styles.flex}>
+                    <Text style={styles.placeName} numberOfLines={1}>{booking.listingName}</Text>
+                    <Text style={styles.placeAddr} numberOfLines={1}>{booking.addressLine}</Text>
+                  </View>
+                </View>
+              ) : null}
+            </TimelineItem>
+          ))}
 
-        {/* Renter */}
-        <Section title="RENTER" theme={theme}>
-          <View style={styles.renterRow}>
-            <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
-              <Text style={styles.avatarText}>{renterInitials}</Text>
-            </View>
-            <View style={styles.renterInfo}>
-              <Text style={[styles.renterName, { color: theme.text }]}>{booking.renterName}</Text>
-              {booking.renterPhone ? (
-                <Pressable
-                  style={styles.phoneRow}
-                  onPress={() => handleCallRenter(booking.renterPhone!)}
-                >
-                  <Ionicons name="call-outline" size={14} color={theme.primary} />
-                  <Text style={[styles.phoneText, { color: theme.primary }]}>{booking.renterPhone}</Text>
-                </Pressable>
-              ) : (
-                <Text style={[styles.phoneText, { color: theme.textMuted }]}>No phone on file</Text>
-              )}
-            </View>
-          </View>
-          <View style={styles.vehicleRow}>
-            <Ionicons name="car-outline" size={16} color={theme.textMuted} />
-            <Text style={[styles.vehicleText, { color: theme.textSecondary }]}>
-              {booking.vehicle.type} · {booking.vehicle.plate}
-            </Text>
-          </View>
-        </Section>
+          {/* Guest */}
+          <Text style={styles.sheetSection}>Guest</Text>
+          <ContactCard
+            name={booking.renterName}
+            subtitle={booking.renterPhone || 'No phone on file'}
+            onCall={booking.renterPhone ? () => handleCallRenter(booking.renterPhone!) : undefined}
+            style={styles.contactCard}
+          />
 
-        {/* Payment */}
-        <Section title="PAYMENT" theme={theme}>
-          <View style={styles.paymentRow}>
-            <Text style={[styles.paymentLabel, { color: theme.textSecondary }]}>Base Price</Text>
-            <Text style={[styles.paymentValue, { color: theme.text }]}>
-              ₹{rawBooking.basePrice.toFixed(2)}
-            </Text>
-          </View>
-          {rawBooking.discountAmount > 0 && (
-            <View style={styles.paymentRow}>
-              <Text style={[styles.paymentLabel, { color: theme.textSecondary }]}>Discount</Text>
-              <Text style={[styles.paymentValue, { color: theme.success }]}>
-                -₹{rawBooking.discountAmount.toFixed(2)}
-              </Text>
+          {/* Payment */}
+          <Text style={styles.sheetSection}>Payment</Text>
+          <View style={styles.payCard}>
+            <View style={styles.payLine}>
+              <Text style={styles.payLabel}>Base Price</Text>
+              <Text style={styles.payValue}>₹{rawBooking.basePrice.toFixed(2)}</Text>
             </View>
-          )}
-          <View style={[styles.paymentDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.paymentRow}>
-            <Text style={[styles.paymentTotalLabel, { color: theme.text }]}>Total</Text>
-            <Text style={[styles.paymentTotalValue, { color: theme.text }]}>
-              ₹{rawBooking.totalAmount.toFixed(2)}
-            </Text>
-          </View>
-          <View style={styles.paymentStatusRow}>
-            <Text style={[styles.paymentLabel, { color: theme.textSecondary }]}>Payment</Text>
-            <View style={styles.paymentStatusBadge}>
-              <Ionicons name={paymentInfo.icon} size={14} color={paymentInfo.color} />
-              <Text style={[styles.paymentStatusText, { color: paymentInfo.color }]}>
-                {paymentInfo.label}
-              </Text>
+            {rawBooking.discountAmount > 0 && (
+              <View style={styles.payLine}>
+                <Text style={styles.payLabel}>Discount</Text>
+                <Text style={[styles.payValue, styles.payDiscount]}>
+                  -₹{rawBooking.discountAmount.toFixed(2)}
+                </Text>
+              </View>
+            )}
+            <View style={styles.payDivider} />
+            <View style={styles.payLine}>
+              <Text style={styles.payTotalLabel}>Total</Text>
+              <Text style={styles.payTotalValue}>₹{rawBooking.totalAmount.toFixed(2)}</Text>
+            </View>
+            <View style={styles.payStatusRow}>
+              <Text style={styles.payLabel}>Payment</Text>
+              <StatusTag label={paymentInfo.label} tone={paymentInfo.tone} />
             </View>
           </View>
-        </Section>
 
-        {/* Cancellation Policy (UPCOMING only) */}
-        {refundPolicy && (
-          <View style={[styles.refundBanner, { backgroundColor: theme.warningLight, borderColor: theme.warning }]}>
-            <Ionicons name="information-circle-outline" size={16} color={theme.warning} />
-            <Text style={[styles.refundBannerText, { color: theme.warning }]}>
-              {refundPolicy.label}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.bottomPad} />
+          {/* Cancellation Policy (UPCOMING only) */}
+          {refundPolicy && (
+            <View style={styles.policyRow}>
+              <Ionicons name="shield-checkmark-outline" size={16} color={palette.textMuted} />
+              <Text style={styles.policyText}>{refundPolicy.label}</Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
-      {/* Footer Actions */}
+      {/* Sticky footer actions */}
       {renderFooterActions()}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -540,35 +509,9 @@ export default function BookingDetailsScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: palette.bgCream,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderBottomWidth: 1,
-  },
-  backButton: {
-    padding: spacing[1],
-    marginRight: spacing[2],
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-  },
-  headerRight: {
-    width: 32,
-  },
-  statusBadge: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-  },
-  statusBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-  },
+  flex: { flex: 1 },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -578,242 +521,143 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing[6],
-    gap: spacing[3],
-  },
-  errorText: {
-    fontSize: fontSize.base,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingHorizontal: spacing[6],
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    paddingHorizontal: 24,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
+    flexGrow: 1,
   },
-  bottomPad: {
-    height: spacing[6],
+  // Summary card
+  summaryCard: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 20,
+    overflow: 'hidden',
   },
-  // Section
-  section: {
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    padding: spacing[4],
-    marginBottom: spacing[3],
+  summaryArt: { position: 'absolute', right: -34, top: 70 },
+  summaryTop: { flexDirection: 'row' },
+  statusCol: { alignItems: 'flex-start' },
+  statusTagGap: { marginTop: 6 },
+  gridLabelStrong: { ...fonts.semibold, fontSize: 12.5, color: palette.text },
+  summaryRef: {
+    ...fonts.bold,
+    fontSize: 24,
+    letterSpacing: -0.5,
+    color: palette.text,
+    marginTop: 4,
+    marginRight: 8,
   },
-  sectionTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-    letterSpacing: 0.8,
-    marginBottom: spacing[3],
-  },
-  // Booking reference
-  bookingNumber: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold as any,
-    marginBottom: spacing[1],
-    fontVariant: ['tabular-nums'],
-  },
-  bookingMeta: {
-    fontSize: fontSize.sm,
-    marginBottom: spacing[3],
-  },
-  modeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-  },
-  modeBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-  },
-  // Info row
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing[3],
-  },
-  infoIcon: {
-    marginTop: 2,
-    marginRight: spacing[3],
-    width: 16,
-  },
-  infoText: {
+  summaryTrack: { marginTop: 16, width: '66%' },
+  summaryGrid: { marginTop: 18, width: '72%' },
+  // Sheet
+  detailSheet: {
     flex: 1,
+    marginTop: 14,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
-  infoLabel: {
-    fontSize: fontSize.xs,
-    marginBottom: 2,
+  grabber: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    marginBottom: 16,
   },
-  infoValue: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+  sheetLead: {
+    ...fonts.medium,
+    fontSize: 13.5,
+    lineHeight: 19,
+    color: palette.textMuted,
+    marginBottom: 18,
   },
-  // Check-in window
-  checkInWindowBanner: {
+  windowBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.lg,
+    padding: 14,
+    borderRadius: radii.lg,
+    backgroundColor: palette.peachSoft,
+    marginBottom: 18,
+  },
+  windowText: {
+    ...fonts.semibold,
+    flex: 1,
+    fontSize: 13,
+    color: palette.text,
+    marginLeft: 8,
+  },
+  placeCard: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    paddingRight: 14,
+    borderRadius: radii.pill,
     borderWidth: 1,
-    marginBottom: spacing[3],
+    borderColor: palette.line,
   },
-  checkInWindowText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
-  // Renter
-  renterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing[3],
-  },
-  avatar: {
+  placeIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    backgroundColor: palette.peachSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing[3],
+    marginRight: 10,
   },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold as any,
+  placeName: { ...fonts.bold, fontSize: 14, color: palette.text },
+  placeAddr: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 2 },
+  sheetSection: {
+    ...fonts.semibold,
+    fontSize: 18,
+    color: palette.text,
+    marginTop: 6,
+    marginBottom: 12,
   },
-  renterInfo: {
-    flex: 1,
-  },
-  renterName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[1],
-  },
-  phoneRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
-  },
-  phoneText: {
-    fontSize: fontSize.sm,
-  },
-  vehicleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  vehicleText: {
-    fontSize: fontSize.sm,
-  },
+  contactCard: { marginTop: 0, marginBottom: 20 },
   // Payment
-  paymentRow: {
+  payCard: { backgroundColor: palette.surfaceDim, borderRadius: radii.lg, padding: 16 },
+  payLine: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
+  payLabel: { ...fonts.medium, fontSize: 14, color: palette.textMuted },
+  payValue: { ...fonts.semibold, fontSize: 14, color: palette.text },
+  payDiscount: { color: palette.success },
+  payDivider: { height: 1, backgroundColor: palette.line, marginVertical: 8 },
+  payTotalLabel: { ...fonts.semibold, fontSize: 16, color: palette.text },
+  payTotalValue: { ...fonts.bold, fontSize: 18, color: palette.text },
+  payStatusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing[2],
+    marginTop: 10,
   },
-  paymentLabel: {
-    fontSize: fontSize.sm,
-  },
-  paymentValue: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    fontVariant: ['tabular-nums'],
-  },
-  paymentDivider: {
-    height: 1,
-    marginVertical: spacing[2],
-  },
-  paymentTotalLabel: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-  paymentTotalValue: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as any,
-    fontVariant: ['tabular-nums'],
-  },
-  paymentStatusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing[2],
-  },
-  paymentStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
-  },
-  paymentStatusText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
-  // Refund banner
-  refundBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    marginBottom: spacing[3],
-  },
-  refundBannerText: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
+  policyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingHorizontal: 4 },
+  policyText: { ...fonts.medium, flex: 1, fontSize: 13, color: palette.textMuted, marginLeft: 8 },
   // Footer
   footer: {
     flexDirection: 'row',
-    padding: spacing[4],
-    borderTopWidth: 1,
-    gap: spacing[3],
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: palette.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
+    gap: 10,
     // Keeps the footer above the scroll view it sits beside.
     zIndex: 10,
     elevation: 10,
-    ...Platform.select({
-      ios: {
-        paddingBottom: spacing[6],
-      },
-    }),
   },
   footerLoader: {
     flex: 1,
-    paddingVertical: spacing[2],
+    paddingVertical: 19,
   },
-  footerButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-  },
-  footerButtonOutline: {
-    borderWidth: 1,
-    backgroundColor: 'transparent',
-  },
-  footerButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-  },
+  footerMain: { flex: 1.4 },
+  footerSide: { flex: 1 },
 });

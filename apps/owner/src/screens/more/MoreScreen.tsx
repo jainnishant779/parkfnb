@@ -4,21 +4,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
-  Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
-import AppHeader from '../../components/headers/AppHeader';
+import { palette, radii, fonts } from '../../theme/kit';
+import { Avatar, IconCircle, ListRow } from '../../components/ui';
 import { clearMoreDot } from '../../utils/storage';
 import { useAuth } from '../../context/AuthContext';
 
@@ -44,14 +36,14 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
     items: [
       {
         id: 'profile',
-        icon: 'person-outline',
+        icon: 'user',
         label: 'Profile',
         description: 'Manage your personal information',
         route: 'Profile',
       },
       {
         id: 'notifications',
-        icon: 'notifications-outline',
+        icon: 'bell',
         label: 'Notifications',
         description: 'Notification preferences',
         route: 'NotificationPreferences',
@@ -65,28 +57,28 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
     items: [
       {
         id: 'earnings',
-        icon: 'bar-chart-outline',
+        icon: 'bar-chart-2',
         label: 'Earnings',
         description: 'Revenue summary and transactions',
         route: 'Earnings',
       },
       {
         id: 'payouts',
-        icon: 'card-outline',
+        icon: 'credit-card',
         label: 'Payouts',
         description: 'Bank account and payout settings',
         route: 'Payouts',
       },
       {
         id: 'promotions',
-        icon: 'pricetag-outline',
+        icon: 'tag',
         label: 'Promotions',
         description: 'Discounts and special offers',
         route: 'Promotions',
       },
       {
         id: 'reviews',
-        icon: 'star-outline',
+        icon: 'star',
         label: 'Reviews',
         description: 'View and respond to reviews',
         route: 'Reviews',
@@ -98,7 +90,7 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
     items: [
       {
         id: 'help',
-        icon: 'help-circle-outline',
+        icon: 'help-circle',
         label: 'Help Center',
         description: 'FAQs and support tickets',
         route: 'HelpCenter',
@@ -107,91 +99,16 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
   },
 ];
 
-// Menu item component
-interface MenuItemRowProps {
-  item: MenuItem;
-  onPress: () => void;
-  isLast: boolean;
-  theme: ReturnType<typeof getTheme>;
-}
-
-function MenuItemRow({ item, onPress, isLast, theme }: MenuItemRowProps) {
-  const scale = useSharedValue(1);
-
-  const handlePressIn = useCallback(() => {
-    scale.value = withSpring(0.98, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const handlePressOut = useCallback(() => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      accessibilityLabel={item.label}
-      accessibilityRole="button"
-    >
-      <Animated.View
-        style={[
-          styles.menuItem,
-          !isLast && [styles.menuItemBorder, { borderBottomColor: theme.borderLight }],
-          animatedStyle,
-        ]}
-      >
-        {/* Icon */}
-        <View style={[styles.menuItemIcon, { backgroundColor: theme.primaryLight }]}>
-          <Ionicons
-            name={item.icon}
-            size={20}
-            color={item.color || theme.primary}
-          />
-        </View>
-
-        {/* Content */}
-        <View style={styles.menuItemContent}>
-          <Text style={[styles.menuItemLabel, { color: theme.text }]}>
-            {item.label}
-          </Text>
-          {item.description && (
-            <Text
-              style={[styles.menuItemDescription, { color: theme.textMuted }]}
-              numberOfLines={1}
-            >
-              {item.description}
-            </Text>
-          )}
-        </View>
-
-        {/* Badge or Chevron */}
-        <View style={styles.menuItemRight}>
-          {item.showBadge && item.badgeCount && item.badgeCount > 0 && (
-            <View style={[styles.badge, { backgroundColor: theme.danger }]}>
-              <Text style={styles.badgeText}>{item.badgeCount}</Text>
-            </View>
-          )}
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={theme.textMuted}
-          />
-        </View>
-      </Animated.View>
-    </Pressable>
-  );
-}
-
 export default function MoreScreen() {
   const navigation = useNavigation();
-  const { signOut } = useAuth();
-  // Force light mode
-  const theme = useMemo(() => getTheme(false), []);
+  const { signOut, user, owner } = useAuth();
+  const insets = useSafeAreaInsets();
+
+  const displayName =
+    user?.legalName ||
+    `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() ||
+    'Owner';
+  const displaySubtitle = owner?.businessName || user?.email || user?.phone || 'Parking owner';
 
   // Owner type state for conditional menu items
   const [isEmptyLandOwner, setIsEmptyLandOwner] = useState(false);
@@ -225,7 +142,7 @@ export default function MoreScreen() {
           if (item.id === 'promotions' && isEmptyLandOwner) {
             return {
               id: 'disputes',
-              icon: 'alert-circle-outline',
+              icon: 'alert-circle',
               label: 'Disputes',
               description: 'Track and manage dispute cases',
               route: 'Disputes',
@@ -235,7 +152,7 @@ export default function MoreScreen() {
           if (item.id === 'reviews' && isIndustrialOwner) {
             return {
               id: 'integrations',
-              icon: 'git-network-outline',
+              icon: 'git-branch',
               label: 'Integrations',
               description: 'Fleet and GPS tracking',
               route: 'Integrations',
@@ -250,7 +167,7 @@ export default function MoreScreen() {
             ...items,
             {
               id: 'iot-integrations',
-              icon: 'hardware-chip-outline',
+              icon: 'cpu',
               label: 'IoT Integrations',
               description: 'IoT devices and POS systems',
               route: 'IoTIntegrations',
@@ -291,52 +208,65 @@ export default function MoreScreen() {
   }, [signOut]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <AppHeader
-        variant="large"
-        title="More"
-        subtitle="Profile and support"
-        showDivider={false}
-      />
-
-      {/* Content */}
+    <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 120 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {menuSections.map((section, sectionIndex) => (
+        {/* Profile row */}
+        <View style={styles.profileRow}>
+          <TouchableOpacity onPress={() => handleMenuPress('Profile')} activeOpacity={0.8}>
+            <Avatar name={displayName} uri={user?.profilePictureUrl} size={58} />
+          </TouchableOpacity>
+          <View style={styles.profileText}>
+            <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
+            <Text style={styles.profileSub} numberOfLines={1}>{displaySubtitle}</Text>
+          </View>
+          <IconCircle
+            icon="edit-2"
+            size={50}
+            onPress={() => handleMenuPress('Profile')}
+          />
+        </View>
+
+        <Text style={styles.pageTitle}>More</Text>
+
+        {menuSections.map(section => (
           <View key={section.title} style={styles.section}>
             {/* Section Title */}
-            <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>
-              {section.title}
-            </Text>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
 
             {/* Section Card */}
-            <View style={[styles.sectionCard, { backgroundColor: theme.surface }]}>
-              {section.items.map((item, itemIndex) => (
-                <MenuItemRow
+            <View style={styles.sectionCard}>
+              {section.items.map((item: MenuItem, itemIndex: number) => (
+                <ListRow
                   key={item.id}
-                  item={item}
+                  icon={item.icon}
+                  title={item.label}
+                  subtitle={item.description}
                   onPress={() => handleMenuPress(item.route)}
                   isLast={itemIndex === section.items.length - 1}
-                  theme={theme}
                 />
               ))}
             </View>
           </View>
         ))}
 
-        {/* Logout Button */}
-        <Pressable
-          style={[styles.logoutButton, { backgroundColor: theme.primary }]}
-          onPress={handleLogout}
-        >
-          <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
-          <Text style={[styles.logoutText, { color: '#FFFFFF' }]}>Log Out</Text>
-        </Pressable>
-
+        {/* Logout */}
+        <View style={styles.sectionCard}>
+          <ListRow
+            icon="log-out"
+            title="Log Out"
+            danger
+            onPress={handleLogout}
+            right={null}
+            isLast
+          />
+        </View>
       </ScrollView>
     </View>
   );
@@ -345,98 +275,59 @@ export default function MoreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: palette.bg,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[2],
+    paddingHorizontal: 16,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  profileText: {
+    flex: 1,
+    marginLeft: 14,
+    marginRight: 10,
+  },
+  profileName: {
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
+  },
+  profileSub: {
+    ...fonts.medium,
+    fontSize: 15,
+    color: palette.textMuted,
+    marginTop: 3,
+  },
+  pageTitle: {
+    ...fonts.semibold,
+    fontSize: 32,
+    letterSpacing: -0.8,
+    color: palette.text,
+    marginTop: 26,
+    marginBottom: 18,
+    paddingHorizontal: 4,
   },
   section: {
-    marginBottom: spacing[5],
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing[2],
-    marginLeft: spacing[1],
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.textMuted,
+    marginBottom: 10,
+    marginLeft: 6,
   },
   sectionCard: {
-    borderRadius: borderRadius.lg,
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    paddingHorizontal: 16,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-  },
-  menuItemBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  menuItemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuItemContent: {
-    flex: 1,
-    marginLeft: spacing[3],
-    gap: 2,
-  },
-  menuItemLabel: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
-  },
-  menuItemDescription: {
-    fontSize: fontSize.xs,
-  },
-  menuItemRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
-    marginTop: spacing[2],
-  },
-  logoutText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
   },
 });

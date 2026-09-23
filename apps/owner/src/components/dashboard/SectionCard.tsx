@@ -3,11 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { radii, fonts } from '../../theme/kit';
 
 export interface SectionCardProps {
   title: string;
@@ -39,16 +38,18 @@ function SectionCard({
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
         {rightAction && (
-          <Pressable
+          <TouchableOpacity
             onPress={rightAction.onPress}
+            activeOpacity={0.7}
+            style={[styles.action, { backgroundColor: theme.background }]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel={rightAction.label}
             accessibilityRole="button"
           >
-            <Text style={[styles.actionText, { color: theme.primary }]}>
+            <Text style={[styles.actionText, { color: theme.text }]}>
               {rightAction.label}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -60,34 +61,36 @@ function SectionCard({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: borderRadius.lg,
+    borderRadius: radii.xl,
     marginBottom: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
     overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[3],
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 12,
   },
   title: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 19,
+    letterSpacing: -0.3,
+  },
+  action: {
+    paddingHorizontal: 12,
+    height: 30,
+    borderRadius: radii.pill,
+    justifyContent: 'center',
   },
   actionText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 13,
   },
   content: {
-    paddingHorizontal: spacing[4],
-    paddingBottom: spacing[4],
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
 });
 

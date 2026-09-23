@@ -6,7 +6,8 @@ import {
   StyleSheet,
   FlatList,
   RefreshControl,
-  Pressable,
+  ScrollView,
+  TouchableOpacity,
   Platform,
   LayoutAnimation,
   UIManager,
@@ -18,11 +19,13 @@ import Animated, {
   FadeIn,
   FadeOut,
 } from 'react-native-reanimated';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
-import AppHeader from '../../components/headers/AppHeader';
-import SegmentedControl from '../../components/dashboard/SegmentedControl';
+import { palette, radii, fonts } from '../../theme/kit';
+import {
+  IconCircle,
+  PillButton,
+  Chip,
+  EmptyState as KitEmptyState,
+} from '../../components/ui';
 import type { Promo, PromoStatus, PromoSortOption, PromoTabCounts, PromoListing } from '../../types/promo';
 import {
   loadAllPromosData,
@@ -68,39 +71,38 @@ const SORT_OPTIONS: { key: PromoSortOption; label: string; icon: string }[] = [
 interface EmptyStateProps {
   status: PromoStatus;
   onCreatePress: () => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
-function EmptyState({ status, onCreatePress, theme }: EmptyStateProps) {
+function EmptyState({ status, onCreatePress }: EmptyStateProps) {
   const getEmptyContent = () => {
     switch (status) {
       case 'ACTIVE':
         return {
-          icon: 'pricetags-outline',
+          tone: 'peach',
           title: 'No active promotions',
           subtitle: 'Create a promotion to attract more customers',
         };
       case 'SCHEDULED':
         return {
-          icon: 'calendar-outline',
+          tone: 'blue',
           title: 'No scheduled promotions',
           subtitle: 'Plan ahead by scheduling promotions',
         };
       case 'EXPIRED':
         return {
-          icon: 'time-outline',
+          tone: 'grey',
           title: 'No expired promotions',
           subtitle: 'Expired promotions will appear here',
         };
       case 'DRAFT':
         return {
-          icon: 'document-outline',
+          tone: 'blue',
           title: 'No draft promotions',
           subtitle: 'Save incomplete promotions as drafts',
         };
       default:
         return {
-          icon: 'pricetags-outline',
+          tone: 'peach',
           title: 'No promotions',
           subtitle: 'Create your first promotion',
         };
@@ -114,42 +116,27 @@ function EmptyState({ status, onCreatePress, theme }: EmptyStateProps) {
       entering={FadeIn.duration(300)}
       exiting={FadeOut.duration(200)}
       style={styles.emptyState}
+      accessibilityLabel="Create promotion"
     >
-      <View style={[styles.emptyIcon, { backgroundColor: theme.borderLight }]}>
-        <Ionicons name={content.icon} size={40} color={theme.textMuted} />
-      </View>
-      <Text style={[styles.emptyTitle, { color: theme.text }]}>
-        {content.title}
-      </Text>
-      <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
-        {content.subtitle}
-      </Text>
-      <Pressable
-        onPress={onCreatePress}
-        style={[styles.emptyButton, { backgroundColor: theme.primary }]}
-        accessibilityLabel="Create promotion"
-        accessibilityRole="button"
-      >
-        <Ionicons name="add" size={20} color="#FFFFFF" />
-        <Text style={styles.emptyButtonText}>Create Promo</Text>
-      </Pressable>
+      <KitEmptyState
+        tone={content.tone}
+        title={content.title}
+        subtitle={content.subtitle}
+        action="Create Promo"
+        onAction={onCreatePress}
+      />
     </Animated.View>
   );
 }
 
 // Skeleton loader
-function PromoSkeleton({ theme }: { theme: ReturnType<typeof getTheme> }) {
+function PromoSkeleton() {
   return (
-    <View style={[styles.skeletonCard, { backgroundColor: theme.surface }]}>
-      <View style={styles.skeletonHeader}>
-        <View style={[styles.skeletonCircle, { backgroundColor: theme.borderLight }]} />
-        <View style={styles.skeletonTitleArea}>
-          <View style={[styles.skeletonTitle, { backgroundColor: theme.borderLight }]} />
-          <View style={[styles.skeletonBadge, { backgroundColor: theme.borderLight }]} />
-        </View>
-      </View>
-      <View style={[styles.skeletonLine, { backgroundColor: theme.borderLight }]} />
-      <View style={[styles.skeletonLineShort, { backgroundColor: theme.borderLight }]} />
+    <View style={styles.skeletonCard}>
+      <View style={styles.skeletonBadge} />
+      <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonLine} />
+      <View style={styles.skeletonLineShort} />
     </View>
   );
 }
@@ -157,7 +144,6 @@ function PromoSkeleton({ theme }: { theme: ReturnType<typeof getTheme> }) {
 export default function PromotionsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const theme = useMemo(() => getTheme(false), []);
 
   // State
   const [isLoading, setIsLoading] = useState(false);
@@ -364,9 +350,10 @@ export default function PromotionsScreen() {
 
   // Render promo item
   const renderItem = useCallback(
-    ({ item }: { item: Promo }) => (
+    ({ item, index }: { item: Promo; index: number }) => (
       <PromoCard
         promo={item}
+        tone={index % 2 === 0 ? 'peach' : 'blue'}
         onPress={() => handleEditPromo(item)}
         onToggleEnabled={() => handleToggleEnabled(item)}
         onEdit={() => handleEditPromo(item)}
@@ -394,10 +381,11 @@ export default function PromotionsScreen() {
     if (searchText) {
       return (
         <View style={styles.noResults}>
-          <Ionicons name="search-outline" size={48} color={theme.textMuted} />
-          <Text style={[styles.noResultsText, { color: theme.textMuted }]}>
-            No promotions match "{searchText}"
-          </Text>
+          <KitEmptyState
+            tone="grey"
+            title="No results"
+            subtitle={`No promotions match "${searchText}"`}
+          />
         </View>
       );
     }
@@ -405,28 +393,35 @@ export default function PromotionsScreen() {
       <EmptyState
         status={selectedTab}
         onCreatePress={handleCreatePromo}
-        theme={theme}
       />
     );
-  }, [searchText, selectedTab, handleCreatePromo, theme]);
+  }, [searchText, selectedTab, handleCreatePromo]);
+
+  const renderHeader = (withCreate: boolean) => (
+    <View style={[styles.header, { paddingTop: insets.top + 8 }]} testID="promotions_header">
+      <IconCircle icon="arrow-left" size={46} onPress={() => navigation.goBack()} />
+      <Text style={styles.headerTitle}>Promotions</Text>
+      {withCreate ? (
+        <PillButton
+          label="Create"
+          icon="plus"
+          variant="ink"
+          size="sm"
+          onPress={handleCreatePromo}
+        />
+      ) : (
+        <View style={styles.headerSpacer} />
+      )}
+    </View>
+  );
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <AppHeader
-          variant="standard"
-          title="Promotions"
-          leftAction={{
-            icon: 'back',
-            label: 'Back',
-            onPress: () => navigation.goBack(),
-            showBackground: true,
-          }}
-          showDivider={false}
-        />
+      <View style={styles.container}>
+        {renderHeader(false)}
         <View style={styles.loadingContainer}>
           {[1, 2, 3].map(i => (
-            <PromoSkeleton key={i} theme={theme} />
+            <PromoSkeleton key={i} />
           ))}
         </View>
       </View>
@@ -434,37 +429,27 @@ export default function PromotionsScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={styles.container}>
       {/* Header */}
-      <AppHeader
-        variant="standard"
-        title="Promotions"
-        leftAction={{
-          icon: 'back',
-          label: 'Back',
-          onPress: () => navigation.goBack(),
-          showBackground: true,
-        }}
-        rightActions={[
-          {
-            icon: 'add',
-            label: 'Create promotion',
-            onPress: handleCreatePromo,
-          },
-        ]}
-        showDivider={false}
-        testID="promotions_header"
-      />
+      {renderHeader(true)}
 
       {/* Tabs */}
-      <View style={[styles.tabsContainer, { backgroundColor: theme.surface }]}>
-        <SegmentedControl
-          options={tabOptions}
-          selectedKey={selectedTab}
-          onSelect={handleTabChange}
-          testID="promo_tabs"
-        />
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabsScroll}
+        contentContainerStyle={styles.tabsContainer}
+        testID="promo_tabs"
+      >
+        {tabOptions.map(tab => (
+          <Chip
+            key={tab.key}
+            label={tab.badge ? `${tab.label} · ${tab.badge}` : tab.label}
+            selected={selectedTab === tab.key}
+            onPress={() => handleTabChange(tab.key)}
+          />
+        ))}
+      </ScrollView>
 
       {/* Search & Sort Row */}
       <View style={styles.searchSortRow}>
@@ -472,18 +457,19 @@ export default function PromotionsScreen() {
           <PromoSearchBar
             value={searchText}
             onChangeText={setSearchText}
-            placeholder="Search by name or code..."
+            placeholder="Search by name or code"
             testID="promo_search"
           />
         </View>
-        <Pressable
+        <TouchableOpacity
           onPress={() => setShowSortSheet(true)}
-          style={[styles.sortButton, { backgroundColor: theme.surface }]}
+          activeOpacity={0.75}
+          style={styles.sortButton}
           accessibilityLabel="Sort promotions"
           accessibilityRole="button"
         >
-          <Ionicons name="swap-vertical" size={20} color={theme.text} />
-        </Pressable>
+          <Ionicons name="swap-vertical" size={20} color={palette.text} />
+        </TouchableOpacity>
       </View>
 
       {/* Promo List */}
@@ -494,7 +480,7 @@ export default function PromotionsScreen() {
         contentContainerStyle={[
           styles.listContent,
           filteredPromos.length === 0 && styles.listContentEmpty,
-          { paddingBottom: insets.bottom + spacing[4] },
+          { paddingBottom: insets.bottom + 24 },
         ]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={renderEmpty}
@@ -502,8 +488,8 @@ export default function PromotionsScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor={theme.primary}
-            colors={[theme.primary]}
+            tintColor={palette.ink}
+            colors={[palette.ink]}
           />
         }
         testID="promo_list"
@@ -516,36 +502,32 @@ export default function PromotionsScreen() {
         title="Sort By"
         testID="sort_sheet"
       >
-        {SORT_OPTIONS.map(option => (
-          <Pressable
-            key={option.key}
-            onPress={() => handleSortChange(option.key)}
-            style={[
-              styles.sortOption,
-              sortOption === option.key && { backgroundColor: theme.primaryLight },
-            ]}
-            accessibilityLabel={option.label}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: sortOption === option.key }}
-          >
-            <Ionicons
-              name={option.icon}
-              size={20}
-              color={sortOption === option.key ? theme.primary : theme.textMuted}
-            />
-            <Text
-              style={[
-                styles.sortOptionText,
-                { color: sortOption === option.key ? theme.primary : theme.text },
-              ]}
+        {SORT_OPTIONS.map(option => {
+          const isSelected = sortOption === option.key;
+          return (
+            <TouchableOpacity
+              key={option.key}
+              onPress={() => handleSortChange(option.key)}
+              activeOpacity={0.75}
+              style={[styles.sortOption, isSelected && styles.sortOptionSelected]}
+              accessibilityLabel={option.label}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: isSelected }}
             >
-              {option.label}
-            </Text>
-            {sortOption === option.key && (
-              <Ionicons name="checkmark" size={20} color={theme.primary} />
-            )}
-          </Pressable>
-        ))}
+              <View style={[styles.sortIcon, isSelected && styles.sortIconSelected]}>
+                <Ionicons
+                  name={option.icon}
+                  size={18}
+                  color={isSelected ? palette.textInverse : palette.text}
+                />
+              </View>
+              <Text style={styles.sortOptionText}>{option.label}</Text>
+              {isSelected && (
+                <Ionicons name="checkmark" size={20} color={palette.text} />
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </PromoBottomSheet>
 
       {/* Listings Preview Sheet */}
@@ -559,24 +541,15 @@ export default function PromotionsScreen() {
         testID="listings_preview_sheet"
       >
         {viewingListings.map(listing => (
-          <View
-            key={listing.id}
-            style={[styles.listingPreviewRow, { borderBottomColor: theme.borderLight }]}
-          >
-            <View style={[styles.listingPreviewThumb, { backgroundColor: theme.borderLight }]}>
-              <Ionicons name="car-outline" size={18} color={theme.textMuted} />
+          <View key={listing.id} style={styles.listingPreviewRow}>
+            <View style={styles.listingPreviewThumb}>
+              <Ionicons name="car-outline" size={18} color={palette.text} />
             </View>
             <View style={styles.listingPreviewInfo}>
-              <Text style={[styles.listingPreviewName, { color: theme.text }]}>
-                {listing.name}
-              </Text>
-              <Text style={[styles.listingPreviewAddress, { color: theme.textSecondary }]}>
-                {listing.addressShort}
-              </Text>
+              <Text style={styles.listingPreviewName}>{listing.name}</Text>
+              <Text style={styles.listingPreviewAddress}>{listing.addressShort}</Text>
             </View>
-            <Text style={[styles.listingPreviewPrice, { color: theme.textMuted }]}>
-              ₹{listing.priceHint}
-            </Text>
+            <Text style={styles.listingPreviewPrice}>₹{listing.priceHint}</Text>
           </View>
         ))}
       </PromoBottomSheet>
@@ -626,125 +599,112 @@ export default function PromotionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: palette.bg,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  headerTitle: {
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
+  },
+  headerSpacer: {
+    width: 46,
   },
   loadingContainer: {
     flex: 1,
-    padding: spacing[4],
+    paddingTop: 12,
+  },
+  tabsScroll: {
+    flexGrow: 0,
   },
   tabsContainer: {
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   searchSortRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    gap: spacing[2],
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 12,
+    gap: 10,
   },
   searchWrapper: {
     flex: 1,
   },
   sortButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.lg,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
   },
   listContent: {
-    paddingTop: spacing[2],
+    paddingTop: 4,
   },
   listContentEmpty: {
-    flex: 1,
+    flexGrow: 1,
   },
   emptyState: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing[6],
-  },
-  emptyIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[4],
-  },
-  emptyTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[2],
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-    marginBottom: spacing[5],
-  },
-  emptyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[5],
-    borderRadius: borderRadius.lg,
-  },
-  emptyButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    padding: 16,
   },
   noResults: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing[6],
-    gap: spacing[3],
-  },
-  noResultsText: {
-    fontSize: fontSize.base,
-    textAlign: 'center',
+    padding: 16,
   },
   sortOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    borderRadius: borderRadius.md,
-    marginBottom: spacing[1],
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: radii.lg,
+    marginBottom: 6,
+  },
+  sortOptionSelected: {
+    backgroundColor: palette.surfaceDim,
+  },
+  sortIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortIconSelected: {
+    backgroundColor: palette.ink,
   },
   sortOptionText: {
+    ...fonts.semibold,
     flex: 1,
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
+    fontSize: 15,
+    color: palette.text,
   },
   listingPreviewRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing[3],
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: spacing[3],
+    borderBottomColor: palette.line,
+    gap: 12,
   },
   listingPreviewThumb: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: palette.peachSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -753,58 +713,54 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   listingPreviewName: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
   },
   listingPreviewAddress: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
   },
   listingPreviewPrice: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.text,
   },
   // Skeleton styles
   skeletonCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    marginBottom: spacing[3],
-  },
-  skeletonHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing[3],
-  },
-  skeletonCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  skeletonTitleArea: {
-    flex: 1,
-    marginLeft: spacing[3],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  skeletonTitle: {
-    width: 120,
-    height: 16,
-    borderRadius: 4,
+    borderRadius: radii.xl,
+    padding: 18,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    minHeight: 180,
+    backgroundColor: palette.surface,
   },
   skeletonBadge: {
-    width: 60,
-    height: 20,
-    borderRadius: 10,
+    width: 70,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: palette.fill,
+  },
+  skeletonTitle: {
+    width: '55%',
+    height: 22,
+    borderRadius: 6,
+    marginTop: 16,
+    backgroundColor: palette.fill,
   },
   skeletonLine: {
-    width: '100%',
-    height: 12,
-    borderRadius: 4,
-    marginBottom: spacing[2],
+    width: '40%',
+    height: 28,
+    borderRadius: 6,
+    marginTop: 10,
+    backgroundColor: palette.fill,
   },
   skeletonLineShort: {
     width: '60%',
     height: 12,
     borderRadius: 4,
+    marginTop: 18,
+    backgroundColor: palette.fill,
   },
 });

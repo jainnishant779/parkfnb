@@ -11,8 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 
 export type QuickActionIcon = 'add' | 'calendar' | 'pricetag' | 'wallet' | 'settings' | 'stats';
 
@@ -59,7 +58,7 @@ function QuickActionTile({
         return theme.danger;
       case 'primary':
       default:
-        return theme.primary;
+        return palette.text;
     }
   }, [color, theme]);
 
@@ -73,7 +72,7 @@ function QuickActionTile({
         return theme.dangerLight;
       case 'primary':
       default:
-        return theme.primaryLight;
+        return palette.peachSoft;
     }
   }, [color, theme]);
 
@@ -108,9 +107,11 @@ function QuickActionTile({
           animatedStyle,
         ]}
       >
-        <Ionicons name={iconName} size={20} color={accentColor} />
+        <Animated.View style={styles.iconCircle}>
+          <Ionicons name={iconName} size={20} color={accentColor} />
+        </Animated.View>
         <Text
-          style={[styles.label, { color: accentColor }]}
+          style={[styles.label, { color: palette.text }]}
           numberOfLines={1}
           allowFontScaling
         >
@@ -126,17 +127,24 @@ const styles = StyleSheet.create({
     width: '48%',
   },
   container: {
-    padding: spacing[3],
-    borderRadius: borderRadius.md,
+    padding: 14,
+    borderRadius: radii.lg,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 10,
+    minHeight: 96,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[1],
-    minHeight: 72,
   },
   label: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-    textAlign: 'center',
+    ...fonts.semibold,
+    fontSize: 14,
   },
 });
 

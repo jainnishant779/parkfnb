@@ -14,8 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 import { resolveImageUri } from '../../utils/imageUri';
 
 export interface ListingRowProps {
@@ -88,7 +87,7 @@ function ListingRow({
         ]}
       >
         {/* Thumbnail */}
-        <View style={[styles.thumbnail, { backgroundColor: theme.borderLight, overflow: 'hidden' }]}>
+        <View style={[styles.thumbnail, { backgroundColor: palette.peachSoft }]}>
           {photoUri ? (
             <Image
               source={{ uri: resolveImageUri(photoUri) }}
@@ -99,7 +98,7 @@ function ListingRow({
             <Ionicons
               name="car-outline"
               size={24}
-              color={theme.textMuted}
+              color={palette.text}
             />
           )}
         </View>
@@ -146,8 +145,9 @@ function ListingRow({
         <Switch
           value={localIsLive}
           onValueChange={handleToggle}
-          trackColor={{ false: theme.border, true: theme.successLight }}
-          thumbColor={localIsLive ? theme.success : theme.textMuted}
+          trackColor={{ false: palette.line, true: palette.ink }}
+          thumbColor={palette.surface}
+          ios_backgroundColor={palette.line}
           accessibilityLabel={`Toggle ${title} ${localIsLive ? 'off' : 'on'}`}
         />
       </Animated.View>
@@ -159,44 +159,47 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing[3],
+    paddingVertical: 14,
   },
   withBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   thumbnail: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.md,
+    width: 58,
+    height: 58,
+    borderRadius: radii.md,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   content: {
     flex: 1,
-    marginLeft: spacing[3],
-    marginRight: spacing[2],
+    marginLeft: 12,
+    marginRight: 8,
     gap: 2,
   },
   title: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 15.5,
   },
   location: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12.5,
   },
   availabilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
-    marginTop: 2,
+    gap: 5,
+    marginTop: 3,
   },
   availabilityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   availabilityText: {
-    fontSize: fontSize.xs - 1,
+    ...fonts.semibold,
+    fontSize: 12,
   },
 });
 

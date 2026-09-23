@@ -6,10 +6,8 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Platform,
-  Modal,
+  TouchableOpacity,
   Dimensions,
-  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';
@@ -27,17 +25,16 @@ import Animated, {
   SlideInDown,
   SlideOutDown,
 } from 'react-native-reanimated';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
-import AppHeader from '../../components/headers/AppHeader';
+import { palette, radii, fonts } from '../../theme/kit';
+import { ScreenHeader, IconCircle, PillButton, IsoBlock, StatusTag } from '../../components/ui';
 
 // Storage key
 const AVAILABILITY_KEY = 'owners:availability_data';
 
-// Screen dimensions
+// Screen dimensions: page gutter 16 + calendar card padding 14 on each side.
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const DAY_SIZE = Math.floor((SCREEN_WIDTH - spacing[4] * 2 - spacing[1] * 6) / 7);
+const CELL_SIZE = Math.floor((SCREEN_WIDTH - 16 * 2 - 14 * 2) / 7);
+const DAY_SIZE = Math.min(CELL_SIZE - 4, 44);
 
 // Types
 interface TimeSlot {
@@ -106,7 +103,6 @@ interface CalendarDayProps {
   isSelected: boolean;
   availability?: DayAvailability;
   onPress: () => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
 function CalendarDay({
@@ -116,7 +112,6 @@ function CalendarDay({
   isSelected,
   availability,
   onPress,
-  theme,
 }: CalendarDayProps) {
   const scale = useSharedValue(1);
 
@@ -135,22 +130,20 @@ function CalendarDay({
   const hasSlots = availability?.timeSlots && availability.timeSlots.length > 0;
   const isAvailable = availability?.available !== false;
   const isRecurring = availability?.isRecurring;
+  const isBlocked = !isAvailable && !!availability;
 
   let bgColor = 'transparent';
-  let textColor = isCurrentMonth ? theme.text : theme.textMuted;
+  let textColor = isCurrentMonth ? palette.text : palette.textSubtle;
 
   if (isSelected) {
-    bgColor = theme.primary;
-    textColor = '#FFFFFF';
-  } else if (isToday) {
-    bgColor = theme.primaryLight;
-    textColor = theme.primary;
+    bgColor = palette.ink;
+    textColor = palette.textInverse;
+  } else if (isBlocked) {
+    bgColor = palette.peach;
+    textColor = palette.text;
   } else if (hasSlots && isAvailable) {
-    bgColor = theme.successLight;
-    textColor = theme.success;
-  } else if (!isAvailable && availability) {
-    bgColor = theme.dangerLight;
-    textColor = theme.danger;
+    bgColor = palette.blueSoft;
+    textColor = palette.text;
   }
 
   return (
@@ -161,12 +154,13 @@ function CalendarDay({
       disabled={!isCurrentMonth}
       accessibilityLabel={`${date.getDate()} ${MONTHS[date.getMonth()]}`}
       accessibilityRole="button"
+      style={styles.dayCell}
     >
       <Animated.View
         style={[
           styles.calendarDay,
           { backgroundColor: bgColor },
-          isSelected && styles.calendarDaySelected,
+          isToday && !isSelected && styles.calendarDayToday,
           animatedStyle,
         ]}
       >
@@ -174,22 +168,19 @@ function CalendarDay({
           style={[
             styles.calendarDayText,
             { color: textColor },
-            isSelected && styles.calendarDayTextSelected,
-            !isCurrentMonth && styles.calendarDayTextMuted,
+            (isSelected || isToday) && styles.calendarDayTextStrong,
           ]}
         >
           {date.getDate()}
         </Text>
-        {/* Indicators */}
-        <View style={styles.dayIndicators}>
-          {hasSlots && !isSelected && (
-            <View style={[styles.slotIndicator, { backgroundColor: theme.success }]} />
-          )}
-          {isRecurring && !isSelected && (
-            <Ionicons name="repeat" size={8} color={theme.primary} />
-          )}
-        </View>
       </Animated.View>
+      {/* Indicators */}
+      <View style={styles.dayIndicators}>
+        {hasSlots && !isSelected && isCurrentMonth ? <View style={styles.slotIndicator} /> : null}
+        {isRecurring && !isSelected && isCurrentMonth ? (
+          <Ionicons name="repeat" size={9} color={palette.textMuted} />
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -199,33 +190,36 @@ interface TimeSlotItemProps {
   slot: TimeSlot;
   onEdit: () => void;
   onDelete: () => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
-function TimeSlotItem({ slot, onEdit, onDelete, theme }: TimeSlotItemProps) {
+function TimeSlotItem({ slot, onEdit, onDelete }: TimeSlotItemProps) {
   return (
-    <View style={[styles.timeSlotItem, { backgroundColor: theme.primaryLight }]}>
+    <View style={styles.timeSlotItem}>
       <View style={styles.timeSlotContent}>
-        <Ionicons name="time-outline" size={18} color={theme.primary} />
-        <Text style={[styles.timeSlotText, { color: theme.text }]}>
+        <View style={styles.timeSlotIcon}>
+          <Ionicons name="time-outline" size={17} color={palette.text} />
+        </View>
+        <Text style={styles.timeSlotText}>
           {slot.startTime} - {slot.endTime}
         </Text>
       </View>
       <View style={styles.timeSlotActions}>
-        <Pressable
+        <TouchableOpacity
           onPress={onEdit}
-          style={[styles.timeSlotAction, { backgroundColor: theme.surface }]}
+          activeOpacity={0.7}
+          style={styles.timeSlotAction}
           accessibilityLabel="Edit time slot"
         >
-          <Ionicons name="pencil-outline" size={16} color={theme.primary} />
-        </Pressable>
-        <Pressable
+          <Ionicons name="pencil-outline" size={16} color={palette.text} />
+        </TouchableOpacity>
+        <TouchableOpacity
           onPress={onDelete}
-          style={[styles.timeSlotAction, { backgroundColor: theme.dangerLight }]}
+          activeOpacity={0.7}
+          style={[styles.timeSlotAction, styles.timeSlotActionDanger]}
           accessibilityLabel="Delete time slot"
         >
-          <Ionicons name="trash-outline" size={16} color={theme.danger} />
-        </Pressable>
+          <Ionicons name="trash-outline" size={16} color={palette.danger} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -236,33 +230,22 @@ interface RecurringDayChipProps {
   day: number;
   isSelected: boolean;
   onToggle: () => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
-function RecurringDayChip({ day, isSelected, onToggle, theme }: RecurringDayChipProps) {
+function RecurringDayChip({ day, isSelected, onToggle }: RecurringDayChipProps) {
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onToggle}
-      style={[
-        styles.recurringDayChip,
-        {
-          backgroundColor: isSelected ? theme.primary : theme.surface,
-          borderColor: isSelected ? theme.primary : theme.border,
-        },
-      ]}
+      activeOpacity={0.75}
+      style={[styles.recurringDayChip, isSelected && styles.recurringDayChipOn]}
       accessibilityLabel={`${DAYS_FULL[day]}, ${isSelected ? 'selected' : 'not selected'}`}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: isSelected }}
     >
-      <Text
-        style={[
-          styles.recurringDayChipText,
-          { color: isSelected ? '#FFFFFF' : theme.text },
-        ]}
-      >
+      <Text style={[styles.recurringDayChipText, isSelected && styles.recurringDayChipTextOn]}>
         {DAYS_OF_WEEK[day]}
       </Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -272,10 +255,10 @@ interface SnackbarProps {
   message: string;
   variant: 'success' | 'error' | 'info';
   onDismiss: () => void;
-  theme: ReturnType<typeof getTheme>;
+  bottom: number;
 }
 
-function Snackbar({ visible, message, variant, onDismiss, theme }: SnackbarProps) {
+function Snackbar({ visible, message, variant, onDismiss, bottom }: SnackbarProps) {
   const translateY = useSharedValue(100);
 
   useEffect(() => {
@@ -292,16 +275,17 @@ function Snackbar({ visible, message, variant, onDismiss, theme }: SnackbarProps
     transform: [{ translateY: translateY.value }],
   }));
 
-  const bgColor = variant === 'success' ? theme.success : variant === 'error' ? theme.danger : theme.primary;
+  const iconColor =
+    variant === 'success' ? palette.success : variant === 'error' ? palette.danger : palette.peach;
 
   if (!visible) return null;
 
   return (
-    <Animated.View style={[styles.snackbar, { backgroundColor: bgColor }, animatedStyle]}>
+    <Animated.View style={[styles.snackbar, { bottom }, animatedStyle]}>
       <Ionicons
         name={variant === 'success' ? 'checkmark-circle' : variant === 'error' ? 'alert-circle' : 'information-circle'}
         size={20}
-        color="#FFFFFF"
+        color={iconColor}
       />
       <Text style={styles.snackbarText}>{message}</Text>
     </Animated.View>
@@ -321,7 +305,6 @@ const TIME_PRESETS = [
 export default function AvailabilityCalendarScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const theme = useMemo(() => getTheme(false), []);
 
   // State
   const [isSaving, setIsSaving] = useState(false);
@@ -736,105 +719,66 @@ export default function AvailabilityCalendarScreen() {
     return { availableDays, unavailableDays, totalSlots };
   }, [currentMonth, availability]);
 
+  const selectedSlots = selectedDateInfo?.availability?.timeSlots ?? [];
+  const selectedBlocked = selectedDateInfo?.availability?.available === false;
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
-      <AppHeader
-        variant="standard"
-        title="Set Availability"
-        subtitle="Select your available time slots"
-        leftAction={{
-          icon: 'back',
-          label: 'Cancel',
-          onPress: handleCancel,
-          showBackground: true,
-        }}
-        rightActions={[
-          {
-            icon: 'refresh',
-            label: 'Today',
-            onPress: goToToday,
-          },
-        ]}
-        showDivider={false}
+      <ScreenHeader
+        title="Set availability"
+        onBack={handleCancel}
+        right={<IconCircle icon="rotate-ccw" size={40} onPress={goToToday} />}
       />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + (hasChanges ? 100 : spacing[6]) },
+          { paddingBottom: insets.bottom + (hasChanges ? 110 : 28) },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Month Navigation */}
-        <Animated.View
-          entering={FadeInDown.delay(100).duration(400)}
-          style={[styles.monthNav, { backgroundColor: theme.surface }]}
-        >
-          <Pressable
-            onPress={goToPreviousMonth}
-            style={[styles.monthNavButton, { backgroundColor: theme.borderLight }]}
-            accessibilityLabel="Previous month"
-          >
-            <Ionicons name="chevron-back" size={20} color={theme.text} />
-          </Pressable>
-          <View style={styles.monthNavCenter}>
-            <Text style={[styles.monthTitle, { color: theme.text }]}>
+        {/* Month summary */}
+        <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.monthNav}>
+          <View style={styles.flex}>
+            <Text style={styles.monthLabel}>Select your available time slots</Text>
+            <Text style={styles.monthTitle}>
               {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </Text>
           </View>
-          <Pressable
-            onPress={goToNextMonth}
-            style={[styles.monthNavButton, { backgroundColor: theme.borderLight }]}
-            accessibilityLabel="Next month"
-          >
-            <Ionicons name="chevron-forward" size={20} color={theme.text} />
-          </Pressable>
+          <IconCircle
+            icon="chevron-left"
+            size={44}
+            onPress={goToPreviousMonth}
+            style={styles.monthNavGap}
+          />
+          <IconCircle icon="chevron-right" size={44} onPress={goToNextMonth} />
         </Animated.View>
 
         {/* Stats Row */}
-        <Animated.View
-          entering={FadeInDown.delay(150).duration(400)}
-          style={styles.statsRow}
-        >
-          <View style={[styles.statItem, { backgroundColor: theme.successLight }]}>
-            <Text style={[styles.statNumber, { color: theme.success }]}>
-              {monthStats.availableDays}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.success }]}>Available</Text>
+        <Animated.View entering={FadeInDown.delay(150).duration(400)} style={styles.statsRow}>
+          <View style={[styles.statItem, { backgroundColor: palette.blueSoft }]}>
+            <Text style={styles.statNumber}>{monthStats.availableDays}</Text>
+            <Text style={styles.statLabel}>Available</Text>
           </View>
-          <View style={[styles.statItem, { backgroundColor: theme.dangerLight }]}>
-            <Text style={[styles.statNumber, { color: theme.danger }]}>
-              {monthStats.unavailableDays}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.danger }]}>Blocked</Text>
+          <View style={[styles.statItem, { backgroundColor: palette.peachSoft }]}>
+            <Text style={styles.statNumber}>{monthStats.unavailableDays}</Text>
+            <Text style={styles.statLabel}>Blocked</Text>
           </View>
-          <View style={[styles.statItem, { backgroundColor: theme.infoLight }]}>
-            <Text style={[styles.statNumber, { color: theme.info }]}>
-              {monthStats.totalSlots}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.info }]}>Slots</Text>
+          <View style={[styles.statItem, { backgroundColor: palette.surface }]}>
+            <Text style={styles.statNumber}>{monthStats.totalSlots}</Text>
+            <Text style={styles.statLabel}>Slots</Text>
           </View>
         </Animated.View>
 
         {/* Calendar */}
-        <Animated.View
-          entering={FadeInDown.delay(200).duration(400)}
-          style={[styles.calendarCard, { backgroundColor: theme.surface }]}
-        >
+        <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.calendarCard}>
           {/* Week day headers */}
           <View style={styles.weekDaysHeader}>
-            {DAYS_OF_WEEK.map((day, index) => (
+            {DAYS_OF_WEEK.map((day) => (
               <View key={day} style={styles.weekDayItem}>
-                <Text
-                  style={[
-                    styles.weekDayText,
-                    { color: index === 0 || index === 6 ? theme.danger : theme.textMuted },
-                  ]}
-                >
-                  {day}
-                </Text>
+                <Text style={styles.weekDayText}>{day}</Text>
               </View>
             ))}
           </View>
@@ -859,128 +803,112 @@ export default function AvailabilityCalendarScreen() {
                   isSelected={selectedDate === dateStr}
                   availability={availability[dateStr]}
                   onPress={() => handleSelectDate(date)}
-                  theme={theme}
                 />
               );
             })}
           </View>
 
           {/* Legend */}
-          <View style={[styles.legend, { borderTopColor: theme.borderLight }]}>
+          <View style={styles.legend}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: theme.success }]} />
-              <Text style={[styles.legendText, { color: theme.textMuted }]}>Available</Text>
+              <View style={[styles.legendDot, { backgroundColor: palette.blueSoft }]} />
+              <Text style={styles.legendText}>Available</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: theme.danger }]} />
-              <Text style={[styles.legendText, { color: theme.textMuted }]}>Blocked</Text>
+              <View style={[styles.legendDot, { backgroundColor: palette.peach }]} />
+              <Text style={styles.legendText}>Blocked</Text>
             </View>
             <View style={styles.legendItem}>
-              <Ionicons name="repeat" size={12} color={theme.primary} />
-              <Text style={[styles.legendText, { color: theme.textMuted }]}>Recurring</Text>
+              <Ionicons name="repeat" size={12} color={palette.textMuted} />
+              <Text style={styles.legendText}>Recurring</Text>
             </View>
           </View>
         </Animated.View>
 
         {/* Selected Date Details */}
         {selectedDateInfo && (
-          <Animated.View
-            entering={FadeInDown.duration(300)}
-            style={[styles.selectedDateCard, { backgroundColor: theme.surface }]}
-          >
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.selectedDateCard}>
             <View style={styles.selectedDateHeader}>
-              <View>
-                <Text style={[styles.selectedDateTitle, { color: theme.text }]}>
+              <View style={styles.flex}>
+                <StatusTag
+                  label={selectedBlocked ? 'Blocked' : selectedSlots.length > 0 ? 'Available' : 'Not set'}
+                  tone={selectedBlocked ? 'warning' : selectedSlots.length > 0 ? 'ink' : 'grey'}
+                  style={styles.selectedTag}
+                />
+                <Text style={styles.selectedDateTitle}>
                   {selectedDateInfo.dayName}, {selectedDateInfo.month} {selectedDateInfo.dayNumber}
                 </Text>
-                <Text style={[styles.selectedDateSubtitle, { color: theme.textMuted }]}>
+                <Text style={styles.selectedDateSubtitle}>
                   {selectedDateInfo.availability?.timeSlots?.length || 0} time slot(s)
                 </Text>
               </View>
-              <View style={styles.selectedDateActions}>
-                <Pressable
-                  onPress={toggleDayAvailability}
-                  style={[
-                    styles.actionButton,
-                    {
-                      backgroundColor:
-                        selectedDateInfo.availability?.available === false
-                          ? theme.successLight
-                          : theme.dangerLight,
-                    },
-                  ]}
-                  accessibilityLabel={
-                    selectedDateInfo.availability?.available === false
-                      ? 'Mark as available'
-                      : 'Block this day'
-                  }
-                >
-                  <Ionicons
-                    name={
-                      selectedDateInfo.availability?.available === false
-                        ? 'checkmark-circle'
-                        : 'close-circle'
-                    }
-                    size={18}
-                    color={
-                      selectedDateInfo.availability?.available === false
-                        ? theme.success
-                        : theme.danger
-                    }
-                  />
-                </Pressable>
-              </View>
+              <TouchableOpacity
+                onPress={toggleDayAvailability}
+                activeOpacity={0.8}
+                style={[styles.actionButton, selectedBlocked ? styles.actionUnblock : styles.actionBlock]}
+                accessibilityLabel={selectedBlocked ? 'Mark as available' : 'Block this day'}
+              >
+                <Ionicons
+                  name={selectedBlocked ? 'checkmark-circle-outline' : 'ban-outline'}
+                  size={16}
+                  color={selectedBlocked ? palette.textInverse : palette.text}
+                />
+                <Text style={[styles.actionButtonText, selectedBlocked && styles.actionButtonTextOn]}>
+                  {selectedBlocked ? 'Unblock' : 'Block day'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {selectedDateInfo.availability?.available === false ? (
-              <View style={[styles.blockedMessage, { backgroundColor: theme.dangerLight }]}>
-                <Ionicons name="ban" size={24} color={theme.danger} />
-                <Text style={[styles.blockedMessageText, { color: theme.danger }]}>
-                  This day is blocked
+            {selectedBlocked ? (
+              <View style={styles.blockedMessage}>
+                <View style={styles.blockedArt} pointerEvents="none">
+                  <IsoBlock size={110} tone="peach" />
+                </View>
+                <Text style={styles.blockedMessageTitle}>This day is blocked</Text>
+                <Text style={styles.blockedMessageText}>
+                  Renters can't book any slot on this date.
                 </Text>
               </View>
             ) : (
               <>
                 {/* Time Slots */}
-                {selectedDateInfo.availability?.timeSlots && selectedDateInfo.availability.timeSlots.length > 0 ? (
+                {selectedSlots.length > 0 ? (
                   <View style={styles.timeSlotsList}>
-                    {selectedDateInfo.availability.timeSlots.map(slot => (
+                    {selectedSlots.map(slot => (
                       <TimeSlotItem
                         key={slot.id}
                         slot={slot}
                         onEdit={() => openTimeModal(slot)}
                         onDelete={() => deleteTimeSlot(slot.id)}
-                        theme={theme}
                       />
                     ))}
                   </View>
                 ) : (
                   <View style={styles.noSlotsMessage}>
-                    <Ionicons name="time-outline" size={32} color={theme.textMuted} />
-                    <Text style={[styles.noSlotsText, { color: theme.textMuted }]}>
-                      No time slots set for this day
-                    </Text>
+                    <Ionicons name="time-outline" size={26} color={palette.textMuted} />
+                    <Text style={styles.noSlotsText}>No time slots set for this day</Text>
                   </View>
                 )}
 
                 {/* Action Buttons */}
                 <View style={styles.dateActionButtons}>
-                  <Pressable
+                  <PillButton
+                    label="Add time slot"
+                    icon="plus"
+                    variant="ink"
+                    size="md"
                     onPress={() => openTimeModal()}
-                    style={[styles.addSlotButton, { backgroundColor: theme.primary }]}
-                    accessibilityLabel="Add time slot"
-                  >
-                    <Ionicons name="add" size={20} color="#FFFFFF" />
-                    <Text style={styles.addSlotButtonText}>Add Time Slot</Text>
-                  </Pressable>
-                  {selectedDateInfo.availability?.timeSlots && selectedDateInfo.availability.timeSlots.length > 0 && (
-                    <Pressable
+                    style={styles.flex}
+                  />
+                  {selectedSlots.length > 0 && (
+                    <IconCircle
+                      icon="trash-2"
+                      size={48}
+                      variant="grey"
+                      color={palette.danger}
                       onPress={clearDaySlots}
-                      style={[styles.clearButton, { borderColor: theme.danger }]}
-                      accessibilityLabel="Clear all slots"
-                    >
-                      <Ionicons name="trash-outline" size={18} color={theme.danger} />
-                    </Pressable>
+                      style={styles.clearButton}
+                    />
                   )}
                 </View>
               </>
@@ -990,17 +918,12 @@ export default function AvailabilityCalendarScreen() {
 
         {/* Empty State - No date selected */}
         {!selectedDate && (
-          <Animated.View
-            entering={FadeIn.duration(400)}
-            style={[styles.emptyState, { backgroundColor: theme.surface }]}
-          >
-            <View style={[styles.emptyIcon, { backgroundColor: theme.primaryLight }]}>
-              <Ionicons name="calendar-outline" size={40} color={theme.primary} />
+          <Animated.View entering={FadeIn.duration(400)} style={styles.emptyState}>
+            <View style={styles.emptyArt} pointerEvents="none">
+              <IsoBlock size={130} tone="blue" />
             </View>
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>
-              Select a Date
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: theme.textMuted }]}>
+            <Text style={styles.emptyTitle}>Select a date</Text>
+            <Text style={styles.emptySubtitle}>
               Tap on any date in the calendar above to set your availability
             </Text>
           </Animated.View>
@@ -1011,184 +934,147 @@ export default function AvailabilityCalendarScreen() {
       {hasChanges && (
         <Animated.View
           entering={FadeIn.duration(300)}
-          style={[
-            styles.saveButtonContainer,
-            {
-              backgroundColor: theme.background,
-              paddingBottom: insets.bottom + spacing[4],
-              borderTopColor: theme.borderLight,
-            },
-          ]}
+          style={[styles.saveButtonContainer, { paddingBottom: insets.bottom + 16 }]}
         >
-          <Pressable
+          <PillButton
+            label="Save changes"
+            icon="check"
+            variant="ink"
+            loading={isSaving}
             onPress={saveAvailability}
-            disabled={isSaving}
-            style={[
-              styles.saveButton,
-              { backgroundColor: theme.primary },
-              isSaving && { opacity: 0.7 },
-            ]}
-            accessibilityLabel="Save availability"
-          >
-            {isSaving ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </>
-            )}
-          </Pressable>
+          />
         </Animated.View>
       )}
 
-      {/* Time Slot Modal */}
+      {/* Time Slot Sheet */}
       {showTimeModal ? (
-
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowTimeModal(false)}
-        >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowTimeModal(false)}
+          />
           <Animated.View
             entering={SlideInDown.springify().damping(15)}
             exiting={SlideOutDown}
-            style={[styles.modalContent, { backgroundColor: theme.surface }]}
+            style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}
           >
-            <Pressable onPress={e => e.stopPropagation()}>
-              {/* Modal Header */}
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>
-                  {editingSlot ? 'Edit Time Slot' : 'Add Time Slot'}
-                </Text>
-                <Pressable
-                  onPress={() => setShowTimeModal(false)}
-                  style={[styles.modalCloseButton, { backgroundColor: theme.borderLight }]}
-                >
-                  <Ionicons name="close" size={20} color={theme.text} />
-                </Pressable>
-              </View>
-
-              {/* Quick Presets */}
-              <Text style={[styles.presetsLabel, { color: theme.textSecondary }]}>
-                Quick Presets
+            <View style={styles.grabber} />
+            {/* Sheet Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingSlot ? 'Edit time slot' : 'Add time slot'}
               </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.presetsContainer}
-                contentContainerStyle={styles.presetsContent}
-              >
-                {TIME_PRESETS.map(preset => (
-                  <Pressable
-                    key={preset.label}
-                    onPress={() => applyTimePreset(preset)}
-                    style={[styles.presetChip, { backgroundColor: theme.primaryLight }]}
-                  >
-                    <Text style={[styles.presetChipText, { color: theme.primary }]}>
-                      {preset.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+              <IconCircle
+                icon="x"
+                size={38}
+                variant="grey"
+                onPress={() => setShowTimeModal(false)}
+              />
+            </View>
 
-              {/* Time Pickers */}
-              <View style={styles.timePickersRow}>
-                <View style={styles.timePickerColumn}>
-                  <Text style={[styles.timePickerLabel, { color: theme.textSecondary }]}>
-                    Start Time
-                  </Text>
-                  <Pressable
-                    onPress={() => setShowStartPicker(true)}
-                    style={[styles.timePickerButton, { backgroundColor: theme.borderLight }]}
-                  >
-                    <Ionicons name="time-outline" size={20} color={theme.primary} />
-                    <Text style={[styles.timePickerValue, { color: theme.text }]}>
-                      {formatTime(tempStartTime)}
-                    </Text>
-                  </Pressable>
-                </View>
-                <View style={styles.timePickerDivider}>
-                  <Ionicons name="arrow-forward" size={20} color={theme.textMuted} />
-                </View>
-                <View style={styles.timePickerColumn}>
-                  <Text style={[styles.timePickerLabel, { color: theme.textSecondary }]}>
-                    End Time
-                  </Text>
-                  <Pressable
-                    onPress={() => setShowEndPicker(true)}
-                    style={[styles.timePickerButton, { backgroundColor: theme.borderLight }]}
-                  >
-                    <Ionicons name="time-outline" size={20} color={theme.primary} />
-                    <Text style={[styles.timePickerValue, { color: theme.text }]}>
-                      {formatTime(tempEndTime)}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-
-              {/* Recurring Toggle */}
-              <Pressable
-                onPress={() => setIsRecurringMode(!isRecurringMode)}
-                style={[styles.recurringToggle, { backgroundColor: theme.borderLight }]}
-              >
-                <View style={styles.recurringToggleLeft}>
-                  <Ionicons
-                    name="repeat"
-                    size={20}
-                    color={isRecurringMode ? theme.primary : theme.textMuted}
-                  />
-                  <Text style={[styles.recurringToggleText, { color: theme.text }]}>
-                    Apply to recurring days
-                  </Text>
-                </View>
-                <Ionicons
-                  name={isRecurringMode ? 'checkbox' : 'square-outline'}
-                  size={24}
-                  color={isRecurringMode ? theme.primary : theme.textMuted}
-                />
-              </Pressable>
-
-              {/* Recurring Days Selection */}
-              {isRecurringMode && (
-                <Animated.View entering={FadeIn.duration(200)} style={styles.recurringDaysContainer}>
-                  <Text style={[styles.recurringDaysLabel, { color: theme.textSecondary }]}>
-                    Select days to apply this time slot:
-                  </Text>
-                  <View style={styles.recurringDaysRow}>
-                    {DAYS_OF_WEEK.map((_, index) => (
-                      <RecurringDayChip
-                        key={index}
-                        day={index}
-                        isSelected={recurringDays.includes(index)}
-                        onToggle={() => toggleRecurringDay(index)}
-                        theme={theme}
-                      />
-                    ))}
-                  </View>
-                </Animated.View>
-              )}
-
-              {/* Modal Actions */}
-              <View style={styles.modalActions}>
-                <Pressable
-                  onPress={() => setShowTimeModal(false)}
-                  style={[styles.modalCancelButton, { borderColor: theme.border }]}
+            {/* Quick Presets */}
+            <Text style={styles.presetsLabel}>Quick presets</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.presetsContainer}
+              contentContainerStyle={styles.presetsContent}
+            >
+              {TIME_PRESETS.map(preset => (
+                <TouchableOpacity
+                  key={preset.label}
+                  activeOpacity={0.75}
+                  onPress={() => applyTimePreset(preset)}
+                  style={styles.presetChip}
                 >
-                  <Text style={[styles.modalCancelText, { color: theme.text }]}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={saveTimeSlot}
-                  style={[styles.modalSaveButton, { backgroundColor: theme.primary }]}
+                  <Text style={styles.presetChipText}>{preset.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Time Pickers */}
+            <View style={styles.timePickersRow}>
+              <View style={styles.timePickerColumn}>
+                <Text style={styles.timePickerLabel}>Start time</Text>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setShowStartPicker(true)}
+                  style={styles.timePickerButton}
                 >
-                  <Text style={styles.modalSaveText}>
-                    {isRecurringMode ? 'Apply to Days' : 'Save Slot'}
-                  </Text>
-                </Pressable>
+                  <Ionicons name="time-outline" size={18} color={palette.textMuted} />
+                  <Text style={styles.timePickerValue}>{formatTime(tempStartTime)}</Text>
+                </TouchableOpacity>
               </View>
-            </Pressable>
+              <View style={styles.timePickerDivider}>
+                <Ionicons name="arrow-forward" size={18} color={palette.textMuted} />
+              </View>
+              <View style={styles.timePickerColumn}>
+                <Text style={styles.timePickerLabel}>End time</Text>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setShowEndPicker(true)}
+                  style={styles.timePickerButton}
+                >
+                  <Ionicons name="time-outline" size={18} color={palette.textMuted} />
+                  <Text style={styles.timePickerValue}>{formatTime(tempEndTime)}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Recurring Toggle */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setIsRecurringMode(!isRecurringMode)}
+              style={styles.recurringToggle}
+            >
+              <View style={styles.recurringToggleLeft}>
+                <View style={styles.recurringIcon}>
+                  <Ionicons name="repeat" size={18} color={palette.text} />
+                </View>
+                <Text style={styles.recurringToggleText}>Apply to recurring days</Text>
+              </View>
+              <View style={[styles.checkbox, isRecurringMode && styles.checkboxOn]}>
+                {isRecurringMode ? (
+                  <Ionicons name="checkmark" size={16} color={palette.textInverse} />
+                ) : null}
+              </View>
+            </TouchableOpacity>
+
+            {/* Recurring Days Selection */}
+            {isRecurringMode && (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.recurringDaysContainer}>
+                <Text style={styles.recurringDaysLabel}>Select days to apply this time slot:</Text>
+                <View style={styles.recurringDaysRow}>
+                  {DAYS_OF_WEEK.map((_, index) => (
+                    <RecurringDayChip
+                      key={index}
+                      day={index}
+                      isSelected={recurringDays.includes(index)}
+                      onToggle={() => toggleRecurringDay(index)}
+                    />
+                  ))}
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Sheet Actions */}
+            <View style={styles.modalActions}>
+              <PillButton
+                label="Cancel"
+                variant="grey"
+                onPress={() => setShowTimeModal(false)}
+                style={styles.flex}
+              />
+              <PillButton
+                label={isRecurringMode ? 'Apply to days' : 'Save slot'}
+                variant="ink"
+                onPress={saveTimeSlot}
+                style={styles.modalSave}
+              />
+            </View>
           </Animated.View>
-        </Pressable>
-      
+        </View>
       ) : null}
 
       {/* Start Time Picker */}
@@ -1227,356 +1113,190 @@ export default function AvailabilityCalendarScreen() {
         message={snackbar.message}
         variant={snackbar.variant}
         onDismiss={hideSnackbar}
-        theme={theme}
+        bottom={insets.bottom + (hasChanges ? 96 : 24)}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
-  },
-  // Month Navigation
-  monthNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    borderRadius: borderRadius.xl,
-    marginBottom: spacing[3],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  monthNavButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthNavCenter: {
-    alignItems: 'center',
-  },
+  container: { flex: 1, backgroundColor: palette.bg },
+  flex: { flex: 1 },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 6 },
+
+  // Month navigation
+  monthNav: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 16 },
+  monthLabel: { ...fonts.medium, fontSize: 14, color: palette.textMuted },
   monthTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 30,
+    letterSpacing: -0.8,
+    color: palette.text,
+    marginTop: 2,
   },
-  // Stats Row
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing[3],
-    marginBottom: spacing[4],
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-  },
-  statNumber: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold as any,
-  },
-  statLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-  },
+  monthNavGap: { marginRight: 8 },
+
+  // Stats
+  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  statItem: { flex: 1, borderRadius: radii.lg, paddingVertical: 14, paddingHorizontal: 14 },
+  statNumber: { ...fonts.semibold, fontSize: 26, letterSpacing: -0.6, color: palette.text },
+  statLabel: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginTop: 2 },
+
   // Calendar
   calendarCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    marginBottom: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 14,
+    marginBottom: 12,
   },
-  weekDaysHeader: {
-    flexDirection: 'row',
-    marginBottom: spacing[2],
-  },
-  weekDayItem: {
-    width: DAY_SIZE,
-    alignItems: 'center',
-    paddingVertical: spacing[2],
-  },
-  weekDayText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
+  weekDaysHeader: { flexDirection: 'row', marginBottom: 4 },
+  weekDayItem: { width: CELL_SIZE, alignItems: 'center', paddingVertical: 6 },
+  weekDayText: { ...fonts.semibold, fontSize: 12, color: palette.textMuted },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  dayCell: { width: CELL_SIZE, alignItems: 'center', paddingTop: 2, height: DAY_SIZE + 10 },
   calendarDay: {
     width: DAY_SIZE,
     height: DAY_SIZE,
+    borderRadius: DAY_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: DAY_SIZE / 2,
-    marginVertical: spacing[1] / 2,
   },
-  calendarDaySelected: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  calendarDayText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
-  calendarDayTextSelected: {
-    fontWeight: fontWeight.bold as any,
-  },
-  calendarDayTextMuted: {
-    opacity: 0.3,
-  },
+  calendarDayToday: { borderWidth: 1.5, borderColor: palette.ink },
+  calendarDayText: { ...fonts.medium, fontSize: 15 },
+  calendarDayTextStrong: { ...fonts.bold },
   dayIndicators: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    height: 8,
     gap: 2,
-    position: 'absolute',
-    bottom: 4,
   },
-  slotIndicator: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  // Legend
+  slotIndicator: { width: 4, height: 4, borderRadius: 2, backgroundColor: palette.ink },
   legend: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing[4],
-    paddingTop: spacing[3],
-    marginTop: spacing[3],
+    gap: 18,
+    paddingTop: 12,
+    marginTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
   },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendText: {
-    fontSize: fontSize.xs,
-  },
-  // Selected Date Card
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted },
+
+  // Selected date
   selectedDateCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    marginBottom: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 18,
+    marginBottom: 12,
   },
-  selectedDateHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing[4],
-  },
-  selectedDateTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[1],
-  },
-  selectedDateSubtitle: {
-    fontSize: fontSize.sm,
-  },
-  selectedDateActions: {
-    flexDirection: 'row',
-    gap: spacing[2],
-  },
+  selectedDateHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
+  selectedTag: { alignSelf: 'flex-start', marginBottom: 10 },
+  selectedDateTitle: { ...fonts.bold, fontSize: 22, letterSpacing: -0.5, color: palette.text },
+  selectedDateSubtitle: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginTop: 2 },
   actionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  blockedMessage: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.lg,
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    marginLeft: 10,
   },
+  actionBlock: { backgroundColor: palette.peachSoft },
+  actionUnblock: { backgroundColor: palette.ink },
+  actionButtonText: { ...fonts.semibold, fontSize: 13, color: palette.text, marginLeft: 6 },
+  actionButtonTextOn: { color: palette.textInverse },
+  blockedMessage: {
+    backgroundColor: palette.peachSoft,
+    borderRadius: radii.lg,
+    padding: 18,
+    minHeight: 110,
+    overflow: 'hidden',
+  },
+  blockedArt: { position: 'absolute', right: -24, bottom: -22 },
+  blockedMessageTitle: { ...fonts.bold, fontSize: 18, color: palette.text, width: '65%' },
   blockedMessageText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 4,
+    width: '62%',
   },
-  timeSlotsList: {
-    gap: spacing[2],
-    marginBottom: spacing[4],
-  },
+  timeSlotsList: { gap: 8, marginBottom: 14 },
   timeSlotItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.lg,
+    backgroundColor: palette.surfaceDim,
+    borderRadius: radii.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
-  timeSlotContent: {
-    flexDirection: 'row',
+  timeSlotContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  timeSlotIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: palette.surface,
     alignItems: 'center',
-    gap: spacing[2],
+    justifyContent: 'center',
+    marginRight: 10,
   },
-  timeSlotText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
-  },
-  timeSlotActions: {
-    flexDirection: 'row',
-    gap: spacing[2],
-  },
+  timeSlotText: { ...fonts.semibold, fontSize: 15, color: palette.text },
+  timeSlotActions: { flexDirection: 'row', gap: 8 },
   timeSlotAction: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  timeSlotActionDanger: { backgroundColor: palette.dangerSoft },
   noSlotsMessage: {
     alignItems: 'center',
-    paddingVertical: spacing[5],
-    gap: spacing[2],
+    paddingVertical: 20,
+    backgroundColor: palette.surfaceDim,
+    borderRadius: radii.lg,
+    marginBottom: 14,
   },
-  noSlotsText: {
-    fontSize: fontSize.sm,
-  },
-  dateActionButtons: {
-    flexDirection: 'row',
-    gap: spacing[3],
-  },
-  addSlotButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-  },
-  addSlotButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-  },
-  clearButton: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-  },
-  // Empty State
+  noSlotsText: { ...fonts.medium, fontSize: 13.5, color: palette.textMuted, marginTop: 8 },
+  dateActionButtons: { flexDirection: 'row', alignItems: 'center' },
+  clearButton: { marginLeft: 10 },
+
+  // Empty state
   emptyState: {
-    alignItems: 'center',
-    padding: spacing[6],
-    borderRadius: borderRadius.xl,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: palette.blueSoft,
+    borderRadius: radii.xl,
+    padding: 18,
+    minHeight: 140,
+    overflow: 'hidden',
   },
-  emptyIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[4],
-  },
-  emptyTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[2],
-  },
+  emptyArt: { position: 'absolute', right: -28, bottom: -24 },
+  emptyTitle: { ...fonts.bold, fontSize: 22, letterSpacing: -0.5, color: palette.text, width: '62%' },
   emptySubtitle: {
-    fontSize: fontSize.sm,
-    textAlign: 'center',
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 6,
+    width: '60%',
   },
-  // Save Button
+
+  // Save bar
   saveButtonContainer: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    backgroundColor: palette.bg,
   },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.lg,
-    minHeight: 52,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-  // Modal
+
+  // Sheet
   modalOverlay: {
     // Absolutely positioned rather than flex:1 — no longer inside a
     // <Modal>, which does not present on this build.
@@ -1587,183 +1307,118 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    borderTopLeftRadius: borderRadius['2xl'],
-    borderTopRightRadius: borderRadius['2xl'],
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[6],
-    maxHeight: '80%',
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    maxHeight: '85%',
+  },
+  grabber: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    alignSelf: 'center',
+    marginBottom: 14,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing[4],
+    marginBottom: 16,
   },
-  modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-  },
-  modalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
+  modalTitle: { ...fonts.semibold, fontSize: 22, letterSpacing: -0.4, color: palette.text },
+  presetsLabel: { ...fonts.semibold, fontSize: 14, color: palette.text, marginBottom: 10 },
+  presetsContainer: { marginBottom: 16, flexGrow: 0 },
+  presetsContent: { gap: 8 },
+  presetChip: {
+    height: 38,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
     justifyContent: 'center',
   },
-  presetsLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    marginBottom: spacing[2],
-  },
-  presetsContainer: {
-    marginBottom: spacing[4],
-  },
-  presetsContent: {
-    gap: spacing[2],
-  },
-  presetChip: {
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.full,
-    marginRight: spacing[2],
-  },
-  presetChipText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
-  timePickersRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: spacing[4],
-  },
-  timePickerColumn: {
-    flex: 1,
-  },
-  timePickerLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    marginBottom: spacing[2],
-  },
+  presetChipText: { ...fonts.semibold, fontSize: 13.5, color: palette.text },
+  timePickersRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 16 },
+  timePickerColumn: { flex: 1 },
+  timePickerLabel: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginBottom: 8 },
   timePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.lg,
+    height: 52,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    gap: 8,
   },
-  timePickerValue: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
-  },
-  timePickerDivider: {
-    width: 40,
-    alignItems: 'center',
-    paddingBottom: spacing[3],
-  },
+  timePickerValue: { ...fonts.semibold, fontSize: 15.5, color: palette.text },
+  timePickerDivider: { height: 52, justifyContent: 'center', paddingHorizontal: 8 },
   recurringToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[3],
+    padding: 12,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surfaceDim,
+    marginBottom: 12,
   },
-  recurringToggleLeft: {
-    flexDirection: 'row',
+  recurringToggleLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  recurringIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: palette.surface,
     alignItems: 'center',
-    gap: spacing[2],
+    justifyContent: 'center',
+    marginRight: 10,
   },
-  recurringToggleText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
+  recurringToggleText: { ...fonts.semibold, fontSize: 15, color: palette.text },
+  checkbox: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: palette.textSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  recurringDaysContainer: {
-    marginBottom: spacing[4],
-  },
-  recurringDaysLabel: {
-    fontSize: fontSize.sm,
-    marginBottom: spacing[2],
-  },
-  recurringDaysRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+  checkboxOn: { backgroundColor: palette.ink, borderColor: palette.ink },
+  recurringDaysContainer: { marginBottom: 12 },
+  recurringDaysLabel: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginBottom: 10 },
+  recurringDaysRow: { flexDirection: 'row', justifyContent: 'space-between' },
   recurringDayChip: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: palette.fill,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
   },
-  recurringDayChipText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: spacing[3],
-    marginTop: spacing[2],
-  },
-  modalCancelButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[3],
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-  },
-  modalCancelText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
-  },
-  modalSaveButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-  },
-  modalSaveText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
+  recurringDayChipOn: { backgroundColor: palette.ink },
+  recurringDayChipText: { ...fonts.semibold, fontSize: 12.5, color: palette.text },
+  recurringDayChipTextOn: { color: palette.textInverse },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  modalSave: { flex: 1.4 },
+
   // Snackbar
   snackbar: {
     position: 'absolute',
-    bottom: 100,
-    left: spacing[4],
-    right: spacing[4],
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    borderRadius: borderRadius.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    gap: 10,
+    backgroundColor: palette.ink,
+    borderRadius: radii.pill,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    zIndex: 10000,
+    elevation: 30,
   },
-  snackbarText: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
+  snackbarText: { ...fonts.semibold, flex: 1, fontSize: 14, color: palette.textInverse },
 });

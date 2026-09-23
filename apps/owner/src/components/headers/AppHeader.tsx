@@ -3,21 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  Platform,
   TextInput,
-  Pressable,
+  TouchableOpacity,
   Image,
 } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts, shadow } from '../../theme/kit';
 import HeaderAction, { HeaderIconName } from './HeaderAction';
 import StatusPill, { StatusPillVariant } from './StatusPill';
 
@@ -74,8 +67,7 @@ export interface AppHeaderProps {
   testID?: string;
 }
 
-// The owner app's icon ships amber, but everything around it reads the teal
-// semantic tokens — the mark is the only amber in the header, by design.
+// The owner app's icon ships amber; it sits beside ink type on the grey canvas.
 const BRAND_MARK = require('../../assets/logo-mark.png');
 
 // Height constants
@@ -195,18 +187,16 @@ const HeaderStatCard = memo(function HeaderStatCard({
   theme,
   testID,
 }: HeaderStatCardProps) {
-  const accent = theme[stat.color];
-  // Semantic light tints are named `<token>Light`; `danger` is the only
-  // colour whose pairing isn't derivable by suffixing the same key.
+  const accent = stat.color === 'primary' ? palette.text : theme[stat.color];
+  // Soft tint behind the icon: peach for primary, the semantic `<token>Light`
+  // wash otherwise.
   const accentBg =
-    stat.color === 'danger' ? theme.dangerLight : theme[`${stat.color}Light`];
+    stat.color === 'primary' ? palette.peachSoft : theme[`${stat.color}Light`];
 
   return (
-    <Pressable
-      style={[
-        styles.statCard,
-        { backgroundColor: theme.surface, borderColor: theme.border },
-      ]}
+    <TouchableOpacity
+      style={[styles.statCard, { backgroundColor: theme.surface }]}
+      activeOpacity={0.85}
       onPress={stat.onPress}
       disabled={!stat.onPress}
       accessibilityRole="button"
@@ -214,7 +204,7 @@ const HeaderStatCard = memo(function HeaderStatCard({
       testID={testID}
     >
       <View style={[styles.statIcon, { backgroundColor: accentBg }]}>
-        <Ionicons name={stat.icon} size={13} color={accent} />
+        <Ionicons name={stat.icon} size={16} color={accent} />
       </View>
       <Text
         style={[styles.statValue, { color: theme.text }]}
@@ -230,7 +220,7 @@ const HeaderStatCard = memo(function HeaderStatCard({
       >
         {stat.label}
       </Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 });
 
@@ -254,14 +244,9 @@ const SearchField = memo(function SearchField({
 }: SearchFieldProps) {
   return (
     <View
-      style={[
-        styles.searchContainer,
-        {
-          backgroundColor: theme.borderLight,
-          borderColor: theme.border,
-        },
-      ]}
+      style={[styles.searchContainer, { backgroundColor: theme.surface }]}
     >
+      <Ionicons name="search" size={18} color={theme.textMuted} style={styles.searchIcon} />
       <TextInput
         style={[styles.searchInput, { color: theme.text }]}
         placeholder={placeholder}
@@ -508,14 +493,13 @@ function AppHeader({
       style={[
         styles.container,
         {
-          backgroundColor: theme.surface,
+          backgroundColor: theme.background,
           paddingTop: insets.top,
         },
         showShadow && styles.shadow,
-        showDivider && !showShadow && [
-          styles.divider,
-          { borderBottomColor: theme.border },
-        ],
+        // Dividers are gone in the redesign (header sits on the canvas); the
+        // prop is still accepted for API compatibility.
+        showDivider && !showShadow && styles.divider,
       ]}
       testID={testID}
     >
@@ -538,31 +522,19 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   content: {
-    paddingHorizontal: spacing[4],
+    paddingHorizontal: 20,
   },
   contentCompact: {
-    paddingVertical: spacing[1],
+    paddingVertical: 4,
   },
   contentBrand: {
-    paddingTop: spacing[3],
-    paddingBottom: spacing[4],
+    paddingTop: 12,
+    paddingBottom: 16,
   },
   shadow: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    ...shadow.soft,
   },
-  divider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+  divider: {},
 
   // Standard variant
   standardContent: {
@@ -573,15 +545,17 @@ const styles = StyleSheet.create({
   titleContainer: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: spacing[2],
+    paddingHorizontal: 8,
   },
   title: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 19,
+    letterSpacing: -0.2,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12.5,
     marginTop: 1,
     textAlign: 'center',
   },
@@ -595,6 +569,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
   largeTitleWrapper: {
     flex: 1,
@@ -605,22 +580,25 @@ const styles = StyleSheet.create({
   largeTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
+    gap: 8,
   },
   largeTitle: {
-    fontSize: fontSize['2xl'],
-    fontWeight: fontWeight.bold as any,
+    ...fonts.semibold,
+    fontSize: 30,
+    letterSpacing: -0.8,
     flexShrink: 1,
   },
   largeTitleCompact: {
-    fontSize: fontSize.xl,
+    fontSize: 24,
+    letterSpacing: -0.5,
   },
   largeSubtitle: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    fontSize: 14,
     marginTop: 2,
   },
   largeSubtitleCompact: {
-    fontSize: fontSize.xs,
+    fontSize: 12.5,
     marginTop: 2,
   },
   statusPillContainer: {
@@ -629,84 +607,87 @@ const styles = StyleSheet.create({
 
   // Brand variant
   brandContent: {
-    gap: spacing[4],
+    gap: 18,
   },
   brandTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing[2],
+    gap: 8,
   },
   brandLockup: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing[3],
+    alignItems: 'center',
+    gap: 12,
   },
   brandMark: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.lg,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   brandWordmarkBlock: {
     flex: 1,
   },
   brandWordmark: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold as any,
-    letterSpacing: 1.5,
+    ...fonts.bold,
+    fontSize: 18,
+    letterSpacing: 1.2,
   },
   brandSubmark: {
+    ...fonts.semibold,
     fontSize: 10,
-    fontWeight: fontWeight.semibold as any,
     letterSpacing: 2.4,
     marginTop: 1,
   },
   brandTagline: {
-    fontSize: fontSize.xs,
-    marginTop: spacing[1],
+    ...fonts.medium,
+    fontSize: 12.5,
+    marginTop: 4,
   },
   brandGreetingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
+    gap: 8,
   },
   brandGreetingBlock: {
     flex: 1,
   },
   brandGreeting: {
-    fontSize: fontSize['2xl'],
-    fontWeight: fontWeight.bold as any,
+    ...fonts.semibold,
+    fontSize: 30,
+    letterSpacing: -0.8,
   },
   brandSubtitle: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    fontSize: 14,
     marginTop: 2,
   },
   statRow: {
     flexDirection: 'row',
-    gap: spacing[2],
+    gap: 10,
   },
   statCard: {
     flex: 1,
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[2],
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
+    padding: 12,
+    borderRadius: radii.lg,
   },
   statIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing[1],
+    marginBottom: 10,
   },
   statValue: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as any,
+    ...fonts.semibold,
+    fontSize: 22,
+    letterSpacing: -0.6,
   },
   statLabel: {
-    fontSize: 11,
+    ...fonts.medium,
+    fontSize: 11.5,
     marginTop: 1,
   },
 
@@ -715,21 +696,24 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
+    gap: 8,
   },
   searchContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    paddingHorizontal: spacing[3],
-    height: 40,
+    borderRadius: radii.pill,
+    paddingHorizontal: 16,
+    height: 46,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
+    ...fonts.medium,
     flex: 1,
-    fontSize: fontSize.base,
-    paddingVertical: spacing[2],
+    fontSize: 15,
+    paddingVertical: 0,
   },
 
   // Common
@@ -740,7 +724,7 @@ const styles = StyleSheet.create({
   rightActionsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
+    gap: 8,
   },
 });
 

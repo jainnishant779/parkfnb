@@ -5,42 +5,40 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  Pressable,
   TouchableOpacity,
+  Switch,
+  Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
-// Components
-import { AppHeader } from '../../components/headers';
-import type { HeaderStat } from '../../components/headers';
+// Theme & UI kit
+import { palette, radii, fonts } from '../../theme/kit';
 import {
-  KpiCard,
-  SectionCard,
-  SegmentedControl,
-  BookingRow,
-  ListingRow,
-  AlertRow,
-  QuickActionTile,
-  ReviewCard,
-  EmptyState,
-} from '../../components/dashboard';
+  PillButton,
+  IconCircle,
+  SectionTitle,
+  Avatar,
+  StatusTag,
+  ProgressTrack,
+  ListRow,
+  Segmented,
+  IsoBlock,
+} from '../../components/ui';
 
-// Theme & Utils
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+// Utils
 import { resolveImageUri } from '../../utils/imageUri';
 import {
   formatCurrency,
   formatCurrencyCompact,
   formatOwnerGreeting,
   formatPercentage,
+  formatTimeRange,
 } from '../../utils/formatters';
 import {
   loadAllDashboardData,
-  toggleListingStatus,
   dismissAlert,
   saveLastBookingsTab,
   DashboardData,
@@ -51,13 +49,12 @@ import {
 import type { ComplianceTemplate } from '../../types/compliance';
 import { ROUTES } from '../../constants/routes';
 import { ENABLE_TYPE_SPECIFIC_UI } from '../../constants/featureFlags';
-import type { StatusPillVariant } from '../../components/headers/StatusPill';
 import { useAuth } from '../../context/AuthContext';
 import { bookingService } from '../../services/bookingService';
 import { listingService } from '../../services/listingService';
-import earningsService, { startOfWeek, startOfToday, startOfMonth } from '../../services/earningsService';
+import earningsService, { startOfWeek, startOfToday } from '../../services/earningsService';
 import type { ApiBooking, ApiProperty, ApiOwnerStats } from '../../types/api';
-import type { DashboardBooking, DashboardListing, DashboardReview } from '../../constants/mockData';
+import type { DashboardBooking, DashboardListing } from '../../constants/mockData';
 
 // Owner type constants
 const INDUSTRIAL_OWNER_TYPES = ['industrial_facility'];
@@ -146,8 +143,7 @@ function transformApiPropertyToListing(p: ApiProperty): DashboardListing {
 export default function DashboardScreen() {
   const navigation = useNavigation();
   const { kycStatus, user, owner } = useAuth();
-  // Force light mode for dashboard
-  const theme = useMemo(() => getTheme(false), []);
+  const insets = useSafeAreaInsets();
 
   // Persistent UI state (alerts dismissals, tab selection)
   const [data, setData] = useState<DashboardData | null>(null);
@@ -163,7 +159,6 @@ export default function DashboardScreen() {
 
   // Scroll / refresh
   const [refreshing, setRefreshing] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
 
   // Live API state
   const [liveStats, setLiveStats] = useState<ApiOwnerStats | null>(null);
@@ -514,13 +509,20 @@ export default function DashboardScreen() {
     return 'Owner';
   }, [user, data]);
 
-  // Status variant for header pill
-  const statusVariant: StatusPillVariant | undefined = useMemo(() => {
-    if (kycStatus === 'verified')  return 'verified'  as StatusPillVariant;
-    if (kycStatus === 'submitted') return 'pending'   as StatusPillVariant;
-    if (kycStatus === 'rejected')  return 'rejected'  as StatusPillVariant;
-    return undefined;
+  // KYC status tag shown under the owner's name
+  const kycTag = useMemo((): { label: string; tone: 'success' | 'warning' | 'danger' } | null => {
+    if (kycStatus === 'verified')  return { label: 'Verified', tone: 'success' };
+    if (kycStatus === 'submitted') return { label: 'KYC in review', tone: 'warning' };
+    if (kycStatus === 'rejected')  return { label: 'KYC rejected', tone: 'danger' };
+    return null;
   }, [kycStatus]);
+
+  // Full name for the profile row
+  const displayName = useMemo(() => {
+    if (user?.legalName) return user.legalName;
+    const full = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim();
+    return full || firstName;
+  }, [user, firstName]);
 
   // Bookings for the currently selected tab (max 3 on dashboard)
   const currentBookings = useMemo(() => {
@@ -532,623 +534,705 @@ export default function DashboardScreen() {
     }
   }, [bookingsTab, computedData]);
 
-  // Header stat tiles. Every figure is live: listings and pending requests come
-  // from the bookings/listings fetches, active bookings and monthly revenue
-  // from GET /owners/:id/stats. Currency is compacted because the tile is a
-  // quarter of the screen width.
-  const headerStats = useMemo((): HeaderStat[] => [
+  // KPI tiles. Every figure is live: listings and pending requests come
+  // from the bookings/listings fetches, active bookings, occupancy and
+  // revenue from GET /owners/:id/stats. Currency is compacted because a tile
+  // is half the panel width.
+  const kpiTiles = useMemo(() => [
     {
-      icon: 'business-outline',
-      value: computedData.totalListings.toString(),
-      label: 'Listings',
-      color: 'primary',
+      key: 'today',
+      icon: 'cash-outline',
+      value: formatCurrencyCompact(computedData.todayEarnings),
+      label: "Today's earnings",
+      onPress: () => navigation.navigate(ROUTES.TABS.EARNINGS as never),
+    },
+    {
+      key: 'week',
+      icon: 'trending-up-outline',
+      value: formatCurrencyCompact(computedData.weekEarnings),
+      label: 'This week',
+      onPress: () => navigation.navigate(ROUTES.TABS.EARNINGS as never),
+    },
+    {
+      key: 'occupancy',
+      icon: 'stats-chart-outline',
+      value: formatPercentage(computedData.occupancyRate),
+      label: 'Occupancy',
       onPress: handleViewAllListings,
     },
     {
-      icon: 'hourglass-outline',
-      value: computedData.requestsCount.toString(),
-      label: 'Requests',
-      color: 'warning',
-      onPress: handleViewBookingRequests,
+      key: 'listings',
+      icon: 'business-outline',
+      value: computedData.totalListings.toString(),
+      label: 'Listings',
+      onPress: handleViewAllListings,
     },
-    {
-      icon: 'car-outline',
-      value: computedData.activeBookingsCount.toString(),
-      label: 'Active',
-      color: 'success',
-      onPress: handleViewAllBookings,
-    },
-    {
-      icon: 'wallet-outline',
-      value: formatCurrencyCompact(computedData.monthEarnings),
-      label: 'This Month',
-      color: 'primary',
-      onPress: () => navigation.navigate(ROUTES.TABS.EARNINGS as never),
-    },
-  ], [
-    computedData,
-    handleViewAllListings,
-    handleViewBookingRequests,
-    handleViewAllBookings,
-    navigation,
-  ]);
+  ], [computedData, handleViewAllListings, navigation]);
 
   const bookingsSegmentOptions = useMemo(() => [
-    { key: 'requests' as BookingsTab, label: 'Requests', badge: computedData.requestsCount },
-    { key: 'active'   as BookingsTab, label: 'Active' },
-    { key: 'upcoming' as BookingsTab, label: 'Upcoming' },
+    {
+      id: 'requests' as BookingsTab,
+      label: computedData.requestsCount > 0 ? `Requests (${computedData.requestsCount})` : 'Requests',
+    },
+    { id: 'active'   as BookingsTab, label: 'Active' },
+    { id: 'upcoming' as BookingsTab, label: 'Upcoming' },
   ], [computedData]);
 
-  return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <AppHeader
-        variant="brand"
-        title={`${formatOwnerGreeting(firstName)} 👋`}
-        subtitle="Manage your parking. Grow your business."
-        brandTagline="Your Space. Our Technology. More Possibilities."
-        stats={headerStats}
-        status={statusVariant}
-        rightActions={[
-          {
-            icon: 'notifications',
-            label: 'Notifications',
-            onPress: handleNotifications,
-            badgeCount: computedData.unreadCount,
-          },
-        ]}
-        showDivider={false}
-        elevated={isScrolled}
-        isScrolled={isScrolled}
-        testID="dashboard-header"
-      />
+  const alertIcon: Record<Alert['type'], string> = {
+    kyc: 'shield',
+    bank: 'credit-card',
+    bookings: 'inbox',
+    listing: 'plus-square',
+  };
 
+  const runAlertAction = (alert: Alert) => {
+    if (alert.type === 'kyc') handleNavigateToKyc();
+    else if (alert.type === 'bank') handleNavigateToBankSetup();
+    else if (alert.type === 'listing') handleCompleteFirstListing();
+    else handleViewBookingRequests();
+  };
+
+  const bookingTagTone = (status: DashboardBooking['status']) => {
+    if (status === 'active') return 'success';
+    if (status === 'request') return 'warning';
+    if (status === 'cancelled' || status === 'rejected') return 'danger';
+    if (status === 'completed') return 'grey';
+    return 'ink';
+  };
+
+  return (
+    <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{ paddingTop: insets.top + 8 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={theme.primary}
+            tintColor={palette.ink}
           />
         }
-        onScroll={(e) => {
-          setIsScrolled(e.nativeEvent.contentOffset.y > 10);
-        }}
-        scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
+        testID="dashboard-header"
       >
-        {/* KPI Cards. Active Bookings lives in the header stat row now, so this
-            carousel carries only the figures the header doesn't show. */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.kpiRow}
-          contentContainerStyle={styles.kpiRowContent}
-        >
-          <KpiCard
-            icon="cash"
-            value={formatCurrency(computedData.todayEarnings)}
-            label="Today's Earnings"
-            color="success"
-            onPress={() => navigation.navigate(ROUTES.TABS.EARNINGS as never)}
+        {/* Profile row */}
+        <View style={styles.topRow}>
+          <Avatar name={displayName} size={58} />
+          <View style={styles.topText}>
+            <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
+            <View style={styles.subRow}>
+              <Text style={styles.subText} numberOfLines={1}>
+                {formatOwnerGreeting(firstName)}
+              </Text>
+              {kycTag ? (
+                <StatusTag label={kycTag.label} tone={kycTag.tone} style={styles.kycTag} />
+              ) : null}
+            </View>
+          </View>
+          <IconCircle
+            icon="bell"
+            size={50}
+            badge={computedData.unreadCount > 0}
+            onPress={handleNotifications}
           />
-          <KpiCard
-            icon="trending-up"
-            value={formatCurrency(computedData.weekEarnings)}
-            label="This Week"
-            color="primary"
-            onPress={() => navigation.navigate(ROUTES.TABS.EARNINGS as never)}
-          />
-          <KpiCard
-            icon="stats-chart"
-            value={formatPercentage(computedData.occupancyRate)}
-            label="Occupancy"
-            color="primary"
-            onPress={handleViewAllListings}
-          />
-        </ScrollView>
+        </View>
 
-        {/* Alerts */}
-        {alerts.length > 0 && (
-          <View style={styles.alertsSection}>
-            {alerts.map(alert => (
-              <AlertRow
-                key={alert.id}
-                id={alert.id}
-                type={alert.type}
-                title={alert.title}
-                description={alert.description}
-                actionLabel={alert.actionLabel}
-                onAction={() => {
-                  if (alert.type === 'kyc') handleNavigateToKyc();
-                  else if (alert.type === 'bank') handleNavigateToBankSetup();
-                  else if (alert.type === 'listing') handleCompleteFirstListing();
-                  else handleViewBookingRequests();
-                }}
-                onDismiss={handleDismissAlert}
-              />
+        {/* Balance */}
+        <View style={styles.balanceRow}>
+          <TouchableOpacity
+            style={styles.flex}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate(ROUTES.TABS.EARNINGS as never)}
+          >
+            <Text style={styles.balanceLabel}>Earnings this month</Text>
+            <Text style={styles.balanceValue} numberOfLines={1} adjustsFontSizeToFit>
+              {formatCurrency(computedData.monthEarnings)}
+            </Text>
+          </TouchableOpacity>
+          <PillButton
+            label="Payouts"
+            icon="arrow-up-right"
+            size="md"
+            onPress={handleViewPayouts}
+          />
+        </View>
+
+        {/* Quick actions */}
+        <View style={styles.quickRow}>
+          <PillButton
+            label={isResidentialOwner ? 'Add property' : 'Add listing'}
+            icon="plus"
+            onPress={isResidentialOwner ? handleAddProperty : handleAddListing}
+            style={styles.flex}
+          />
+          <PillButton
+            label="Availability"
+            icon="calendar"
+            onPress={handleSetAvailability}
+            style={styles.flex}
+          />
+        </View>
+
+        {/* Content panel */}
+        <View style={[styles.panel, { paddingBottom: insets.bottom + 120 }]}>
+          {/* KPI tiles */}
+          <View style={styles.kpiGrid}>
+            {kpiTiles.map((tile) => (
+              <TouchableOpacity
+                key={tile.key}
+                activeOpacity={0.8}
+                onPress={tile.onPress}
+                style={styles.kpiTile}
+              >
+                <View style={styles.kpiIcon}>
+                  <Ionicons name={tile.icon} size={17} color={palette.text} />
+                </View>
+                <Text style={styles.kpiValue} numberOfLines={1}>{tile.value}</Text>
+                <Text style={styles.kpiLabel} numberOfLines={1}>{tile.label}</Text>
+              </TouchableOpacity>
             ))}
           </View>
-        )}
 
-        {/* Bookings Section */}
-        <SectionCard
-          title="Bookings"
-          rightAction={{ label: 'View all', onPress: handleViewAllBookings }}
-        >
-          <SegmentedControl
-            options={bookingsSegmentOptions}
-            selectedKey={bookingsTab}
-            onSelect={handleBookingsTabChange}
+          {/* Feature cards */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={handleViewBookingRequests}
+            style={[styles.featureCard, { backgroundColor: palette.peachSoft }]}
+          >
+            <View style={styles.featureArt} pointerEvents="none">
+              <IsoBlock size={140} tone="peach" />
+            </View>
+            <StatusTag
+              label={computedData.requestsCount > 0 ? `${computedData.requestsCount} pending` : 'All clear'}
+              tone="ink"
+            />
+            <View style={styles.featureBody}>
+              <Text style={styles.featureTitle}>Booking requests</Text>
+              <ProgressTrack
+                steps={4}
+                current={computedData.requestsCount > 0 ? 0 : 1}
+                trackColor="#F7D3A6"
+                style={styles.featureTrack}
+              />
+              <View style={styles.featureMetaRow}>
+                <View>
+                  <Text style={styles.featureMetaTitle}>{computedData.requestsCount}</Text>
+                  <Text style={styles.featureMetaSub}>Awaiting approval</Text>
+                </View>
+                <View>
+                  <Text style={styles.featureMetaTitle}>{computedData.upcomingBookings.length}</Text>
+                  <Text style={styles.featureMetaSub}>Upcoming</Text>
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={handleViewAllBookings}
+            style={[styles.featureCard, { backgroundColor: palette.blueSoft }]}
+          >
+            <View style={styles.featureArt} pointerEvents="none">
+              <IsoBlock size={140} tone="blue" />
+            </View>
+            <StatusTag label={`${computedData.activeBookingsCount} live`} tone="ink" />
+            <View style={styles.featureBody}>
+              <Text style={styles.featureTitle}>Active bookings</Text>
+              <ProgressTrack
+                steps={4}
+                current={2}
+                trackColor="#BCD0F4"
+                style={styles.featureTrack}
+              />
+              <View style={styles.featureMetaRow}>
+                <View>
+                  <Text style={styles.featureMetaTitle}>
+                    {formatPercentage(computedData.occupancyRate)}
+                  </Text>
+                  <Text style={styles.featureMetaSub}>Occupancy</Text>
+                </View>
+                <View>
+                  <Text style={styles.featureMetaTitle}>
+                    {computedData.liveListings}/{computedData.totalListings}
+                  </Text>
+                  <Text style={styles.featureMetaSub}>Listings live</Text>
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Alerts */}
+          {alerts.length > 0 && (
+            <>
+              <SectionTitle title="Needs attention" style={styles.sectionGap} />
+              <View style={styles.greyCard}>
+                {alerts.map((alert, index) => (
+                  <ListRow
+                    key={alert.id}
+                    icon={alertIcon[alert.type]}
+                    title={alert.title}
+                    subtitle={alert.description}
+                    onPress={() => runAlertAction(alert)}
+                    isLast={index === alerts.length - 1}
+                    right={
+                      <View style={styles.alertRight}>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => runAlertAction(alert)}
+                          style={styles.alertAction}
+                        >
+                          <Text style={styles.alertActionText}>{alert.actionLabel}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          hitSlop={10}
+                          onPress={() => handleDismissAlert(alert.id)}
+                          style={styles.alertDismiss}
+                        >
+                          <Ionicons name="close" size={16} color={palette.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                    }
+                  />
+                ))}
+              </View>
+            </>
+          )}
+
+          {/* Bookings */}
+          <SectionTitle
+            title="Bookings"
+            action="View all"
+            onAction={handleViewAllBookings}
+            style={styles.sectionGap}
           />
-
+          <Segmented
+            options={bookingsSegmentOptions}
+            value={bookingsTab}
+            onChange={handleBookingsTabChange}
+          />
           <View style={styles.bookingsList}>
             {currentBookings.length === 0 ? (
-              <EmptyState
-                icon="calendar-outline"
-                title={`No ${bookingsTab} bookings`}
-                description={
-                  bookingsTab === 'requests'
+              <View style={styles.emptyBox}>
+                <Ionicons name="calendar-outline" size={22} color={palette.textMuted} />
+                <Text style={styles.emptyTitle}>{`No ${bookingsTab} bookings`}</Text>
+                <Text style={styles.emptySub}>
+                  {bookingsTab === 'requests'
                     ? 'New booking requests will appear here'
-                    : `Your ${bookingsTab} bookings will show up here`
-                }
-                compact
-              />
+                    : `Your ${bookingsTab} bookings will show up here`}
+                </Text>
+              </View>
             ) : (
               currentBookings.map((booking, index) => (
-                <BookingRow
+                <TouchableOpacity
                   key={booking.id}
-                  {...booking}
-                  isLast={index === currentBookings.length - 1}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.bookingRow,
+                    index !== currentBookings.length - 1 && styles.rowDivider,
+                  ]}
                   onPress={() =>
                     (navigation as any).navigate(ROUTES.BOOKING_DETAILS, {
                       bookingId: booking.id,
                     })
                   }
-                />
+                >
+                  <Avatar name={booking.renterName} size={46} ring={false} />
+                  <View style={styles.bookingText}>
+                    <Text style={styles.rowTitle} numberOfLines={1}>{booking.renterName}</Text>
+                    <Text style={styles.rowSub} numberOfLines={1}>{booking.listingTitle}</Text>
+                    <Text style={styles.rowSub} numberOfLines={1}>
+                      {formatTimeRange(booking.start, booking.end)}
+                      {booking.vehiclePlate ? `  ·  ${booking.vehiclePlate}` : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.bookingRight}>
+                    <Text style={styles.bookingAmount}>{formatCurrency(booking.amount)}</Text>
+                    <StatusTag
+                      label={booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                      tone={bookingTagTone(booking.status)}
+                      style={styles.bookingTag}
+                    />
+                  </View>
+                </TouchableOpacity>
               ))
             )}
           </View>
-        </SectionCard>
 
-        {/* Listings / IOT Setup / Compliance Templates / Properties */}
-        {isIndustrialOwner ? (
-          <SectionCard
-            title="Compliance Templates"
-            rightAction={{ label: 'View all', onPress: handleViewCompliance }}
-          >
-            {complianceTemplates.length === 0 ? (
-              <EmptyState
-                icon="document-text-outline"
-                title="No templates yet"
-                description="Create compliance templates to manage document requirements"
-                compact
+          {/* Listings / IOT Setup / Compliance Templates / Properties */}
+          {isIndustrialOwner ? (
+            <>
+              <SectionTitle
+                title="Compliance templates"
+                action="View all"
+                onAction={handleViewCompliance}
+                style={styles.sectionGap}
               />
-            ) : (
-              <View style={styles.templatesList}>
-                {complianceTemplates.slice(0, 3).map((template, index) => (
-                  <Pressable
-                    key={template.id}
-                    style={[
-                      styles.templateItem,
-                      { backgroundColor: theme.borderLight },
-                      index === Math.min(complianceTemplates.length - 1, 2) &&
-                        styles.templateItemLast,
-                    ]}
-                    onPress={handleViewCompliance}
-                  >
-                    <View style={[styles.templateIcon, { backgroundColor: theme.primaryLight }]}>
-                      <Ionicons name="document-text-outline" size={18} color={theme.primary} />
-                    </View>
-                    <View style={styles.templateContent}>
-                      <Text style={[styles.templateName, { color: theme.text }]}>
-                        {template.name}
-                      </Text>
-                      <Text style={[styles.templateMeta, { color: theme.textMuted }]}>
-                        {template.requiredTypes.length} required documents
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </SectionCard>
-        ) : isEmptyLandOwner ? (
-          <SectionCard
-            title="IOT Setup"
-            rightAction={{
-              label: 'Configure',
-              onPress: () => (navigation as any).navigate('IoTIntegrations'),
-            }}
-          >
-            <View style={styles.iotSetupContainer}>
-              <View style={styles.iotSetupIconContainer}>
-                <Ionicons name="hardware-chip-outline" size={32} color={theme.primary} />
-              </View>
-              <Text style={[styles.iotSetupTitle, { color: theme.text }]}>
-                Connect Your Devices
-              </Text>
-              <Text style={[styles.iotSetupDescription, { color: theme.textMuted }]}>
-                Set up sensors, cameras, and access controls for your parking lot
-              </Text>
-              <TouchableOpacity
-                style={[styles.iotSetupButton, { backgroundColor: theme.primary }]}
-                onPress={() => (navigation as any).navigate('IoTIntegrations')}
-              >
-                <Ionicons name="settings-outline" size={18} color="#FFF" />
-                <Text style={styles.iotSetupButtonText}>Start Setup</Text>
-              </TouchableOpacity>
-            </View>
-          </SectionCard>
-        ) : isResidentialOwner ? (
-          <SectionCard
-            title="Properties"
-            rightAction={{
-              label: 'Manage',
-              onPress: () => (navigation as any).navigate(ROUTES.TABS.PROPERTIES),
-            }}
-          >
-            <View style={styles.listingsList}>
-              {properties.length === 0 ? (
-                <EmptyState
-                  icon="home-outline"
-                  title="No properties yet"
-                  description="Add your first property to manage parking slots"
-                  compact
-                />
+              {complianceTemplates.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="document-text-outline" size={22} color={palette.textMuted} />
+                  <Text style={styles.emptyTitle}>No templates yet</Text>
+                  <Text style={styles.emptySub}>
+                    Create compliance templates to manage document requirements
+                  </Text>
+                </View>
               ) : (
-                properties.slice(0, 3).map((property, index) => (
-                  <Pressable
-                    key={property.id}
-                    style={[
-                      styles.propertyRow,
-                      { borderBottomColor: theme.borderLight },
-                      index === Math.min(properties.length - 1, 2) && styles.propertyRowLast,
-                    ]}
-                    onPress={() => (navigation as any).navigate(ROUTES.TABS.PROPERTIES)}
-                  >
-                    <View style={[styles.propertyIcon, { backgroundColor: theme.primaryLight }]}>
-                      <Ionicons name="home-outline" size={20} color={theme.primary} />
-                    </View>
-                    <View style={styles.propertyContent}>
-                      <Text
-                        style={[styles.propertyName, { color: theme.text }]}
-                        numberOfLines={1}
-                      >
-                        {property.name}
-                      </Text>
-                      <Text
-                        style={[styles.propertyAddress, { color: theme.textMuted }]}
-                        numberOfLines={1}
-                      >
-                        {property.addressLine || property.city || 'No address'}
-                      </Text>
-                    </View>
-                    <View style={styles.propertyStats}>
-                      <Text style={[styles.propertySlots, { color: theme.success }]}>
-                        {property.availableSlots}/{property.totalSlots}
-                      </Text>
-                      <Text style={[styles.propertySlotsLabel, { color: theme.textMuted }]}>
-                        available
-                      </Text>
-                    </View>
-                  </Pressable>
-                ))
+                <View style={styles.greyCard}>
+                  {complianceTemplates.slice(0, 3).map((template, index) => (
+                    <ListRow
+                      key={template.id}
+                      icon="file-text"
+                      title={template.name}
+                      subtitle={`${template.requiredTypes.length} required documents`}
+                      onPress={handleViewCompliance}
+                      isLast={index === Math.min(complianceTemplates.length - 1, 2)}
+                    />
+                  ))}
+                </View>
               )}
-            </View>
-          </SectionCard>
-        ) : (
-          /* Individual / Commercial / Empty Land listings from real API */
-          <SectionCard
-            title="Listings"
-            rightAction={{ label: 'View all', onPress: handleViewAllListings }}
-          >
-            <View style={styles.listingsList}>
-              {liveListings.length === 0 ? (
-                <EmptyState
-                  icon="business-outline"
-                  title="No listings yet"
-                  description="Add your first parking spot to start earning"
-                  compact
-                />
+            </>
+          ) : isEmptyLandOwner ? (
+            <>
+              <SectionTitle
+                title="IOT setup"
+                action="Configure"
+                onAction={() => (navigation as any).navigate('IoTIntegrations')}
+                style={styles.sectionGap}
+              />
+              <View style={[styles.featureCard, { backgroundColor: palette.peachSoft }]}>
+                <View style={styles.featureArt} pointerEvents="none">
+                  <IsoBlock size={140} tone="peach" />
+                </View>
+                <View style={styles.featureBody}>
+                  <Text style={styles.featureTitle}>Connect your devices</Text>
+                  <Text style={styles.featureDesc}>
+                    Set up sensors, cameras, and access controls for your parking lot
+                  </Text>
+                  <PillButton
+                    label="Start setup"
+                    icon="settings"
+                    variant="ink"
+                    size="sm"
+                    onPress={() => (navigation as any).navigate('IoTIntegrations')}
+                    style={styles.featureBtn}
+                  />
+                </View>
+              </View>
+            </>
+          ) : isResidentialOwner ? (
+            <>
+              <SectionTitle
+                title="Properties"
+                action="Manage"
+                onAction={() => (navigation as any).navigate(ROUTES.TABS.PROPERTIES)}
+                style={styles.sectionGap}
+              />
+              {properties.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="home-outline" size={22} color={palette.textMuted} />
+                  <Text style={styles.emptyTitle}>No properties yet</Text>
+                  <Text style={styles.emptySub}>Add your first property to manage parking slots</Text>
+                </View>
               ) : (
-                liveListings.slice(0, 3).map((listing, index) => (
-                  <ListingRow
+                <View style={styles.greyCard}>
+                  {properties.slice(0, 3).map((property, index) => (
+                    <ListRow
+                      key={property.id}
+                      icon="home"
+                      title={property.name}
+                      subtitle={property.addressLine || property.city || 'No address'}
+                      onPress={() => (navigation as any).navigate(ROUTES.TABS.PROPERTIES)}
+                      isLast={index === Math.min(properties.length - 1, 2)}
+                      right={
+                        <View style={styles.slotStats}>
+                          <Text style={styles.slotValue}>
+                            {property.availableSlots}/{property.totalSlots}
+                          </Text>
+                          <Text style={styles.rowSub}>available</Text>
+                        </View>
+                      }
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          ) : (
+            /* Individual / Commercial / Empty Land listings from real API */
+            <>
+              <SectionTitle
+                title="Listings"
+                action="View all"
+                onAction={handleViewAllListings}
+                style={styles.sectionGap}
+              />
+              {liveListings.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="business-outline" size={22} color={palette.textMuted} />
+                  <Text style={styles.emptyTitle}>No listings yet</Text>
+                  <Text style={styles.emptySub}>Add your first parking spot to start earning</Text>
+                </View>
+              ) : (
+                liveListings.slice(0, 3).map((listing) => (
+                  <TouchableOpacity
                     key={listing.id}
-                    {...listing}
-                    isLast={index === Math.min(liveListings.length - 1, 2)}
-                    onToggle={() => handleListingToggle(listing.id)}
+                    activeOpacity={0.8}
+                    style={styles.listingRow}
                     onPress={() =>
                       (navigation as any).navigate(ROUTES.LISTING_DETAILS, {
                         listingId: listing.id,
                       })
                     }
-                  />
+                  >
+                    {listing.photoUri ? (
+                      <Image source={{ uri: listing.photoUri }} style={styles.listingThumb} />
+                    ) : (
+                      <View style={[styles.listingThumb, styles.listingThumbEmpty]}>
+                        <IsoBlock size={52} tone="peach" />
+                      </View>
+                    )}
+                    <View style={styles.bookingText}>
+                      <Text style={styles.rowTitle} numberOfLines={1}>{listing.title}</Text>
+                      <Text style={styles.rowSub} numberOfLines={1}>{listing.location}</Text>
+                      <Text style={styles.rowSub} numberOfLines={1}>
+                        {listing.capacity} space{listing.capacity === 1 ? '' : 's'}
+                        {'  ·  '}
+                        {listing.isLive ? 'Live' : 'Paused'}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={listing.isLive}
+                      onValueChange={() => handleListingToggle(listing.id)}
+                      trackColor={{ false: palette.bgSoft, true: palette.ink }}
+                      thumbColor={palette.surface}
+                      ios_backgroundColor={palette.bgSoft}
+                    />
+                  </TouchableOpacity>
                 ))
               )}
-            </View>
-          </SectionCard>
-        )}
+            </>
+          )}
 
-        {/* Quick Actions */}
-        <SectionCard title="Quick Actions" noPadding>
-          <View style={styles.quickActionsGrid}>
-            <QuickActionTile
-              icon="add"
-              label={isResidentialOwner ? 'Add Property' : 'Add Listing'}
-              color="primary"
-              onPress={isResidentialOwner ? handleAddProperty : handleAddListing}
-            />
-            <QuickActionTile
-              icon="calendar"
-              label="Set Availability"
-              color="success"
-              onPress={handleSetAvailability}
-            />
-            <QuickActionTile
-              icon="pricetag"
-              label="Create Promo"
-              color="warning"
+          {/* Shortcuts */}
+          <SectionTitle title="Shortcuts" style={styles.sectionGap} />
+          <View style={styles.greyCard}>
+            <ListRow
+              icon="tag"
+              title="Create promo"
+              subtitle="Offer a discount to fill empty slots"
               onPress={handleCreatePromo}
             />
-            <QuickActionTile
-              icon="wallet"
-              label="View Payouts"
-              color="primary"
+            <ListRow
+              icon="credit-card"
+              title="View payouts"
+              subtitle="Transfers to your bank account"
               onPress={handleViewPayouts}
+              isLast
             />
           </View>
-        </SectionCard>
 
-        {/* Recent Reviews — hidden for industrial owners */}
-        {!isIndustrialOwner && (
-          <SectionCard title="Recent Reviews">
-            {computedData.avgRating === 0 ? (
-              <EmptyState
-                icon="star-outline"
-                title="No reviews yet"
-                description="Reviews from renters will appear here"
-                compact
-              />
-            ) : (
-              <View style={[styles.ratingHeader, { borderBottomColor: theme.borderLight }]}>
-                <View style={styles.ratingStars}>
-                  {Array.from({ length: 5 }, (_, i) => (
-                    <Text
-                      key={i}
-                      style={[
-                        styles.ratingStar,
-                        {
-                          color:
-                            i < Math.round(computedData.avgRating)
-                              ? '#F59E0B'
-                              : theme.textMuted,
-                        },
-                      ]}
-                    >
-                      ★
-                    </Text>
-                  ))}
+          {/* Recent Reviews — hidden for industrial owners */}
+          {!isIndustrialOwner && (
+            <>
+              <SectionTitle title="Recent reviews" style={styles.sectionGap} />
+              {computedData.avgRating === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="star-outline" size={22} color={palette.textMuted} />
+                  <Text style={styles.emptyTitle}>No reviews yet</Text>
+                  <Text style={styles.emptySub}>Reviews from renters will appear here</Text>
                 </View>
-                <Text style={[styles.ratingValue, { color: theme.text }]}>
-                  {computedData.avgRating.toFixed(1)}
-                </Text>
-                <Text style={[styles.ratingCount, { color: theme.textMuted }]}>
-                  overall rating
-                </Text>
-              </View>
-            )}
-          </SectionCard>
-        )}
+              ) : (
+                <View style={[styles.greyCard, styles.ratingCard]}>
+                  <Text style={styles.ratingValue}>{computedData.avgRating.toFixed(1)}</Text>
+                  <View style={styles.flex}>
+                    <View style={styles.ratingStars}>
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <Ionicons
+                          key={i}
+                          name={i < Math.round(computedData.avgRating) ? 'star' : 'star-outline'}
+                          size={17}
+                          color={i < Math.round(computedData.avgRating) ? palette.peachDeep : palette.textSubtle}
+                          style={styles.ratingStar}
+                        />
+                      ))}
+                    </View>
+                    <Text style={styles.rowSub}>Overall rating</Text>
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingTop: spacing[2],
-  },
-  kpiRow: {
-    marginBottom: spacing[3],
-  },
-  kpiRowContent: {
-    paddingHorizontal: spacing[4],
-    gap: spacing[2],
-  },
-  section: {
-    marginHorizontal: spacing[4],
-    borderRadius: borderRadius.md,
-    marginBottom: spacing[3],
-    padding: spacing[3],
-  },
-  sectionHeader: {
-    marginBottom: spacing[2],
-  },
-  skeletonTitle: {
-    width: 100,
-    height: 18,
-    borderRadius: borderRadius.sm,
-  },
-  alertsSection: {
-    paddingHorizontal: spacing[4],
-    marginBottom: spacing[2],
-  },
-  bookingsList: {
-    marginTop: spacing[3],
-  },
-  listingSummary: {
+  container: { flex: 1, backgroundColor: palette.bg },
+  scrollView: { flex: 1 },
+  flex: { flex: 1 },
+
+  topRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 },
+  topText: { flex: 1, marginLeft: 14, marginRight: 10 },
+  userName: { ...fonts.semibold, fontSize: 20, color: palette.text, letterSpacing: -0.3 },
+  subRow: { flexDirection: 'row', alignItems: 'center', marginTop: 3 },
+  subText: { ...fonts.medium, fontSize: 15, color: palette.textMuted, flexShrink: 1 },
+  kycTag: { marginLeft: 8 },
+
+  balanceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.md,
-    marginBottom: spacing[3],
+    alignItems: 'flex-end',
+    paddingHorizontal: 20,
+    marginTop: 26,
   },
-  listingStat: {
-    alignItems: 'center',
-    flex: 1,
+  balanceLabel: { ...fonts.medium, fontSize: 15, color: palette.text },
+  balanceValue: {
+    ...fonts.semibold,
+    fontSize: 38,
+    letterSpacing: -1,
+    color: palette.text,
+    marginTop: 4,
+    marginRight: 12,
   },
-  listingStatValue: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold as any,
+
+  quickRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 20,
+    marginTop: 18,
   },
-  listingStatLabel: {
-    fontSize: fontSize.xs,
-    marginTop: 2,
+
+  panel: {
+    marginTop: 20,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    minHeight: 500,
   },
-  listingDivider: {
-    width: 1,
-    height: 32,
-  },
-  listingsList: {
-    marginTop: spacing[1],
-  },
-  quickActionsGrid: {
+
+  kpiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: spacing[2],
-    padding: spacing[3],
+    rowGap: 10,
+    marginBottom: 14,
   },
-  ratingHeader: {
+  kpiTile: {
+    width: '48.5%',
+    backgroundColor: palette.bg,
+    borderRadius: radii.lg,
+    padding: 14,
+  },
+  kpiIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: palette.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  kpiValue: { ...fonts.semibold, fontSize: 22, letterSpacing: -0.5, color: palette.text },
+  kpiLabel: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginTop: 2 },
+
+  featureCard: {
+    borderRadius: radii.xl,
+    padding: 18,
+    marginBottom: 12,
+    minHeight: 160,
+    overflow: 'hidden',
+    alignItems: 'flex-start',
+  },
+  featureArt: { position: 'absolute', right: -30, bottom: -26 },
+  featureBody: { width: '66%' },
+  featureTitle: {
+    ...fonts.bold,
+    fontSize: 22,
+    letterSpacing: -0.5,
+    color: palette.text,
+    marginTop: 12,
+  },
+  featureDesc: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginTop: 6 },
+  featureBtn: { alignSelf: 'flex-start', marginTop: 14 },
+  featureTrack: { marginTop: 14 },
+  featureMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
+  featureMetaTitle: { ...fonts.semibold, fontSize: 14, color: palette.text },
+  featureMetaSub: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 2 },
+
+  sectionGap: { marginTop: 18, marginBottom: 10 },
+
+  greyCard: {
+    backgroundColor: palette.surfaceDim,
+    borderRadius: radii.xl,
+    paddingHorizontal: 14,
+  },
+
+  alertRight: { flexDirection: 'row', alignItems: 'center', marginLeft: 8 },
+  alertAction: {
+    backgroundColor: palette.ink,
+    borderRadius: radii.pill,
+    paddingHorizontal: 12,
+    height: 30,
+    justifyContent: 'center',
+  },
+  alertActionText: { ...fonts.semibold, fontSize: 12.5, color: palette.textInverse },
+  alertDismiss: { marginLeft: 8 },
+
+  bookingsList: { marginTop: 6 },
+  bookingRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line },
+  bookingText: { flex: 1, marginLeft: 12, marginRight: 8 },
+  rowTitle: { ...fonts.semibold, fontSize: 15.5, color: palette.text },
+  rowSub: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginTop: 2 },
+  bookingRight: { alignItems: 'flex-end' },
+  bookingAmount: { ...fonts.semibold, fontSize: 15, color: palette.text },
+  bookingTag: { marginTop: 6 },
+
+  emptyBox: {
+    alignItems: 'center',
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    backgroundColor: palette.surfaceDim,
+    borderRadius: radii.xl,
+    marginTop: 4,
+  },
+  emptyTitle: { ...fonts.semibold, fontSize: 15, color: palette.text, marginTop: 8 },
+  emptySub: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+
+  listingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: spacing[3],
-    marginBottom: spacing[1],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: spacing[2],
+    backgroundColor: palette.surfaceDim,
+    borderRadius: radii.xl,
+    padding: 10,
+    marginBottom: 10,
   },
-  ratingStars: {
-    flexDirection: 'row',
+  listingThumb: { width: 64, height: 64, borderRadius: radii.md },
+  listingThumbEmpty: {
+    backgroundColor: palette.peachSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  ratingStar: {
-    fontSize: 18,
-  },
+
+  slotStats: { alignItems: 'flex-end', marginLeft: 8 },
+  slotValue: { ...fonts.semibold, fontSize: 15, color: palette.success },
+
+  ratingCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16 },
   ratingValue: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as any,
+    ...fonts.semibold,
+    fontSize: 38,
+    letterSpacing: -1,
+    color: palette.text,
+    marginRight: 14,
   },
-  ratingCount: {
-    fontSize: fontSize.sm,
-  },
-  // Compliance Templates Styles
-  templatesList: {
-    gap: spacing[2],
-  },
-  templateItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing[3],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[2],
-  },
-  templateItemLast: {
-    marginBottom: 0,
-  },
-  templateIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing[3],
-  },
-  templateContent: {
-    flex: 1,
-  },
-  templateName: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: 2,
-  },
-  templateMeta: {
-    fontSize: fontSize.xs,
-  },
-  // IOT Setup Styles
-  iotSetupContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing[4],
-  },
-  iotSetupIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing[3],
-  },
-  iotSetupTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[2],
-    textAlign: 'center',
-  },
-  iotSetupDescription: {
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-    marginBottom: spacing[4],
-    paddingHorizontal: spacing[4],
-  },
-  iotSetupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[5],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
-  },
-  iotSetupButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-  },
-  // Property Row Styles
-  propertyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  propertyRowLast: {
-    borderBottomWidth: 0,
-  },
-  propertyIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing[3],
-  },
-  propertyContent: {
-    flex: 1,
-  },
-  propertyName: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: 2,
-  },
-  propertyAddress: {
-    fontSize: fontSize.xs,
-  },
-  propertyStats: {
-    alignItems: 'flex-end',
-  },
-  propertySlots: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold as any,
-  },
-  propertySlotsLabel: {
-    fontSize: fontSize.xs,
-  },
+  ratingStars: { flexDirection: 'row' },
+  ratingStar: { marginRight: 3 },
 });

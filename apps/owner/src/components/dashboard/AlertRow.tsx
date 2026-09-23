@@ -3,19 +3,17 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 
 export type AlertType = 'kyc' | 'bank' | 'bookings' | 'listing' | 'info' | 'warning';
 
@@ -39,6 +37,14 @@ const ALERT_CONFIG: Record<AlertType, { icon: string; colorKey: 'warning' | 'dan
   warning: { icon: 'warning-outline', colorKey: 'warning' },
 };
 
+// Card fill per accent: warm alerts on peach, info on blue, errors on red wash.
+const TONE_BG: Record<'warning' | 'danger' | 'primary' | 'success', string> = {
+  warning: palette.peachSoft,
+  danger: palette.dangerSoft,
+  primary: palette.blueSoft,
+  success: palette.successSoft,
+};
+
 function AlertRow({
   id,
   type,
@@ -55,7 +61,8 @@ function AlertRow({
   const height = useSharedValue<number | 'auto'>('auto');
 
   const config = ALERT_CONFIG[type];
-  const accentColor = theme[config.colorKey];
+  const accentColor = config.colorKey === 'danger' ? palette.danger : palette.text;
+  const toneBg = TONE_BG[config.colorKey];
 
   const handleDismiss = useCallback(() => {
     if (onDismiss) {
@@ -73,13 +80,13 @@ function AlertRow({
     <Animated.View
       style={[
         styles.container,
-        { backgroundColor: `${accentColor}10` },
+        { backgroundColor: toneBg },
         animatedStyle,
       ]}
       testID={testID}
     >
       {/* Icon */}
-      <View style={[styles.iconContainer, { backgroundColor: `${accentColor}20` }]}>
+      <View style={[styles.iconContainer, { backgroundColor: palette.surface }]}>
         <Ionicons name={config.icon} size={20} color={accentColor} />
       </View>
 
@@ -96,25 +103,26 @@ function AlertRow({
       {/* Actions */}
       <View style={styles.actions}>
         {onAction && (
-          <Pressable
+          <TouchableOpacity
             onPress={onAction}
-            style={[styles.actionButton, { backgroundColor: accentColor }]}
+            activeOpacity={0.8}
+            style={styles.actionButton}
             accessibilityLabel={actionLabel}
             accessibilityRole="button"
           >
             <Text style={styles.actionButtonText}>{actionLabel}</Text>
-          </Pressable>
+          </TouchableOpacity>
         )}
         {onDismiss && (
-          <Pressable
+          <TouchableOpacity
             onPress={handleDismiss}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel="Dismiss alert"
             accessibilityRole="button"
             style={styles.dismissButton}
           >
-            <Ionicons name="close" size={18} color={theme.textMuted} />
-          </Pressable>
+            <Ionicons name="close" size={16} color={theme.text} />
+          </TouchableOpacity>
         )}
       </View>
     </Animated.View>
@@ -125,46 +133,55 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing[3],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[2],
+    padding: 14,
+    borderRadius: radii.lg,
+    marginBottom: 10,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
   },
   content: {
     flex: 1,
-    marginHorizontal: spacing[3],
+    marginHorizontal: 12,
     gap: 2,
   },
   title: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 15,
   },
   description: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12.5,
+    lineHeight: 17,
   },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
+    gap: 8,
   },
   actionButton: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.md,
+    paddingHorizontal: 14,
+    height: 34,
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    backgroundColor: palette.ink,
   },
   actionButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    color: palette.textInverse,
+    fontSize: 13,
   },
   dismissButton: {
-    padding: spacing[1],
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

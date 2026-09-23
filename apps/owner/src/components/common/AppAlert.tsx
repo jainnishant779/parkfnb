@@ -4,11 +4,13 @@ import {
   View,
   Text,
   Pressable,
+  TouchableOpacity,
   StyleSheet,
   Platform,
   ScrollView,
   BackHandler,
 } from 'react-native';
+import { palette, radii, fonts } from '../../theme/kit';
 
 // ============================================================================
 // AppAlert — drop-in replacement for `Alert.alert` from react-native, but
@@ -187,20 +189,27 @@ export function AppAlertProvider({ children }: { children: React.ReactNode }) {
               {state.buttons.map((btn, idx) => {
                 const isCancel = btn.style === 'cancel';
                 const isDestructive = btn.style === 'destructive';
+                const isStacked = state.buttons.length > 2;
+                // Explicit margins instead of `gap`: horizontal in a row,
+                // vertical when stacked (column-reverse, so below).
+                const spacingStyle =
+                  idx === 0 ? null : isStacked ? styles.stackGap : styles.rowGap;
                 return (
-                  <Pressable
+                  <TouchableOpacity
                     key={`${btn.text}-${idx}`}
                     onPress={() => handleButton(btn)}
-                    style={({ pressed }) => [
+                    activeOpacity={0.7}
+                    style={[
                       styles.button,
                       isCancel && styles.buttonCancel,
                       isDestructive && styles.buttonDestructive,
                       !isCancel && !isDestructive && styles.buttonPrimary,
-                      pressed && styles.buttonPressed,
-                      state.buttons.length > 2 && styles.buttonFull,
+                      isStacked ? styles.buttonFull : styles.buttonRow,
+                      spacingStyle,
                     ]}
                   >
                     <Text
+                      numberOfLines={1}
                       style={[
                         styles.buttonText,
                         isCancel && styles.buttonTextCancel,
@@ -210,7 +219,7 @@ export function AppAlertProvider({ children }: { children: React.ReactNode }) {
                     >
                       {btn.text}
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -223,7 +232,7 @@ export function AppAlertProvider({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  // Covers the whole app and floats above it, which is what <Modal> used to do.
+  // Covers the whole modal window.
   overlay: {
     position: 'absolute',
     top: 0,
@@ -234,76 +243,69 @@ const styles = StyleSheet.create({
     zIndex: 9999,
   },
   backdrop: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 9999,
-    elevation: 24,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 24,
     width: '100%',
     maxWidth: 420,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.18,
-        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 14 },
+        shadowOpacity: 0.16,
+        shadowRadius: 30,
       },
-      android: { elevation: 12 },
+      android: { elevation: 14 },
     }),
   },
   title: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#0F172A',
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
     marginBottom: 8,
   },
-  messageScroll: { maxHeight: 240, marginBottom: 18 },
+  messageScroll: { maxHeight: 240, marginBottom: 22 },
   messageContainer: { paddingRight: 4 },
   message: {
-    fontSize: 14,
-    color: '#475569',
-    lineHeight: 20,
+    ...fonts.medium,
+    fontSize: 14.5,
+    color: palette.textMuted,
+    lineHeight: 21,
   },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  actionsStacked: {
-    flexDirection: 'column-reverse',
-  },
+  // Two buttons share a row at equal width; more than two stack.
+  actions: { flexDirection: 'row', alignItems: 'center' },
+  actionsStacked: { flexDirection: 'column-reverse', alignItems: 'stretch' },
+  rowGap: { marginLeft: 8 },
+  stackGap: { marginBottom: 8 },
   button: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    minHeight: 40,
-    minWidth: 88,
+    paddingHorizontal: 18,
+    height: 52,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonRow: { flex: 1 },
   buttonFull: { width: '100%' },
-  buttonPressed: { opacity: 0.7 },
-  buttonPrimary: { backgroundColor: '#0D7377' },
-  buttonCancel: { backgroundColor: '#F1F5F9' },
-  buttonDestructive: { backgroundColor: '#EF4444' },
-  buttonText: { fontSize: 14, fontWeight: '600' },
-  buttonTextPrimary: { color: '#FFFFFF' },
-  buttonTextCancel: { color: '#1F2937' },
-  buttonTextDestructive: { color: '#FFFFFF' },
+  // Fill plus a same-colour border: on Android the fill alone sometimes
+  // failed to paint inside a nested modal.
+  buttonPrimary: { backgroundColor: palette.ink, borderWidth: 1.5, borderColor: palette.ink },
+  buttonCancel: { backgroundColor: palette.fill, borderWidth: 1.5, borderColor: palette.fill },
+  buttonDestructive: {
+    backgroundColor: palette.danger,
+    borderWidth: 1.5,
+    borderColor: palette.danger,
+  },
+  buttonText: { ...fonts.semibold, fontSize: 15 },
+  buttonTextPrimary: { color: palette.textInverse },
+  buttonTextCancel: { color: palette.text },
+  buttonTextDestructive: { color: palette.textInverse },
 });
 
 export default AppAlert;

@@ -1,12 +1,10 @@
 // ConfirmDialog Component - Confirmation modal for delete/deactivate actions
-import React, { memo, useMemo, useCallback } from 'react';
+import React, { memo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
   Pressable,
-  Platform,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -15,9 +13,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize, fontWeight } from '../../../theme/typography';
+import { PillButton } from '../../../components/ui';
+import { palette, radii, fonts } from '../../../theme/kit';
 
 interface ConfirmDialogProps {
   visible: boolean;
@@ -42,7 +39,6 @@ function ConfirmDialog({
   variant = 'danger',
   testID,
 }: ConfirmDialogProps) {
-  const theme = useMemo(() => getTheme(false), []);
   const scale = useSharedValue(0.9);
   const opacity = useSharedValue(0);
 
@@ -65,28 +61,28 @@ function ConfirmDialog({
     switch (variant) {
       case 'danger':
         return {
-          icon: 'warning',
-          iconColor: theme.danger,
-          bgColor: theme.dangerLight,
-          buttonBg: theme.danger,
+          icon: 'trash-outline',
+          iconColor: palette.danger,
+          bgColor: palette.dangerSoft,
+          button: 'ink',
         };
       case 'warning':
         return {
-          icon: 'alert-circle',
-          iconColor: theme.warning,
-          bgColor: theme.warningLight,
-          buttonBg: theme.warning,
+          icon: 'alert-circle-outline',
+          iconColor: palette.warning,
+          bgColor: palette.warningSoft,
+          button: 'ink',
         };
       case 'info':
       default:
         return {
-          icon: 'information-circle',
-          iconColor: theme.info,
-          bgColor: theme.infoLight,
-          buttonBg: theme.primary,
+          icon: 'information-circle-outline',
+          iconColor: palette.text,
+          bgColor: palette.peachSoft,
+          button: 'ink',
         };
     }
-  }, [variant, theme]);
+  }, [variant]);
 
   const variantColors = getVariantColors();
 
@@ -106,11 +102,7 @@ function ConfirmDialog({
           accessibilityLabel="Close dialog"
         />
         <Animated.View
-          style={[
-            styles.dialog,
-            { backgroundColor: theme.surface },
-            animatedStyle,
-          ]}
+          style={[styles.dialog, animatedStyle]}
           testID={testID}
         >
           {/* Icon */}
@@ -128,45 +120,25 @@ function ConfirmDialog({
           </View>
 
           {/* Content */}
-          <Text style={[styles.title, { color: theme.text }]}>
-            {title}
-          </Text>
-          <Text style={[styles.message, { color: theme.textSecondary }]}>
-            {message}
-          </Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.message}>{message}</Text>
 
           {/* Actions */}
           <View style={styles.actions}>
-            <Pressable
-              onPress={onClose}
-              style={[
-                styles.button,
-                styles.cancelButton,
-                { backgroundColor: theme.borderLight },
-              ]}
+            <View
+              style={styles.button}
               accessibilityLabel={cancelLabel}
-              accessibilityRole="button"
               testID={testID ? `${testID}-cancel` : undefined}
             >
-              <Text style={[styles.buttonText, { color: theme.text }]}>
-                {cancelLabel}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={handleConfirm}
-              style={[
-                styles.button,
-                styles.confirmButton,
-                { backgroundColor: variantColors.buttonBg },
-              ]}
+              <PillButton label={cancelLabel} variant="grey" size="md" onPress={onClose} />
+            </View>
+            <View
+              style={styles.button}
               accessibilityLabel={confirmLabel}
-              accessibilityRole="button"
               testID={testID ? `${testID}-confirm` : undefined}
             >
-              <Text style={[styles.buttonText, styles.confirmButtonText]}>
-                {confirmLabel}
-              </Text>
-            </Pressable>
+              <PillButton label={confirmLabel} variant={variantColors.button} size="md" onPress={handleConfirm} />
+            </View>
           </View>
         </Animated.View>
       </View>
@@ -185,28 +157,18 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing[6],
+    padding: 24,
   },
   dialog: {
     width: '100%',
-    maxWidth: 340,
-    borderRadius: borderRadius.xl,
-    padding: spacing[6],
+    maxWidth: 360,
+    borderRadius: radii.xl,
+    padding: 24,
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.15,
-        shadowRadius: 24,
-      },
-      android: {
-        elevation: 16,
-      },
-    }),
+    backgroundColor: palette.surface,
   },
   iconContainer: {
     width: 64,
@@ -214,40 +176,31 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing[4],
+    marginBottom: 16,
   },
   title: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
     textAlign: 'center',
-    marginBottom: spacing[2],
+    marginBottom: 8,
   },
   message: {
-    fontSize: fontSize.sm,
-    textAlign: 'center',
+    ...fonts.medium,
+    fontSize: 14,
     lineHeight: 20,
-    marginBottom: spacing[5],
+    color: palette.textMuted,
+    textAlign: 'center',
+    marginBottom: 22,
   },
   actions: {
     flexDirection: 'row',
-    gap: spacing[3],
+    gap: 10,
     width: '100%',
   },
   button: {
     flex: 1,
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButton: {},
-  confirmButton: {},
-  buttonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-  confirmButtonText: {
-    color: '#FFFFFF',
   },
 });
 

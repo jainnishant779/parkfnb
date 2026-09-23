@@ -1,14 +1,13 @@
 // PromoBottomSheet Component - Reusable bottom sheet for promotions screen
-import React, { memo, useMemo, useCallback, useEffect } from 'react';
+import React, { memo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
-  Modal,
   ScrollView,
   Dimensions,
-  Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -20,9 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize, fontWeight } from '../../../theme/typography';
+import { palette, radii, fonts } from '../../../theme/kit';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -45,7 +42,6 @@ function PromoBottomSheet({
   maxHeight = SCREEN_HEIGHT * 0.7,
   testID,
 }: PromoBottomSheetProps) {
-  const theme = useMemo(() => getTheme(false), []);
   const insets = useSafeAreaInsets();
 
   const translateY = useSharedValue(maxHeight);
@@ -122,9 +118,8 @@ function PromoBottomSheet({
             style={[
               styles.sheet,
               {
-                backgroundColor: theme.surface,
                 maxHeight,
-                paddingBottom: insets.bottom + spacing[4],
+                paddingBottom: insets.bottom + 16,
               },
               sheetStyle,
             ]}
@@ -133,29 +128,22 @@ function PromoBottomSheet({
             {/* Handle */}
             {showHandle && (
               <View style={styles.handleContainer}>
-                <View
-                  style={[styles.handle, { backgroundColor: theme.border }]}
-                />
+                <View style={styles.handle} />
               </View>
             )}
 
             {/* Header */}
             <View style={styles.header}>
-              <Text style={[styles.title, { color: theme.text }]}>
-                {title}
-              </Text>
-              <Pressable
+              <Text style={styles.title}>{title}</Text>
+              <TouchableOpacity
                 onPress={handleClose}
-                style={[styles.closeButton, { backgroundColor: theme.borderLight }]}
+                activeOpacity={0.7}
+                style={styles.closeButton}
                 accessibilityLabel="Close"
                 accessibilityRole="button"
               >
-                <Ionicons
-                  name="close"
-                  size={20}
-                  color={theme.textSecondary}
-                />
-              </Pressable>
+                <Ionicons name="close" size={20} color={palette.text} />
+              </TouchableOpacity>
             </View>
 
             {/* Content */}
@@ -188,57 +176,50 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
   sheet: {
-    borderTopLeftRadius: borderRadius['2xl'],
-    borderTopRightRadius: borderRadius['2xl'],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 24,
-      },
-    }),
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
   },
   handleContainer: {
     alignItems: 'center',
-    paddingTop: spacing[2],
-    paddingBottom: spacing[1],
+    paddingTop: 12,
+    paddingBottom: 4,
   },
   handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   title: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 22,
+    letterSpacing: -0.4,
+    color: palette.text,
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: palette.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   content: {
     flex: 1,
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
+    paddingHorizontal: 20,
+    paddingTop: 10,
   },
 });
 

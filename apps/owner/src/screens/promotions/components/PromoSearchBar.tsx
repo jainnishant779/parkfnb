@@ -1,11 +1,10 @@
 // PromoSearchBar Component - Search input for promotions
-import React, { memo, useMemo, useCallback, useRef } from 'react';
+import React, { memo, useCallback, useRef } from 'react';
 import {
   View,
   TextInput,
   StyleSheet,
   Pressable,
-  Platform,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Animated, {
@@ -13,9 +12,7 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize } from '../../../theme/typography';
+import { palette, radii, fonts } from '../../../theme/kit';
 
 interface PromoSearchBarProps {
   value: string;
@@ -36,7 +33,6 @@ function PromoSearchBar({
   onBlur,
   testID,
 }: PromoSearchBarProps) {
-  const theme = useMemo(() => getTheme(false), []);
   const inputRef = useRef<TextInput>(null);
   const isFocused = useSharedValue(0);
   const clearScale = useSharedValue(value ? 1 : 0);
@@ -63,8 +59,8 @@ function PromoSearchBar({
   }, [onChangeText, clearScale]);
 
   const containerAnimatedStyle = useAnimatedStyle(() => ({
-    borderColor: isFocused.value === 1 ? theme.primary : theme.border,
-    borderWidth: isFocused.value === 1 ? 1.5 : 1,
+    borderColor: isFocused.value === 1 ? palette.ink : 'transparent',
+    borderWidth: 1.5,
   }));
 
   const clearButtonStyle = useAnimatedStyle(() => ({
@@ -76,7 +72,6 @@ function PromoSearchBar({
     <Animated.View
       style={[
         styles.container,
-        { backgroundColor: theme.surface },
         containerAnimatedStyle,
       ]}
       testID={testID}
@@ -84,16 +79,16 @@ function PromoSearchBar({
       <Ionicons
         name="search"
         size={18}
-        color={theme.textMuted}
+        color={palette.textMuted}
         style={styles.searchIcon}
       />
       <TextInput
         ref={inputRef}
-        style={[styles.input, { color: theme.text }]}
+        style={styles.input}
         value={value}
         onChangeText={handleChangeText}
         placeholder={placeholder}
-        placeholderTextColor={theme.textMuted}
+        placeholderTextColor={palette.textMuted}
         onFocus={handleFocus}
         onBlur={handleBlur}
         returnKeyType="search"
@@ -109,11 +104,11 @@ function PromoSearchBar({
         accessibilityRole="button"
         testID={testID ? `${testID}-clear` : undefined}
       >
-        <View style={[styles.clearIcon, { backgroundColor: theme.borderLight }]}>
+        <View style={styles.clearIcon}>
           <Ionicons
             name="close"
             size={14}
-            color={theme.textMuted}
+            color={palette.textMuted}
           />
         </View>
       </AnimatedPressable>
@@ -125,36 +120,29 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing[3],
-    height: 44,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
+    borderRadius: radii.pill,
+    paddingHorizontal: 18,
+    height: 52,
+    backgroundColor: palette.surface,
   },
   searchIcon: {
-    marginRight: spacing[2],
+    marginRight: 10,
   },
   input: {
+    ...fonts.medium,
     flex: 1,
-    fontSize: fontSize.base,
-    paddingVertical: spacing[2],
+    fontSize: 15,
+    color: palette.text,
+    paddingVertical: 8,
   },
   clearButton: {
-    marginLeft: spacing[2],
+    marginLeft: 8,
   },
   clearIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: palette.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },

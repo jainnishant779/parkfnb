@@ -4,11 +4,8 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   FlatList,
   Pressable,
-  TextInput,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -17,9 +14,8 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize, fontWeight } from '../../../theme/typography';
+import { palette, radii, fonts } from '../../../theme/kit';
+import { IconCircle, SearchPill, PillButton, EmptyState } from '../../../components/ui';
 import type { PromoListing } from '../../../types/promo';
 // import { mockPromoListings } from '../../../constants/mockPromoListings';
 
@@ -37,14 +33,12 @@ interface ListingRowProps {
   listing: PromoListing;
   isSelected: boolean;
   onToggle: () => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
 const ListingRow = memo(function ListingRow({
   listing,
   isSelected,
   onToggle,
-  theme,
 }: ListingRowProps) {
   const scale = useSharedValue(1);
 
@@ -67,7 +61,7 @@ const ListingRow = memo(function ListingRow({
       onPressOut={handlePressOut}
       style={[
         styles.listingRow,
-        isSelected && { backgroundColor: theme.primaryLight },
+        isSelected && styles.listingRowSelected,
         animatedStyle,
       ]}
       accessibilityLabel={`${listing.name}, ${isSelected ? 'selected' : 'not selected'}`}
@@ -75,52 +69,27 @@ const ListingRow = memo(function ListingRow({
       accessibilityState={{ checked: isSelected }}
     >
       {/* Thumbnail Placeholder */}
-      <View
-        style={[
-          styles.thumbnail,
-          { backgroundColor: theme.borderLight },
-        ]}
-      >
-        <Ionicons
-          name="car-outline"
-          size={20}
-          color={theme.textMuted}
-        />
+      <View style={styles.thumbnail}>
+        <Ionicons name="car-outline" size={20} color={palette.text} />
       </View>
 
       {/* Listing Info */}
       <View style={styles.listingInfo}>
-        <Text
-          style={[styles.listingName, { color: theme.text }]}
-          numberOfLines={1}
-        >
+        <Text style={styles.listingName} numberOfLines={1}>
           {listing.name}
         </Text>
-        <Text
-          style={[styles.listingAddress, { color: theme.textSecondary }]}
-          numberOfLines={1}
-        >
+        <Text style={styles.listingAddress} numberOfLines={1}>
           {listing.addressShort}
         </Text>
       </View>
 
       {/* Price Hint */}
-      <Text style={[styles.priceHint, { color: theme.textMuted }]}>
-        ₹{listing.priceHint}
-      </Text>
+      <Text style={styles.priceHint}>₹{listing.priceHint}</Text>
 
       {/* Checkbox */}
-      <View
-        style={[
-          styles.checkbox,
-          {
-            borderColor: isSelected ? theme.primary : theme.border,
-            backgroundColor: isSelected ? theme.primary : 'transparent',
-          },
-        ]}
-      >
+      <View style={[styles.checkbox, isSelected && styles.checkboxOn]}>
         {isSelected && (
-          <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+          <Ionicons name="checkmark" size={14} color={palette.textInverse} />
         )}
       </View>
     </AnimatedPressable>
@@ -134,7 +103,6 @@ function ListingPicker({
   onApply,
   testID,
 }: ListingPickerProps) {
-  const theme = useMemo(() => getTheme(false), []);
   const insets = useSafeAreaInsets();
   const [searchText, setSearchText] = useState('');
   const [localSelectedIds, setLocalSelectedIds] = useState<string[]>(selectedIds);
@@ -190,10 +158,9 @@ function ListingPicker({
         listing={item}
         isSelected={localSelectedIds.includes(item.id)}
         onToggle={() => toggleListing(item.id)}
-        theme={theme}
       />
     ),
-    [localSelectedIds, toggleListing, theme]
+    [localSelectedIds, toggleListing]
   );
 
   const keyExtractor = useCallback((item: PromoListing) => item.id, []);
@@ -201,32 +168,16 @@ function ListingPicker({
   const isAllSelected = filteredListings.length > 0 && localSelectedIds.length === filteredListings.length;
 
   return visible ? (
-
       <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: theme.background,
-            paddingTop: insets.top,
-          },
-        ]}
+        style={[styles.container, { paddingTop: insets.top }]}
         testID={testID}
       >
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.surface }]}>
-          <Pressable
-            onPress={onClose}
-            style={styles.closeButton}
-            accessibilityLabel="Close"
-            accessibilityRole="button"
-          >
-            <Ionicons name="close" size={24} color={theme.text} />
-          </Pressable>
+        <View style={styles.header}>
+          <IconCircle icon="x" size={44} onPress={onClose} />
           <View style={styles.headerCenter}>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>
-              Select Listings
-            </Text>
-            <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
+            <Text style={styles.headerTitle}>Select listings</Text>
+            <Text style={styles.headerSubtitle}>
               Selected: {localSelectedIds.length}
             </Text>
           </View>
@@ -235,46 +186,30 @@ function ListingPicker({
             style={styles.selectAllButton}
             accessibilityLabel={isAllSelected ? 'Deselect all' : 'Select all'}
           >
-            <Text style={[styles.selectAllText, { color: theme.primary }]}>
+            <Text style={styles.selectAllText}>
               {isAllSelected ? 'Clear' : 'All'}
             </Text>
           </Pressable>
         </View>
 
         {/* Search */}
-        <View
-          style={[
-            styles.searchContainer,
-            { backgroundColor: theme.surface },
-          ]}
-        >
-          <View
-            style={[
-              styles.searchInput,
-              { backgroundColor: theme.borderLight, borderColor: theme.border },
-            ]}
-          >
-            <Ionicons
-              name="search"
-              size={18}
-              color={theme.textMuted}
-            />
-            <TextInput
-              style={[styles.searchTextInput, { color: theme.text }]}
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search listings..."
-              placeholderTextColor={theme.textMuted}
-              returnKeyType="search"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {searchText.length > 0 && (
-              <Pressable onPress={() => setSearchText('')}>
-                <Ionicons name="close-circle" size={18} color={theme.textMuted} />
-              </Pressable>
-            )}
-          </View>
+        <View style={styles.searchContainer}>
+          <SearchPill
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Search listings"
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.searchPill}
+            right={
+              searchText.length > 0 ? (
+                <Pressable onPress={() => setSearchText('')} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={palette.textMuted} />
+                </Pressable>
+              ) : null
+            }
+          />
         </View>
 
         {/* List */}
@@ -285,132 +220,105 @@ function ListingPicker({
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Ionicons
-                name="search-outline"
-                size={48}
-                color={theme.textMuted}
-              />
-              <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-                No listings found
-              </Text>
-            </View>
+            <EmptyState
+              tone="blue"
+              title="No listings found"
+              subtitle="Listings you can attach this promotion to will show here."
+            />
           }
         />
 
         {/* Footer */}
-        <View
-          style={[
-            styles.footer,
-            {
-              backgroundColor: theme.surface,
-              paddingBottom: insets.bottom + spacing[4],
-            },
-          ]}
-        >
-          <Pressable
-            onPress={handleApply}
-            style={[
-              styles.applyButton,
-              {
-                backgroundColor: localSelectedIds.length > 0 ? theme.primary : theme.borderLight,
-              },
-            ]}
-            disabled={localSelectedIds.length === 0}
-            accessibilityLabel="Apply selection"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: localSelectedIds.length === 0 }}
-            testID={testID ? `${testID}-apply` : undefined}
-          >
-            <Text
-              style={[
-                styles.applyButtonText,
-                {
-                  color: localSelectedIds.length > 0 ? '#FFFFFF' : theme.textMuted,
-                },
-              ]}
-            >
-              Apply Selection ({localSelectedIds.length})
-            </Text>
-          </Pressable>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+          <View testID={testID ? `${testID}-apply` : undefined}>
+            <PillButton
+              label={`Apply selection (${localSelectedIds.length})`}
+              variant="ink"
+              onPress={handleApply}
+              disabled={localSelectedIds.length === 0}
+            />
+          </View>
         </View>
       </View>
-    
     ) : null;
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    // Full-screen overlay above the promo form (no <Modal> on this build).
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9500,
+    elevation: 22,
+    backgroundColor: palette.bg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  closeButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -spacing[2],
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
   },
   headerSubtitle: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
     marginTop: 2,
   },
   selectAllButton: {
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[3],
+    minWidth: 44,
+    height: 44,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   selectAllText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
   },
   searchContainer: {
-    padding: spacing[4],
-    paddingTop: spacing[3],
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 12,
   },
-  searchInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    paddingHorizontal: spacing[3],
-    height: 44,
-    gap: spacing[2],
-  },
-  searchTextInput: {
-    flex: 1,
-    fontSize: fontSize.base,
+  searchPill: {
+    backgroundColor: palette.surface,
   },
   listContent: {
-    padding: spacing[4],
-    paddingTop: 0,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    flexGrow: 1,
   },
   listingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing[3],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[2],
-    gap: spacing[3],
+    padding: 14,
+    borderRadius: radii.lg,
+    marginBottom: 8,
+    gap: 12,
+    backgroundColor: palette.surface,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  listingRowSelected: {
+    borderColor: palette.ink,
   },
   thumbnail: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.md,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: palette.peachSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -419,57 +327,37 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   listingName: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
   },
   listingAddress: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
   },
   priceHint: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.text,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 2,
+    borderColor: palette.line,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing[12],
-    gap: spacing[3],
-  },
-  emptyText: {
-    fontSize: fontSize.base,
+  checkboxOn: {
+    borderColor: palette.ink,
+    backgroundColor: palette.ink,
   },
   footer: {
-    padding: spacing[4],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.1)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  applyButton: {
-    height: 52,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  applyButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: palette.bg,
   },
 });
 

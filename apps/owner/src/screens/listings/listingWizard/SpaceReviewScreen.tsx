@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import WizardHeader from '../../../components/wizard/WizardHeader';
 import WizardFooter from '../../../components/wizard/WizardFooter';
 import { useSpaceWizard } from '../../../context/ListingWizardContext';
 import { listingService } from '../../../services/listingService';
 import { ApiRequestError } from '../../../services/api';
 import { resolveImageUri, isSampleUri, uploadLocalImages } from '../../../utils/imageUri';
+import { palette, radii, fonts } from '../../../theme/kit';
+import { StatusTag, IsoBlock } from '../../../components/ui';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -99,14 +102,28 @@ export default function SpaceReviewScreen() {
   const enabledDays = data.availability.schedules.filter((s) => s.enabled);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <View style={styles.screen}>
       <WizardHeader
         title={data.editSpaceId ? 'Review Changes' : 'Review Space'}
         step={5}
         totalSteps={5}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <View style={styles.heroArt} pointerEvents="none">
+            <IsoBlock size={140} tone="blue" />
+          </View>
+          <StatusTag label={data.editSpaceId ? 'Editing' : 'Ready to publish'} tone="ink" />
+          <Text style={styles.heroTitle} numberOfLines={1}>
+            Space {data.spaceNumber || '—'}
+          </Text>
+          <Text style={[styles.heroSub, styles.capitalize]} numberOfLines={1}>
+            {data.spaceType}
+            {data.pricePerHour != null ? `  ·  ₹${data.pricePerHour}/hr` : ''}
+          </Text>
+        </View>
+
         <Section title="Basics">
           <Row label="Space number" value={data.spaceNumber} />
           <Row label="Type" value={data.spaceType} />
@@ -147,6 +164,7 @@ export default function SpaceReviewScreen() {
 
         {warningText ? (
           <View style={styles.warnBox}>
+            <Ionicons name="alert-circle" size={18} color={palette.warning} />
             <Text style={styles.warnText}>{warningText}</Text>
           </View>
         ) : null}
@@ -163,7 +181,7 @@ export default function SpaceReviewScreen() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <View style={styles.section}>
+    <View style={styles.card}>
       <Text style={styles.sectionTitle}>{title}</Text>
       {children}
     </View>
@@ -220,49 +238,73 @@ function PhotosPreview({ label, images }: { label: string; images: string[] }) {
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: palette.bg },
   content: { padding: 16, paddingBottom: 80 },
-  section: { marginBottom: 20 },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
+  hero: {
+    backgroundColor: palette.peachSoft,
+    borderRadius: radii.xl,
+    padding: 18,
+    minHeight: 150,
+    overflow: 'hidden',
+    marginBottom: 12,
+    alignItems: 'flex-start',
   },
+  heroArt: { position: 'absolute', right: -30, bottom: -26 },
+  heroTitle: {
+    ...fonts.bold,
+    fontSize: 24,
+    letterSpacing: -0.6,
+    color: palette.text,
+    marginTop: 12,
+    width: '66%',
+  },
+  heroSub: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 4,
+    width: '62%',
+  },
+  card: {
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 4,
+    marginBottom: 12,
+  },
+  sectionTitle: { ...fonts.semibold, fontSize: 17, color: palette.text, marginBottom: 4 },
   row: {
     flexDirection: 'row',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
   },
-  label: { flex: 1, fontSize: 13, color: '#6B7280' },
-  value: { flex: 2, fontSize: 14, color: '#1F2937' },
-  warnBox: {
-    marginTop: 8,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#FEF3C7',
-  },
-  warnText: { fontSize: 13, color: '#92400E' },
-  photosBlock: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  photosLabel: { fontSize: 13, color: '#6B7280', marginBottom: 8 },
-  photosCount: { color: '#1F2937', fontWeight: '500' },
-  photosEmpty: { fontSize: 14, color: '#9CA3AF', fontStyle: 'italic' },
+  label: { ...fonts.medium, flex: 1, fontSize: 13.5, color: palette.textMuted },
+  value: { ...fonts.semibold, flex: 2, fontSize: 14, color: palette.text, textAlign: 'right' },
+  photosBlock: { paddingVertical: 12 },
+  photosLabel: { ...fonts.medium, fontSize: 13.5, color: palette.textMuted, marginBottom: 10 },
+  photosCount: { ...fonts.semibold, color: palette.text },
+  photosEmpty: { ...fonts.medium, fontSize: 14, color: palette.textSubtle },
   photosRow: { gap: 8 },
   photo: {
     width: 96,
     height: 96,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
+    borderRadius: radii.md,
+    backgroundColor: palette.fill,
   },
   photoPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoPlaceholderText: { fontSize: 11, color: '#9CA3AF', fontWeight: '500' },
+  photoPlaceholderText: { ...fonts.semibold, fontSize: 11, color: palette.textMuted },
+  capitalize: { textTransform: 'capitalize' },
+  warnBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: radii.xl,
+    backgroundColor: palette.warningSoft,
+  },
+  warnText: { ...fonts.medium, fontSize: 13, color: palette.text, marginLeft: 10, flex: 1 },
 });

@@ -2,15 +2,12 @@ import React from 'react';
 import {
   Text,
   StyleSheet,
-  Pressable,
+  TouchableOpacity,
   ActivityIndicator,
-  Platform,
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { colors } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 
 // ============================================================================
 // TYPES
@@ -35,55 +32,48 @@ export interface PrimaryButtonProps {
 
 const buttonTheme = {
   primary: {
-    background: colors.primary[600],
-    backgroundPressed: colors.primary[700],
-    backgroundDisabled: colors.gray[300],
-    text: colors.white,
-    textDisabled: colors.gray[500],
+    background: palette.ink,
+    backgroundDisabled: '#D6D6D6',
+    text: palette.textInverse,
+    textDisabled: palette.surface,
   },
   secondary: {
-    background: colors.gray[100],
-    backgroundPressed: colors.gray[200],
-    backgroundDisabled: colors.gray[100],
-    text: colors.gray[900],
-    textDisabled: colors.gray[400],
+    background: palette.fill,
+    backgroundDisabled: palette.fill,
+    text: palette.text,
+    textDisabled: palette.textSubtle,
   },
   outline: {
-    background: colors.transparent,
-    backgroundPressed: colors.primary[50],
-    backgroundDisabled: colors.transparent,
-    border: colors.primary[600],
-    borderDisabled: colors.gray[300],
-    text: colors.primary[600],
-    textDisabled: colors.gray[400],
+    background: palette.surface,
+    backgroundDisabled: palette.surface,
+    border: palette.ink,
+    borderDisabled: palette.line,
+    text: palette.text,
+    textDisabled: palette.textSubtle,
   },
   ghost: {
-    background: colors.transparent,
-    backgroundPressed: colors.gray[100],
-    backgroundDisabled: colors.transparent,
-    text: colors.primary[600],
-    textDisabled: colors.gray[400],
+    background: 'transparent',
+    backgroundDisabled: 'transparent',
+    text: palette.text,
+    textDisabled: palette.textSubtle,
   },
 };
 
 const sizeStyles = {
   small: {
     height: 40,
-    paddingHorizontal: spacing[4],
-    fontSize: fontSize.sm,
-    borderRadius: borderRadius.md,
+    paddingHorizontal: 16,
+    fontSize: 14,
   },
   medium: {
     height: 48,
-    paddingHorizontal: spacing[5],
-    fontSize: fontSize.base,
-    borderRadius: borderRadius.lg,
+    paddingHorizontal: 20,
+    fontSize: 15,
   },
   large: {
-    height: 56,
-    paddingHorizontal: spacing[6],
-    fontSize: fontSize.lg,
-    borderRadius: borderRadius.xl,
+    height: 58,
+    paddingHorizontal: 24,
+    fontSize: 16,
   },
 };
 
@@ -107,11 +97,7 @@ export default function PrimaryButton({
   const sizeStyle = sizeStyles[size];
   const isDisabled = disabled || loading;
 
-  const getBackgroundColor = (pressed: boolean) => {
-    if (isDisabled) return theme.backgroundDisabled;
-    if (pressed) return theme.backgroundPressed;
-    return theme.background;
-  };
+  const backgroundColor = isDisabled ? theme.backgroundDisabled : theme.background;
 
   const getTextColor = () => {
     if (isDisabled) return theme.textDisabled;
@@ -128,21 +114,20 @@ export default function PrimaryButton({
   };
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       disabled={isDisabled}
-      style={({ pressed }) => [
+      activeOpacity={0.8}
+      style={[
         styles.button,
         {
           height: sizeStyle.height,
           paddingHorizontal: sizeStyle.paddingHorizontal,
-          borderRadius: sizeStyle.borderRadius,
-          backgroundColor: getBackgroundColor(pressed),
+          backgroundColor,
           borderWidth: variant === 'outline' ? 1.5 : 0,
           borderColor: getBorderColor(),
           width: fullWidth ? '100%' : undefined,
         },
-        !isDisabled && variant === 'primary' && styles.shadow,
         style,
       ]}
       accessibilityRole="button"
@@ -151,10 +136,7 @@ export default function PrimaryButton({
       accessibilityState={{ disabled: isDisabled }}
     >
       {loading ? (
-        <ActivityIndicator
-          color={getTextColor()}
-          size={size === 'small' ? 'small' : 'small'}
-        />
+        <ActivityIndicator color={getTextColor()} size="small" />
       ) : (
         <Text
           style={[
@@ -169,7 +151,7 @@ export default function PrimaryButton({
           {title}
         </Text>
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -182,22 +164,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  shadow: {
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.primary[600],
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    borderRadius: radii.pill,
   },
   text: {
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
     textAlign: 'center',
   },
 });

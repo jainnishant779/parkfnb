@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { palette, fonts } from '../../theme/kit';
 
 interface Props {
   title: string;
@@ -12,44 +13,72 @@ interface Props {
 }
 
 export default function WizardHeader({ title, step, totalSteps, onBack, onClose }: Props) {
+  const segments = Array.from({ length: Math.max(totalSteps, 1) });
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
       <View style={styles.row}>
-        <Pressable onPress={onBack} style={styles.iconBtn} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color="#1F2937" />
-        </Pressable>
+        <TouchableOpacity onPress={onBack} style={styles.iconBtn} hitSlop={8} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={24} color={palette.text} />
+        </TouchableOpacity>
         <View style={styles.titleWrap}>
           <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          <Text style={styles.sub}>Step {step} of {totalSteps}</Text>
         </View>
         {onClose ? (
-          <Pressable onPress={onClose} style={styles.iconBtn} hitSlop={8}>
-            <Ionicons name="close" size={22} color="#6B7280" />
-          </Pressable>
+          <TouchableOpacity
+            onPress={onClose}
+            style={[styles.iconBtn, styles.closeBtn]}
+            hitSlop={8}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close" size={20} color={palette.text} />
+          </TouchableOpacity>
         ) : (
           <View style={styles.iconBtn} />
         )}
       </View>
-      <View style={styles.progressBg}>
-        <View style={[styles.progressFill, { width: `${(step / totalSteps) * 100}%` }]} />
+      {/* Segmented progress: ink for done/current steps, grey for the rest. */}
+      <View style={styles.progressRow}>
+        {segments.map((_, i) => (
+          <View
+            key={i}
+            style={[
+              styles.progressSeg,
+              i < step ? styles.progressSegDone : null,
+              i > 0 && styles.progressSegGap,
+            ]}
+          />
+        ))}
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { backgroundColor: '#FFFFFF' },
+  safe: { backgroundColor: palette.bg },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    height: 56,
   },
-  iconBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
+  iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
+  closeBtn: {
+    alignItems: 'center',
+    borderRadius: 22,
+    backgroundColor: palette.surface,
+  },
   titleWrap: { flex: 1, alignItems: 'center' },
-  title: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-  sub: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  progressBg: { height: 3, backgroundColor: '#E5E7EB' },
-  progressFill: { height: 3, backgroundColor: '#0D7377' },
+  title: { ...fonts.semibold, fontSize: 19, letterSpacing: -0.2, color: palette.text },
+  sub: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginTop: 1 },
+  progressRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
+  progressSeg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: palette.line },
+  progressSegDone: { backgroundColor: palette.ink },
+  progressSegGap: { marginLeft: 6 },
 });

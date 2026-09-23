@@ -3,13 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  Platform,
   Animated,
-  Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts, shadow } from '../../theme/kit';
 
 // ============================================================================
 // TYPES
@@ -40,39 +38,39 @@ const VARIANT_COLORS: Record<StatCardVariant, {
   accent: string;
 }> = {
   default: {
-    iconBg: '#E8F5F4',
-    iconColor: '#0D7377',
-    trendPositive: '#10B981',
-    trendNegative: '#EF4444',
-    accent: '#0D7377',
+    iconBg: palette.peachSoft,
+    iconColor: palette.text,
+    trendPositive: palette.success,
+    trendNegative: palette.danger,
+    accent: palette.ink,
   },
   success: {
-    iconBg: '#ECFDF5',
-    iconColor: '#10B981',
-    trendPositive: '#10B981',
-    trendNegative: '#EF4444',
-    accent: '#10B981',
+    iconBg: palette.successSoft,
+    iconColor: palette.success,
+    trendPositive: palette.success,
+    trendNegative: palette.danger,
+    accent: palette.success,
   },
   warning: {
-    iconBg: '#FFFBEB',
-    iconColor: '#F59E0B',
-    trendPositive: '#10B981',
-    trendNegative: '#EF4444',
-    accent: '#F59E0B',
+    iconBg: palette.warningSoft,
+    iconColor: palette.warning,
+    trendPositive: palette.success,
+    trendNegative: palette.danger,
+    accent: palette.warning,
   },
   info: {
-    iconBg: '#E8F5F4',
-    iconColor: '#0D7377',
-    trendPositive: '#10B981',
-    trendNegative: '#EF4444',
-    accent: '#0D7377',
+    iconBg: palette.blueSoft,
+    iconColor: palette.text,
+    trendPositive: palette.success,
+    trendNegative: palette.danger,
+    accent: palette.blue,
   },
   purple: {
-    iconBg: '#F5F3FF',
-    iconColor: '#8B5CF6',
-    trendPositive: '#10B981',
-    trendNegative: '#EF4444',
-    accent: '#8B5CF6',
+    iconBg: palette.blueWash,
+    iconColor: palette.blue,
+    trendPositive: palette.success,
+    trendNegative: palette.danger,
+    accent: palette.blue,
   },
 };
 
@@ -159,17 +157,15 @@ export default function StatCard({
 
   if (onPress) {
     return (
-      <Pressable
+      <TouchableOpacity
         onPress={onPress}
-        style={({ pressed }) => [
-          styles.pressable,
-          pressed && styles.pressed,
-        ]}
+        activeOpacity={0.85}
+        style={styles.pressable}
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${amount}`}
       >
         {content}
-      </Pressable>
+      </TouchableOpacity>
     );
   }
 
@@ -182,50 +178,37 @@ export default function StatCard({
 
 const styles = StyleSheet.create({
   pressable: {
-    borderRadius: borderRadius.xl,
-  },
-  pressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
+    borderRadius: radii.xl,
   },
   container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 16,
     minWidth: 140,
     maxWidth: 160,
-    marginRight: spacing[3],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    marginRight: 12,
+    ...shadow.soft,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing[3],
+    marginBottom: 14,
   },
   amount: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold as any,
-    color: '#1E293B',
-    marginBottom: spacing[1],
+    ...fonts.semibold,
+    fontSize: 26,
+    letterSpacing: -0.8,
+    color: palette.text,
+    marginBottom: 2,
   },
   label: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-    color: '#64748B',
-    marginBottom: spacing[2],
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginBottom: 8,
   },
   trendContainer: {
     flexDirection: 'row',
@@ -233,7 +216,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   trendText: {
-    fontSize: 11,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 12,
   },
 });

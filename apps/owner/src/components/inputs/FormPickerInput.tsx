@@ -10,11 +10,12 @@ import {
   TextInput,
   Keyboard,
   ScrollView,
+  Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 
 // ============================================================================
 // TYPES
@@ -45,20 +46,20 @@ export interface FormPickerInputProps {
 // ============================================================================
 
 const pickerTheme = {
-  background: colors.white,
-  backgroundDisabled: colors.gray[100],
-  border: colors.gray[300],
-  borderFocused: '#0D7377',
-  borderError: colors.error[500],
-  text: colors.gray[900],
-  textDisabled: colors.gray[400],
-  placeholder: colors.gray[400],
-  label: colors.gray[700],
-  helper: colors.gray[500],
-  error: colors.error[500],
-  required: colors.error[500],
-  optionSelected: '#E8F5F4',
-  optionSelectedText: '#0D7377',
+  background: palette.fill,
+  backgroundDisabled: palette.surfaceDim,
+  border: palette.fill,
+  borderFocused: palette.ink,
+  borderError: palette.danger,
+  text: palette.text,
+  textDisabled: palette.textSubtle,
+  placeholder: palette.textSubtle,
+  label: palette.textMuted,
+  helper: palette.textMuted,
+  error: palette.danger,
+  required: palette.danger,
+  optionSelected: palette.peachWash,
+  optionSelectedText: palette.text,
 };
 
 // ============================================================================
@@ -81,6 +82,7 @@ export default function FormPickerInput({
 }: FormPickerInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const insets = useSafeAreaInsets();
 
   const selectedOption = options.find((opt) => opt.value === value);
   const displayValue = valueLabel || selectedOption?.label;
@@ -127,9 +129,10 @@ export default function FormPickerInput({
             borderColor: getBorderColor(),
             backgroundColor: disabled
               ? pickerTheme.backgroundDisabled
+              : isOpen
+              ? palette.surface
               : pickerTheme.background,
           },
-          isOpen && styles.pickerButtonOpen,
         ]}
         onPress={handleToggle}
         disabled={disabled}
@@ -151,86 +154,111 @@ export default function FormPickerInput({
         </Text>
         <Ionicons
           name={isOpen ? 'chevron-up' : 'chevron-down'}
-          size={20}
+          size={18}
           color={disabled ? pickerTheme.textDisabled : (isOpen ? pickerTheme.borderFocused : pickerTheme.text)}
         />
       </TouchableOpacity>
 
-      {/* Inline Dropdown Options */}
+      {/* Options bottom sheet */}
       {isOpen && (
-        <View style={styles.dropdownContainer}>
-          {showSearch && (
-            <View style={styles.searchContainer}>
-              <Ionicons
-                name="search"
-                size={16}
-                color={colors.gray[400]}
-                style={styles.searchIcon}
-              />
-              <TextInput
-                style={styles.searchInput}
-                placeholder={`Search ${label.toLowerCase()}...`}
-                placeholderTextColor={colors.gray[400]}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {searchQuery.length > 0 && (
-                <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-                  <Ionicons name="close-circle" size={16} color={colors.gray[400]} />
-                </Pressable>
-              )}
-            </View>
-          )}
-
-          <ScrollView
-            nestedScrollEnabled={true}
-            keyboardShouldPersistTaps="handled"
-            style={styles.dropdownScroll}
-            showsVerticalScrollIndicator={true}
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={handleToggle}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.sheetBackdrop}
           >
-            {filteredOptions.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No options found</Text>
+            <Pressable style={styles.sheetDismiss} onPress={handleToggle} />
+            <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+              <View style={styles.grabber} />
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle} numberOfLines={1}>
+                  {label}
+                </Text>
+                <TouchableOpacity
+                  onPress={handleToggle}
+                  style={styles.sheetClose}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
+                  <Ionicons name="close" size={20} color={palette.text} />
+                </TouchableOpacity>
               </View>
-            ) : (
-              filteredOptions.map((item, index) => {
-                const isSelected = item.value === value;
-                return (
-                  <TouchableOpacity
-                    key={item.value}
-                    style={[
-                      styles.option,
-                      isSelected && styles.optionSelected,
-                      index < filteredOptions.length - 1 && styles.optionBorder,
-                    ]}
-                    onPress={() => handleSelect(item.value)}
-                    activeOpacity={0.7}
-                    accessibilityRole="menuitem"
-                    accessibilityState={{ selected: isSelected }}
-                  >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        isSelected && styles.optionTextSelected,
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                    {isSelected && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={18}
-                        color={pickerTheme.optionSelectedText}
-                      />
-                    )}
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </ScrollView>
-        </View>
+
+              {showSearch && (
+                <View style={styles.searchContainer}>
+                  <Ionicons
+                    name="search"
+                    size={18}
+                    color={palette.textMuted}
+                    style={styles.searchIcon}
+                  />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder={`Search ${label.toLowerCase()}...`}
+                    placeholderTextColor={palette.textSubtle}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {searchQuery.length > 0 && (
+                    <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                      <Ionicons name="close-circle" size={18} color={palette.textSubtle} />
+                    </Pressable>
+                  )}
+                </View>
+              )}
+
+              <ScrollView
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+                style={styles.dropdownScroll}
+                contentContainerStyle={styles.dropdownContent}
+                showsVerticalScrollIndicator={true}
+              >
+                {filteredOptions.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No options found</Text>
+                  </View>
+                ) : (
+                  filteredOptions.map((item) => {
+                    const isSelected = item.value === value;
+                    return (
+                      <TouchableOpacity
+                        key={item.value}
+                        style={[styles.option, isSelected && styles.optionSelected]}
+                        onPress={() => handleSelect(item.value)}
+                        activeOpacity={0.7}
+                        accessibilityRole="menuitem"
+                        accessibilityState={{ selected: isSelected }}
+                      >
+                        <Text
+                          style={[
+                            styles.optionText,
+                            isSelected && styles.optionTextSelected,
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                        {isSelected && (
+                          <View style={styles.optionCheck}>
+                            <Ionicons name="checkmark" size={14} color={palette.textInverse} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       )}
 
       {/* Helper / Error Text (shown when closed) */}
@@ -257,19 +285,21 @@ export default function FormPickerInput({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacing[3],
+    marginBottom: 14,
   },
   labelRow: {
     flexDirection: 'row',
-    marginBottom: spacing[1],
+    marginBottom: 8,
+    marginLeft: 4,
   },
   label: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.medium,
+    fontSize: 13,
     color: pickerTheme.label,
   },
   required: {
-    fontSize: fontSize.sm,
+    ...fonts.semibold,
+    fontSize: 13,
     color: pickerTheme.required,
   },
   pickerButton: {
@@ -277,31 +307,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1.5,
-    borderRadius: borderRadius.lg,
-    minHeight: 52,
-    paddingHorizontal: spacing[4],
+    borderRadius: radii.pill,
+    minHeight: 56,
+    paddingHorizontal: 20,
     backgroundColor: pickerTheme.background,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.black,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
-  },
-  pickerButtonOpen: {
-    borderColor: pickerTheme.borderFocused,
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 4,
   },
   pickerText: {
+    ...fonts.medium,
     flex: 1,
-    fontSize: fontSize.base,
+    fontSize: 16,
     color: pickerTheme.text,
+    marginRight: 8,
   },
   placeholderText: {
     color: pickerTheme.placeholder,
@@ -310,11 +326,12 @@ const styles = StyleSheet.create({
     color: pickerTheme.textDisabled,
   },
   bottomTextContainer: {
-    marginTop: spacing[1],
-    paddingHorizontal: spacing[1],
+    marginTop: 6,
+    paddingHorizontal: 8,
   },
   bottomText: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12.5,
   },
   helperText: {
     color: pickerTheme.helper,
@@ -323,77 +340,115 @@ const styles = StyleSheet.create({
     color: pickerTheme.error,
   },
 
-  // Dropdown list styles
-  dropdownContainer: {
-    marginTop: 4,
-    backgroundColor: colors.white,
-    borderWidth: 1.5,
-    borderColor: pickerTheme.borderFocused,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    maxHeight: 250,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.black,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+  // Options bottom sheet
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheetDismiss: { flex: 1 },
+  sheet: {
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingTop: 10,
+    maxHeight: '80%',
+  },
+  grabber: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    marginBottom: 12,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  sheetTitle: {
+    ...fonts.semibold,
+    flex: 1,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
+    marginRight: 12,
+  },
+  sheetClose: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[200],
-    backgroundColor: colors.gray[50],
+    marginHorizontal: 20,
+    marginBottom: 10,
+    paddingHorizontal: 18,
+    height: 50,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
   },
   searchIcon: {
-    marginRight: spacing[2],
+    marginRight: 10,
   },
   searchInput: {
+    ...fonts.medium,
     flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.gray[900],
-    paddingVertical: 4,
+    fontSize: 15,
+    color: palette.text,
+    paddingVertical: 0,
   },
   dropdownScroll: {
-    maxHeight: 220,
+    flexGrow: 0,
+  },
+  dropdownContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 4,
   },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3] + 2,
-    minHeight: 48,
-  },
-  optionBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[100],
+    paddingHorizontal: 16,
+    minHeight: 52,
+    borderRadius: radii.pill,
   },
   optionSelected: {
     backgroundColor: pickerTheme.optionSelected,
   },
   optionText: {
-    fontSize: fontSize.base,
+    ...fonts.medium,
+    flex: 1,
+    fontSize: 16,
     color: pickerTheme.text,
   },
   optionTextSelected: {
+    ...fonts.semibold,
     color: pickerTheme.optionSelectedText,
-    fontWeight: fontWeight.semibold as any,
+  },
+  optionCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: palette.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
   emptyContainer: {
-    padding: spacing[4],
+    padding: 20,
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: fontSize.sm,
-    color: colors.gray[400],
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.textMuted,
   },
 });

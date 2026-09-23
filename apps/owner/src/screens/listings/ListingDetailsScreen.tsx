@@ -1,9 +1,9 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable,
-  StatusBar, Image,
+  View, Text, StyleSheet, ScrollView, ActivityIndicator,
+  StatusBar, Image, useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -11,6 +11,10 @@ import { listingService } from '../../services/listingService';
 import { ApiRequestError } from '../../services/api';
 import type { ApiSpace, ApiAvailabilitySlot } from '../../types/api';
 import { resolveImageUri, isPlaceholderUrl } from '../../utils/imageUri';
+import { palette, radii, fonts } from '../../theme/kit';
+import { IconCircle, StatusTag, InfoGrid, PillButton, IsoBlock, EmptyState } from '../../components/ui';
+
+const HERO_HEIGHT = 330;
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -19,7 +23,7 @@ function SpacePhoto({ uri }: { uri: string }) {
   if (isPlaceholderUrl(uri) || failed) {
     return (
       <View style={styles.photoPlaceholder}>
-        <Ionicons name="image-outline" size={40} color="#9CA3AF" />
+        <Ionicons name="image-outline" size={40} color={palette.textSubtle} />
       </View>
     );
   }
@@ -41,6 +45,8 @@ export default function ListingDetailsScreen() {
   const [schedules, setSchedules] = useState<ApiAvailabilitySlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState('');
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const loadData = useCallback(async () => {
     try {
@@ -111,7 +117,7 @@ export default function ListingDetailsScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#0D7377" />
+          <ActivityIndicator size="large" color={palette.ink} />
         </View>
       </SafeAreaView>
     );
@@ -121,119 +127,153 @@ export default function ListingDetailsScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.loader}>
-          <Text style={styles.errorText}>{errorText || 'Space not found'}</Text>
-          <Pressable style={styles.backBtnCenter} onPress={() => navigation.goBack()}>
-            <Text style={styles.backBtnText}>Go back</Text>
-          </Pressable>
+          <EmptyState
+            title={errorText || 'Space not found'}
+            action="Go back"
+            onAction={() => navigation.goBack()}
+            tone="grey"
+          />
         </View>
       </SafeAreaView>
     );
   }
 
-  const statusColor = space.isAvailable ? '#059669' : '#D97706';
   const statusLabel = space.isAvailable ? 'Active' : 'Paused';
 
+  const pricingItems = [
+    { label: 'Hourly', value: `₹${space.pricePerHour}` },
+    ...(space.pricePerDay ? [{ label: 'Daily', value: `₹${space.pricePerDay}` }] : []),
+    ...(space.pricePerMonth ? [{ label: 'Monthly', value: `₹${space.pricePerMonth}` }] : []),
+  ];
+  const dimensionItems = [
+    { label: 'Length', value: `${space.lengthMeters} m` },
+    { label: 'Width', value: `${space.widthMeters} m` },
+    ...(space.heightMeters ? [{ label: 'Height clearance', value: `${space.heightMeters} m` }] : []),
+  ];
+  const ruleItems = [
+    { label: 'Vehicles', value: space.allowedVehicleTypes.join(', ') },
+    { label: 'Booking', value: space.bookingMode },
+    { label: 'EV charging', value: space.hasEvCharging ? 'Yes' : 'No' },
+  ];
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color="#1F2937" />
-        </Pressable>
-        <Text style={styles.headerTitle}>Space {space.spaceNumber}</Text>
-        <Pressable onPress={handleEdit} style={styles.iconBtn} hitSlop={8}>
-          <Ionicons name="create-outline" size={20} color="#0D7377" />
-        </Pressable>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Photo carousel */}
-        {space.spaceImages.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow}>
-            {space.spaceImages.map((uri, i) => (
-              <View key={i} style={styles.photo}>
-                <SpacePhoto uri={uri} />
-              </View>
-            ))}
-          </ScrollView>
-        ) : (
-          <View style={styles.photoEmpty}>
-            <Ionicons name="image-outline" size={40} color="#9CA3AF" />
-            <Text style={styles.photoEmptyText}>No photos</Text>
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <View style={styles.statusRow}>
-            <View style={[styles.pill, { backgroundColor: statusColor + '20' }]}>
-              <View style={[styles.dot, { backgroundColor: statusColor }]} />
-              <Text style={[styles.pillText, { color: statusColor }]}>{statusLabel}</Text>
-            </View>
-            <Pressable onPress={togglePause} style={styles.toggleBtn}>
-              <Text style={styles.toggleBtnText}>
-                {space.isAvailable ? 'Pause space' : 'Resume space'}
-              </Text>
-            </Pressable>
-          </View>
-
-          <Text style={styles.spaceType}>{space.spaceType}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pricing</Text>
-          <Row label="Hourly" value={`₹${space.pricePerHour}`} />
-          {space.pricePerDay ? <Row label="Daily" value={`₹${space.pricePerDay}`} /> : null}
-          {space.pricePerMonth ? <Row label="Monthly" value={`₹${space.pricePerMonth}`} /> : null}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Dimensions</Text>
-          <Row label="Length" value={`${space.lengthMeters} m`} />
-          <Row label="Width" value={`${space.widthMeters} m`} />
-          {space.heightMeters ? <Row label="Height clearance" value={`${space.heightMeters} m`} /> : null}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Rules</Text>
-          <Row label="Vehicles" value={space.allowedVehicleTypes.join(', ')} />
-          <Row label="Booking" value={space.bookingMode} />
-          <Row label="EV charging" value={space.hasEvCharging ? 'Yes' : 'No'} />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Availability</Text>
-          {schedules.length === 0 ? (
-            <Row label="Schedule" value="24/7" />
+    <View style={styles.safe}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Photo hero */}
+        <View style={[styles.hero, { height: HERO_HEIGHT + insets.top }]}>
+          {space.spaceImages.length > 0 ? (
+            <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+              {space.spaceImages.map((uri, i) => (
+                <View key={i} style={{ width, height: HERO_HEIGHT + insets.top }}>
+                  <SpacePhoto uri={uri} />
+                </View>
+              ))}
+            </ScrollView>
           ) : (
-            schedules.map((s) => (
-              <Row
-                key={s.id}
-                label={DAY_LABELS[s.dayOfWeek]}
-                value={`${s.availableFrom} – ${s.availableTo}`}
-              />
-            ))
+            <View style={styles.heroEmpty}>
+              <IsoBlock size={170} tone="peach" />
+              <Text style={styles.photoEmptyText}>No photos</Text>
+            </View>
           )}
+          {space.spaceImages.length > 0 ? (
+            <View style={styles.scrim} pointerEvents="none" />
+          ) : null}
+
+          <View style={[styles.heroBar, { top: insets.top + 8 }]}>
+            <IconCircle
+              icon="arrow-left"
+              variant={space.spaceImages.length > 0 ? 'glass' : 'white'}
+              onPress={() => navigation.goBack()}
+            />
+            <IconCircle
+              icon="edit-2"
+              variant={space.spaceImages.length > 0 ? 'glass' : 'white'}
+              onPress={handleEdit}
+            />
+          </View>
+
+          {space.spaceImages.length > 1 ? (
+            <View style={styles.photoCount}>
+              <Ionicons name="images-outline" size={13} color={palette.textInverse} />
+              <Text style={styles.photoCountText}>{space.spaceImages.length}</Text>
+            </View>
+          ) : null}
         </View>
 
-        {space.spaceDescription ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.description}>{space.spaceDescription}</Text>
+        {/* Details card */}
+        <View style={styles.sheet}>
+          <View style={styles.statusRow}>
+            <StatusTag label={statusLabel} tone={space.isAvailable ? 'success' : 'warning'} />
+            <PillButton
+              label={space.isAvailable ? 'Pause space' : 'Resume space'}
+              icon={space.isAvailable ? 'pause' : 'play'}
+              variant="grey"
+              size="sm"
+              onPress={togglePause}
+            />
           </View>
-        ) : null}
 
-        <Pressable style={styles.deleteBtn} onPress={handleDelete}>
-          <Ionicons name="trash-outline" size={18} color="#EF4444" />
-          <Text style={styles.deleteBtnText}>Delete space</Text>
-        </Pressable>
+          <Text style={styles.title}>Space {space.spaceNumber}</Text>
+          <Text style={styles.spaceType}>{space.spaceType}</Text>
+
+          <View style={styles.block}>
+            <Text style={styles.sectionTitle}>Pricing</Text>
+            <InfoGrid items={pricingItems} columns={3} />
+          </View>
+
+          <View style={styles.block}>
+            <Text style={styles.sectionTitle}>Dimensions</Text>
+            <InfoGrid items={dimensionItems} columns={3} />
+          </View>
+
+          <View style={styles.block}>
+            <Text style={styles.sectionTitle}>Rules</Text>
+            <InfoGrid items={ruleItems} columns={2} valueStyle={styles.capitalize} />
+          </View>
+
+          <View style={styles.block}>
+            <Text style={styles.sectionTitle}>Availability</Text>
+            {schedules.length === 0 ? (
+              <Row label="Schedule" value="24/7" isLast />
+            ) : (
+              schedules.map((s, i) => (
+                <Row
+                  key={s.id}
+                  label={DAY_LABELS[s.dayOfWeek]}
+                  value={`${s.availableFrom} – ${s.availableTo}`}
+                  isLast={i === schedules.length - 1}
+                />
+              ))
+            )}
+          </View>
+
+          {space.spaceDescription ? (
+            <View style={styles.block}>
+              <Text style={styles.sectionTitle}>Description</Text>
+              <Text style={styles.description}>{space.spaceDescription}</Text>
+            </View>
+          ) : null}
+
+          <PillButton
+            label="Delete space"
+            icon="trash-2"
+            variant="danger"
+            onPress={handleDelete}
+            style={styles.deleteBtn}
+          />
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, isLast }: { label: string; value: string; isLast?: boolean }) {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, !isLast && styles.rowDivider]}>
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={styles.rowValue}>{value}</Text>
     </View>
@@ -241,80 +281,86 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F9FAFB' },
+  safe: { flex: 1, backgroundColor: palette.bg },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  errorText: { color: '#EF4444', fontSize: 15, textAlign: 'center', marginBottom: 16 },
-  backBtnCenter: { paddingHorizontal: 18, paddingVertical: 10, backgroundColor: '#0D7377', borderRadius: 8 },
-  backBtnText: { color: '#FFFFFF', fontWeight: '600' },
-  header: {
+  content: {},
+  hero: { backgroundColor: palette.ink, overflow: 'hidden' },
+  heroEmpty: {
+    flex: 1,
+    backgroundColor: palette.peachSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 30,
+  },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.28)' },
+  heroBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  photoCount: {
+    position: 'absolute',
+    right: 16,
+    bottom: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: radii.pill,
+    paddingHorizontal: 10,
+    height: 26,
   },
-  iconBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { flex: 1, fontSize: 17, fontWeight: '600', color: '#1F2937', textAlign: 'center' },
-  content: { paddingBottom: 40 },
-  photoRow: { backgroundColor: '#FFFFFF' },
-  photo: { width: 280, height: 180, marginRight: 4 },
+  photoCountText: { ...fonts.semibold, fontSize: 12, color: palette.textInverse, marginLeft: 5 },
   photoImg: { width: '100%', height: '100%' },
-  photoPlaceholder: { flex: 1, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  photoEmpty: {
-    height: 120,
-    backgroundColor: '#FFFFFF',
+  photoPlaceholder: {
+    flex: 1,
+    backgroundColor: palette.fill,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  photoEmptyText: { color: '#9CA3AF', marginTop: 8, fontSize: 13 },
-  section: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    marginTop: 8,
+  photoEmptyText: { ...fonts.medium, color: palette.textMuted, marginTop: 4, fontSize: 13 },
+  sheet: {
+    marginTop: -30,
+    backgroundColor: palette.surface,
+    borderRadius: radii.xxl,
+    marginHorizontal: 0,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 20,
   },
   statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
-  dot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
-  pillText: { fontSize: 12, fontWeight: '600' },
-  toggleBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#0D7377',
-  },
-  toggleBtnText: { color: '#0D7377', fontSize: 13, fontWeight: '600' },
-  spaceType: { fontSize: 15, color: '#6B7280', marginTop: 8, textTransform: 'capitalize' },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  row: {
-    flexDirection: 'row',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  rowLabel: { flex: 1, fontSize: 13, color: '#6B7280' },
-  rowValue: { flex: 2, fontSize: 14, color: '#1F2937' },
-  description: { fontSize: 14, color: '#1F2937', lineHeight: 20 },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
+  title: {
+    ...fonts.bold,
+    fontSize: 30,
+    letterSpacing: -0.8,
+    color: palette.text,
     marginTop: 16,
-    marginHorizontal: 16,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-    borderRadius: 10,
   },
-  deleteBtnText: { color: '#EF4444', fontSize: 15, fontWeight: '600' },
+  spaceType: {
+    ...fonts.medium,
+    fontSize: 15,
+    color: palette.textMuted,
+    marginTop: 2,
+    textTransform: 'capitalize',
+  },
+  block: {
+    marginTop: 18,
+    paddingTop: 18,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
+  },
+  sectionTitle: {
+    ...fonts.semibold,
+    fontSize: 17,
+    color: palette.text,
+    marginBottom: 8,
+  },
+  capitalize: { textTransform: 'capitalize' },
+  row: { flexDirection: 'row', paddingVertical: 10 },
+  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line },
+  rowLabel: { ...fonts.medium, flex: 1, fontSize: 14, color: palette.textMuted },
+  rowValue: { ...fonts.semibold, flex: 2, fontSize: 14, color: palette.text, textAlign: 'right' },
+  description: { ...fonts.medium, fontSize: 14, color: palette.text, lineHeight: 21 },
+  deleteBtn: { marginTop: 24 },
 });

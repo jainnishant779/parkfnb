@@ -12,15 +12,15 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  TouchableOpacity,
   TextInput,
-  Modal,
   KeyboardAvoidingView,
   Platform,
-  Animated,
   LayoutAnimation,
   UIManager,
+  type TextStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
@@ -32,6 +32,16 @@ import { ownerService } from '../../services/ownerService';
 import { ApiRequestError } from '../../services/api';
 import { pickAndUploadImage, handleMediaUploadError, type PickSource } from '../../utils/mediaUpload';
 import SharedDatePickerModal from '../../components/inputs/DatePickerModal';
+import * as UI from '../../components/ui';
+import * as Kit from '../../theme/kit';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const { PillButton, StatusTag, ProgressTrack, IsoBlock } = UI as unknown as Record<
+  string,
+  React.ComponentType<any>
+>;
+const { palette, radii, shadow } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -210,49 +220,26 @@ const MOCK_REJECTION_REASON = {
 // THEME
 // ============================================================================
 
-const createTheme = (isDark: boolean) => ({
+// Light-only, mapped onto the shared kit palette (ink / peach / grey canvas).
+const createTheme = () => ({
   colors: {
-    background: isDark ? '#0F172A' : '#F8FAFC',
-    surface: isDark ? '#1E293B' : '#FFFFFF',
-    surfaceElevated: isDark ? '#334155' : '#FFFFFF',
-    text: isDark ? '#F1F5F9' : '#1E293B',
-    textSecondary: isDark ? '#94A3B8' : '#64748B',
-    textMuted: isDark ? '#64748B' : '#94A3B8',
-    border: isDark ? '#334155' : '#E2E8F0',
-    borderLight: isDark ? '#1E293B' : '#F1F5F9',
-    primary: '#0D7377',
-    primaryLight: isDark ? '#1E3A5F' : '#E8F5F4',
-    success: '#10B981',
-    successLight: isDark ? '#064E3B' : '#ECFDF5',
-    warning: '#F59E0B',
-    warningLight: isDark ? '#78350F' : '#FFFBEB',
-    danger: '#EF4444',
-    dangerLight: isDark ? '#7F1D1D' : '#FEF2F2',
-    overlay: 'rgba(0, 0, 0, 0.5)',
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    xxl: 24,
-    xxxl: 32,
-  },
-  radius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    full: 9999,
-  },
-  typography: {
-    title: { fontSize: 20, fontWeight: '700' as const },
-    subtitle: { fontSize: 16, fontWeight: '600' as const },
-    body: { fontSize: 15, fontWeight: '400' as const },
-    bodyMedium: { fontSize: 15, fontWeight: '500' as const },
-    caption: { fontSize: 13, fontWeight: '400' as const },
-    small: { fontSize: 12, fontWeight: '400' as const },
+    background: palette.bg,
+    surface: palette.surface,
+    surfaceElevated: palette.surface,
+    text: palette.text,
+    textSecondary: palette.textMuted,
+    textMuted: palette.textSubtle,
+    border: palette.line,
+    borderLight: palette.fill,
+    primary: palette.ink,
+    primaryLight: palette.fill,
+    success: palette.success,
+    successLight: palette.successSoft,
+    warning: palette.warning,
+    warningLight: palette.warningSoft,
+    danger: palette.danger,
+    dangerLight: palette.dangerSoft,
+    overlay: 'rgba(0, 0, 0, 0.45)',
   },
 });
 
@@ -422,56 +409,17 @@ interface StatusPillProps {
   theme: ReturnType<typeof createTheme>;
 }
 
-const StatusPill: React.FC<StatusPillProps> = ({ status, theme }) => {
-  const config = {
-    draft: { label: 'Draft', bg: theme.colors.warningLight, color: theme.colors.warning },
-    submitted: { label: 'Submitted', bg: theme.colors.primaryLight, color: theme.colors.primary },
-    verified: { label: 'Verified', bg: theme.colors.successLight, color: theme.colors.success },
-    rejected: { label: 'Rejected', bg: theme.colors.dangerLight, color: theme.colors.danger },
+const StatusPill: React.FC<StatusPillProps> = ({ status }) => {
+  const config: Record<KycStatus, { label: string; tone: string }> = {
+    draft: { label: 'Draft', tone: 'warning' },
+    submitted: { label: 'Submitted', tone: 'ink' },
+    verified: { label: 'Verified', tone: 'success' },
+    rejected: { label: 'Rejected', tone: 'danger' },
   };
 
-  const { label, bg, color } = config[status];
+  const { label, tone } = config[status];
 
-  return (
-    <View style={[styles.statusPill, { backgroundColor: bg }]}>
-      <Text style={[styles.statusPillText, { color }]}>{label}</Text>
-    </View>
-  );
-};
-
-// Progress Bar Component
-interface ProgressBarProps {
-  progress: number;
-  theme: ReturnType<typeof createTheme>;
-}
-
-const ProgressBar: React.FC<ProgressBarProps> = ({ progress, theme }) => {
-  const animatedWidth = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(animatedWidth, {
-      toValue: progress,
-      duration: 400,
-      useNativeDriver: false,
-    }).start();
-  }, [progress, animatedWidth]);
-
-  return (
-    <View style={[styles.progressBarContainer, { backgroundColor: theme.colors.border }]}>
-      <Animated.View
-        style={[
-          styles.progressBarFill,
-          {
-            backgroundColor: progress === 100 ? theme.colors.success : theme.colors.primary,
-            width: animatedWidth.interpolate({
-              inputRange: [0, 100],
-              outputRange: ['0%', '100%'],
-            }),
-          },
-        ]}
-      />
-    </View>
-  );
+  return <StatusTag label={label} tone={tone} />;
 };
 
 // Accordion Section Component
@@ -496,48 +444,46 @@ const AccordionSection: React.FC<AccordionSectionProps> = ({
   isExpanded,
   isLocked,
   onToggle,
-  theme,
   children,
 }) => {
   const getStatusIcon = () => {
-    if (isComplete) return { name: 'checkmark-circle', color: theme.colors.success };
-    if (hasError) return { name: 'alert-circle', color: theme.colors.danger };
-    return { name: 'ellipse-outline', color: theme.colors.textMuted };
+    if (isComplete) return { name: 'checkmark', color: palette.textInverse, bg: palette.success };
+    if (hasError) return { name: 'alert', color: palette.danger, bg: palette.dangerSoft };
+    return { name: 'ellipse-outline', color: palette.textSubtle, bg: palette.fill };
   };
 
   const statusIcon = getStatusIcon();
 
   return (
-    <View style={[styles.accordionContainer, { backgroundColor: theme.colors.surface }]}>
-      <Pressable
+    <View style={[styles.accordionContainer, hasError && styles.accordionError]}>
+      <TouchableOpacity
         style={styles.accordionHeader}
         onPress={onToggle}
+        activeOpacity={0.7}
         disabled={isLocked}
         accessibilityRole="button"
         accessibilityState={{ expanded: isExpanded }}
         accessibilityLabel={`${title}. ${isComplete ? 'Complete' : 'Incomplete'}`}
       >
         <View style={styles.accordionHeaderLeft}>
-          <Ionicons name={statusIcon.name as any} size={24} color={statusIcon.color} />
+          <View style={[styles.accordionIcon, { backgroundColor: statusIcon.bg }]}>
+            <Ionicons name={statusIcon.name as any} size={18} color={statusIcon.color} />
+          </View>
           <View style={styles.accordionHeaderText}>
-            <Text style={[styles.accordionTitle, { color: theme.colors.text }]}>{title}</Text>
-            <Text style={[styles.accordionDescription, { color: theme.colors.textSecondary }]}>
-              {description}
-            </Text>
+            <Text style={styles.accordionTitle}>{title}</Text>
+            <Text style={styles.accordionDescription}>{description}</Text>
           </View>
         </View>
-        <Ionicons
-          name={isExpanded ? 'chevron-up' : 'chevron-down'}
-          size={20}
-          color={isLocked ? theme.colors.textMuted : theme.colors.textSecondary}
-        />
-      </Pressable>
-
-      {isExpanded && (
-        <View style={[styles.accordionContent, { borderTopColor: theme.colors.border }]}>
-          {children}
+        <View style={[styles.chevron, isExpanded && styles.chevronOpen]}>
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={isExpanded ? palette.textInverse : isLocked ? palette.textSubtle : palette.text}
+          />
         </View>
-      )}
+      </TouchableOpacity>
+
+      {isExpanded && <View style={styles.accordionContent}>{children}</View>}
     </View>
   );
 };
@@ -575,33 +521,25 @@ const FormField: React.FC<FormFieldProps> = ({
   secureTextEntry,
   onPress,
   rightIcon,
-  theme,
   maxLength,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
-
-  const getBorderColor = () => {
-    if (error) return theme.colors.danger;
-    if (isFocused) return theme.colors.primary;
-    return theme.colors.border;
-  };
 
   const content = (
     <View
       style={[
         styles.formFieldInput,
-        {
-          borderColor: getBorderColor(),
-          backgroundColor: disabled ? theme.colors.borderLight : theme.colors.surface,
-        },
+        isFocused && styles.formFieldInputFocused,
+        !!error && styles.formFieldInputError,
+        disabled && styles.formFieldInputDisabled,
       ]}
     >
       <TextInput
-        style={[styles.formFieldTextInput, { color: theme.colors.text }]}
+        style={styles.formFieldTextInput}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={theme.colors.textMuted}
+        placeholderTextColor={palette.textSubtle}
         editable={!disabled && !onPress}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
@@ -612,7 +550,7 @@ const FormField: React.FC<FormFieldProps> = ({
         accessibilityLabel={`${label}${required ? ', required' : ''}`}
       />
       {rightIcon && (
-        <Ionicons name={rightIcon as any} size={20} color={theme.colors.textMuted} />
+        <Ionicons name={rightIcon as any} size={20} color={palette.textMuted} />
       )}
     </View>
   );
@@ -620,25 +558,20 @@ const FormField: React.FC<FormFieldProps> = ({
   return (
     <View style={styles.formFieldContainer}>
       <View style={styles.formFieldLabelRow}>
-        <Text style={[styles.formFieldLabel, { color: theme.colors.text }]}>{label}</Text>
-        {required && <Text style={[styles.formFieldRequired, { color: theme.colors.danger }]}> *</Text>}
+        <Text style={styles.formFieldLabel}>{label}</Text>
+        {required && <Text style={styles.formFieldRequired}> *</Text>}
       </View>
 
       {onPress ? (
-        <Pressable onPress={onPress} disabled={disabled}>
+        <TouchableOpacity onPress={onPress} disabled={disabled} activeOpacity={0.8}>
           {content}
-        </Pressable>
+        </TouchableOpacity>
       ) : (
         content
       )}
 
       {(error || helper) && (
-        <Text
-          style={[
-            styles.formFieldHelper,
-            { color: error ? theme.colors.danger : theme.colors.textSecondary },
-          ]}
-        >
+        <Text style={[styles.formFieldHelper, !!error && styles.formFieldHelperError]}>
           {error || helper}
         </Text>
       )}
@@ -662,55 +595,48 @@ const UploadCard: React.FC<UploadCardProps> = ({
   required,
   disabled,
   onPress,
-  theme,
 }) => {
   return (
-    <Pressable
+    <TouchableOpacity
       style={[
         styles.uploadCard,
-        {
-          borderColor: file ? theme.colors.success : theme.colors.border,
-          backgroundColor: file ? theme.colors.successLight : theme.colors.surface,
-          opacity: disabled ? 0.6 : 1,
-        },
+        file ? styles.uploadCardFilled : null,
+        disabled ? styles.uploadCardDisabled : null,
       ]}
       onPress={onPress}
+      activeOpacity={0.8}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={`Upload ${label}${required ? ', required' : ''}`}
     >
       {file ? (
         <>
-          <View style={[styles.uploadPreview, { backgroundColor: theme.colors.primary }]}>
-            <Ionicons name="document" size={24} color="#FFFFFF" />
+          <View style={styles.uploadPreview}>
+            <Ionicons name="document-text-outline" size={20} color={palette.textInverse} />
           </View>
           <View style={styles.uploadCardContent}>
-            <Text style={[styles.uploadCardLabel, { color: theme.colors.text }]} numberOfLines={1}>
+            <Text style={styles.uploadCardLabel} numberOfLines={1}>
               {file.name}
             </Text>
-            <Text style={[styles.uploadCardAction, { color: theme.colors.primary }]}>
-              Replace
-            </Text>
+            <Text style={styles.uploadCardAction}>Replace</Text>
           </View>
-          <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+          <Ionicons name="checkmark-circle" size={20} color={palette.success} />
         </>
       ) : (
         <>
-          <View style={[styles.uploadPlaceholder, { borderColor: theme.colors.border }]}>
-            <Ionicons name="add" size={24} color={theme.colors.textMuted} />
+          <View style={styles.uploadPlaceholder}>
+            <Ionicons name="add" size={22} color={palette.text} />
           </View>
           <View style={styles.uploadCardContent}>
-            <Text style={[styles.uploadCardLabel, { color: theme.colors.text }]}>
+            <Text style={styles.uploadCardLabel}>
               {label}
-              {required && <Text style={{ color: theme.colors.danger }}> *</Text>}
+              {required && <Text style={styles.formFieldRequired}> *</Text>}
             </Text>
-            <Text style={[styles.uploadCardAction, { color: theme.colors.primary }]}>
-              Add
-            </Text>
+            <Text style={styles.uploadCardAction}>Add</Text>
           </View>
         </>
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 
@@ -727,22 +653,22 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
   visible,
   onClose,
   title,
-  theme,
   children,
 }) => {
+  const insets = useSafeAreaInsets();
   return visible ? (
 
       <Pressable style={styles.modalOverlay} onPress={onClose}>
         <Pressable
-          style={[styles.bottomSheet, { backgroundColor: theme.colors.surface }]}
+          style={[styles.bottomSheet, { paddingBottom: insets.bottom + 20 }]}
           onPress={(e) => e.stopPropagation()}
         >
           <View style={styles.bottomSheetHandle} />
-          <Text style={[styles.bottomSheetTitle, { color: theme.colors.text }]}>{title}</Text>
+          <Text style={styles.bottomSheetTitle}>{title}</Text>
           {children}
         </Pressable>
       </Pressable>
-    
+
     ) : null;
 };
 
@@ -755,28 +681,30 @@ interface BannerProps {
   theme: ReturnType<typeof createTheme>;
 }
 
-const Banner: React.FC<BannerProps> = ({ type, title, message, items, theme }) => {
+const Banner: React.FC<BannerProps> = ({ type, title, message, items }) => {
   const config = {
-    info: { bg: theme.colors.primaryLight, color: theme.colors.primary, icon: 'information-circle' },
-    success: { bg: theme.colors.successLight, color: theme.colors.success, icon: 'checkmark-circle' },
-    warning: { bg: theme.colors.warningLight, color: theme.colors.warning, icon: 'warning' },
-    error: { bg: theme.colors.dangerLight, color: theme.colors.danger, icon: 'alert-circle' },
+    info: { bg: palette.blueSoft, color: palette.text, icon: 'information-circle-outline' },
+    success: { bg: palette.successSoft, color: palette.success, icon: 'checkmark-circle-outline' },
+    warning: { bg: palette.warningSoft, color: palette.warning, icon: 'warning-outline' },
+    error: { bg: palette.dangerSoft, color: palette.danger, icon: 'alert-circle-outline' },
   };
 
   const { bg, color, icon } = config[type];
 
   return (
     <View style={[styles.banner, { backgroundColor: bg }]}>
-      <Ionicons name={icon as any} size={24} color={color} />
+      <View style={styles.bannerIcon}>
+        <Ionicons name={icon as any} size={20} color={color} />
+      </View>
       <View style={styles.bannerContent}>
         <Text style={[styles.bannerTitle, { color }]}>{title}</Text>
-        {message && <Text style={[styles.bannerMessage, { color: theme.colors.textSecondary }]}>{message}</Text>}
+        {message && <Text style={styles.bannerMessage}>{message}</Text>}
         {items && items.length > 0 && (
           <View style={styles.bannerItems}>
             {items.map((item, index) => (
               <View key={index} style={styles.bannerItem}>
-                <Text style={[styles.bannerBullet, { color }]}>•</Text>
-                <Text style={[styles.bannerItemText, { color: theme.colors.textSecondary }]}>{item}</Text>
+                <View style={[styles.bannerBullet, { backgroundColor: color }]} />
+                <Text style={styles.bannerItemText}>{item}</Text>
               </View>
             ))}
           </View>
@@ -785,6 +713,26 @@ const Banner: React.FC<BannerProps> = ({ type, title, message, items, theme }) =
     </View>
   );
 };
+
+// Status hero card (submitted / verified): soft peach or blue card with
+// the car illustration cropped into the bottom-right corner.
+interface StatusHeroProps {
+  tone: 'peach' | 'blue';
+  label: string;
+  title: string;
+  message: string;
+}
+
+const StatusHero: React.FC<StatusHeroProps> = ({ tone, label, title, message }) => (
+  <View style={[styles.hero, { backgroundColor: tone === 'peach' ? palette.peachSoft : palette.blueSoft }]}>
+    <StatusTag label={label} tone="ink" />
+    <Text style={styles.heroTitle}>{title}</Text>
+    <Text style={styles.heroMessage}>{message}</Text>
+    <View style={styles.heroArt} pointerEvents="none">
+      <IsoBlock size={130} tone={tone} />
+    </View>
+  </View>
+);
 
 // Segmented Control Component
 interface SegmentedControlProps {
@@ -800,34 +748,28 @@ const SegmentedControl: React.FC<SegmentedControlProps> = ({
   selectedValue,
   onSelect,
   disabled,
-  theme,
 }) => {
   return (
-    <View style={[styles.segmentedControl, { backgroundColor: theme.colors.borderLight }]}>
+    <View style={styles.segmentedControl}>
       {options.map((option) => {
         const isSelected = option.value === selectedValue;
         return (
-          <Pressable
+          <TouchableOpacity
             key={option.value}
-            style={[
-              styles.segment,
-              isSelected && [styles.segmentSelected, { backgroundColor: theme.colors.surface }],
-            ]}
+            style={[styles.segment, isSelected && styles.segmentSelected]}
             onPress={() => onSelect(option.value)}
+            activeOpacity={0.8}
             disabled={disabled}
             accessibilityRole="radio"
             accessibilityState={{ selected: isSelected }}
           >
             <Text
-              style={[
-                styles.segmentText,
-                { color: isSelected ? theme.colors.text : theme.colors.textSecondary },
-                isSelected && styles.segmentTextSelected,
-              ]}
+              style={[styles.segmentText, isSelected && styles.segmentTextSelected]}
+              numberOfLines={1}
             >
               {option.label}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -840,13 +782,14 @@ interface CollapsibleTipsProps {
   theme: ReturnType<typeof createTheme>;
 }
 
-const CollapsibleTips: React.FC<CollapsibleTipsProps> = ({ tips, theme }) => {
+const CollapsibleTips: React.FC<CollapsibleTipsProps> = ({ tips }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <View style={[styles.tipsContainer, { backgroundColor: theme.colors.borderLight }]}>
-      <Pressable
+    <View style={styles.tipsContainer}>
+      <TouchableOpacity
         style={styles.tipsHeader}
+        activeOpacity={0.7}
         onPress={() => {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setIsExpanded(!isExpanded);
@@ -854,22 +797,22 @@ const CollapsibleTips: React.FC<CollapsibleTipsProps> = ({ tips, theme }) => {
         accessibilityRole="button"
       >
         <View style={styles.tipsHeaderLeft}>
-          <Ionicons name="bulb-outline" size={18} color={theme.colors.warning} />
-          <Text style={[styles.tipsTitle, { color: theme.colors.text }]}>Tips for good photos</Text>
+          <Ionicons name="bulb-outline" size={18} color={palette.peachDeep} />
+          <Text style={styles.tipsTitle}>Tips for good photos</Text>
         </View>
         <Ionicons
           name={isExpanded ? 'chevron-up' : 'chevron-down'}
           size={18}
-          color={theme.colors.textSecondary}
+          color={palette.textMuted}
         />
-      </Pressable>
+      </TouchableOpacity>
 
       {isExpanded && (
         <View style={styles.tipsContent}>
           {tips.map((tip, index) => (
             <View key={index} style={styles.tipItem}>
-              <Ionicons name="checkmark" size={14} color={theme.colors.success} />
-              <Text style={[styles.tipText, { color: theme.colors.textSecondary }]}>{tip}</Text>
+              <Ionicons name="checkmark" size={14} color={palette.success} />
+              <Text style={styles.tipText}>{tip}</Text>
             </View>
           ))}
         </View>
@@ -893,7 +836,8 @@ export default function KycVerificationScreen() {
   const navigation = useNavigation();
   const route = useRoute<any>();
   const { user, kycStatus, updateOnboardingStep, updateOwner } = useAuth();
-  const theme = useMemo(() => createTheme(false), []); // Always use light mode
+  const theme = useMemo(() => createTheme(), []); // Always use light mode
+  const insets = useSafeAreaInsets();
 
   // Get section from route params (e.g., when navigating from bank notification)
   const initialSection = route.params?.section as SectionId | undefined;
@@ -1284,31 +1228,35 @@ export default function KycVerificationScreen() {
 
   if (state.isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading...</Text>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  const completedCount = Object.values(sectionComplete).filter(Boolean).length;
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-          <Pressable
+        <View style={styles.header}>
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-          </Pressable>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>KYC & Verification</Text>
+            <Ionicons name="arrow-back" size={22} color={palette.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>KYC & Verification</Text>
           <StatusPill status={state.status} theme={theme} />
         </View>
 
@@ -1319,26 +1267,26 @@ export default function KycVerificationScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Trust Message */}
-          <Text style={[styles.trustMessage, { color: theme.colors.textSecondary }]}>
+          <Text style={styles.trustMessage}>
             Complete verification to publish your parking listings.
           </Text>
 
           {/* Status Banners */}
           {state.status === 'submitted' && (
-            <Banner
-              type="info"
+            <StatusHero
+              tone="blue"
+              label="In review"
               title="Submitted for Review"
               message="Your documents are being verified. This usually takes 1-2 business days."
-              theme={theme}
             />
           )}
 
           {state.status === 'verified' && (
-            <Banner
-              type="success"
+            <StatusHero
+              tone="peach"
+              label="Verified"
               title="Verification Complete"
               message="Your KYC is verified. You can now publish parking listings."
-              theme={theme}
             />
           )}
 
@@ -1353,20 +1301,23 @@ export default function KycVerificationScreen() {
           )}
 
           {/* Progress Section */}
-          <View style={[styles.progressSection, { backgroundColor: theme.colors.surface }]}>
+          <View style={styles.progressSection}>
+            <Text style={styles.progressTitle}>Verification progress</Text>
             <View style={styles.progressHeader}>
-              <Text style={[styles.progressTitle, { color: theme.colors.text }]}>
-                Verification Progress
-              </Text>
-              <Text style={[styles.progressPercent, { color: theme.colors.primary }]}>
-                {Math.round(overallProgress)}%
-              </Text>
+              <Text style={styles.progressPercent}>{Math.round(overallProgress)}%</Text>
+              <Text style={styles.progressCount}>{completedCount} of 4 sections</Text>
             </View>
-            <ProgressBar progress={overallProgress} theme={theme} />
+            <ProgressTrack
+              steps={4}
+              current={completedCount}
+              trackColor={palette.line}
+              style={styles.progressTrack}
+            />
 
             {overallProgress < 100 && !isLocked && (
-              <Pressable
+              <TouchableOpacity
                 style={styles.jumpLink}
+                activeOpacity={0.7}
                 onPress={() => {
                   const incomplete = Object.entries(sectionComplete).find(([_, complete]) => !complete);
                   if (incomplete) {
@@ -1374,10 +1325,9 @@ export default function KycVerificationScreen() {
                   }
                 }}
               >
-                <Text style={[styles.jumpLinkText, { color: theme.colors.primary }]}>
-                  Jump to next incomplete section →
-                </Text>
-              </Pressable>
+                <Text style={styles.jumpLinkText}>Jump to next incomplete section</Text>
+                <Ionicons name="arrow-forward" size={15} color={palette.text} />
+              </TouchableOpacity>
             )}
           </View>
 
@@ -1459,7 +1409,7 @@ export default function KycVerificationScreen() {
             theme={theme}
           >
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldGroupLabel, { color: theme.colors.text }]}>Document Type</Text>
+              <Text style={styles.fieldGroupLabel}>Document Type</Text>
               <SegmentedControl
                 options={[
                   { value: 'national_id', label: 'National ID' },
@@ -1485,7 +1435,7 @@ export default function KycVerificationScreen() {
             />
 
             <View style={styles.uploadSection}>
-              <Text style={[styles.fieldGroupLabel, { color: theme.colors.text }]}>Upload Documents</Text>
+              <Text style={styles.fieldGroupLabel}>Upload Documents</Text>
               <View style={styles.uploadGrid}>
                 <UploadCard
                   label="Front Side"
@@ -1613,7 +1563,7 @@ export default function KycVerificationScreen() {
             </View>
 
             <View style={styles.uploadSection}>
-              <Text style={[styles.fieldGroupLabel, { color: theme.colors.text }]}>Address Proof Document</Text>
+              <Text style={styles.fieldGroupLabel}>Address Proof Document</Text>
               <UploadCard
                 label="Utility Bill / Rental Agreement"
                 file={state.address.proofDocument}
@@ -1622,7 +1572,7 @@ export default function KycVerificationScreen() {
                 onPress={() => dispatch({ type: 'SHOW_UPLOAD_MODAL', payload: { section: 'address', field: 'proofDocument' } })}
                 theme={theme}
               />
-              <Text style={[styles.uploadHint, { color: theme.colors.textMuted }]}>
+              <Text style={styles.uploadHint}>
                 Document should be less than 3 months old
               </Text>
             </View>
@@ -1660,8 +1610,9 @@ export default function KycVerificationScreen() {
 
             {/* Same as full name shortcut */}
             {state.personal.fullName ? (
-              <Pressable
+              <TouchableOpacity
                 style={styles.sameAsNameRow}
+                activeOpacity={0.7}
                 onPress={() => {
                   if (!isLocked) {
                     dispatch({ type: 'UPDATE_BANK', payload: { accountHolderName: state.personal.fullName } });
@@ -1672,38 +1623,35 @@ export default function KycVerificationScreen() {
                 <View style={[
                   styles.sameAsNameCheckbox,
                   state.bank.accountHolderName === state.personal.fullName && styles.sameAsNameCheckboxChecked,
-                  { borderColor: theme.colors.primary },
                 ]}>
                   {state.bank.accountHolderName === state.personal.fullName && (
-                    <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                    <Ionicons name="checkmark" size={12} color={palette.textInverse} />
                   )}
                 </View>
-                <Text style={[styles.sameAsNameText, { color: theme.colors.textSecondary }]}>
-                  Use full name — <Text style={{ color: theme.colors.text }}>{state.personal.fullName}</Text>
+                <Text style={styles.sameAsNameText}>
+                  Use full name: <Text style={styles.sameAsNameValue}>{state.personal.fullName}</Text>
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             ) : null}
 
             <View style={styles.formFieldContainer}>
               <View style={styles.formFieldLabelRow}>
-                <Text style={[styles.formFieldLabel, { color: theme.colors.text }]}>Account Number</Text>
-                <Text style={[styles.formFieldRequired, { color: theme.colors.danger }]}> *</Text>
+                <Text style={styles.formFieldLabel}>Account Number</Text>
+                <Text style={styles.formFieldRequired}> *</Text>
               </View>
               <View
                 style={[
                   styles.formFieldInput,
-                  {
-                    borderColor: accountNumberFocused ? theme.colors.primary : theme.colors.border,
-                    backgroundColor: isLocked ? theme.colors.borderLight : theme.colors.surface,
-                  },
+                  accountNumberFocused && styles.formFieldInputFocused,
+                  isLocked && styles.formFieldInputDisabled,
                 ]}
               >
                 <TextInput
-                  style={[styles.formFieldTextInput, { color: theme.colors.text }]}
+                  style={styles.formFieldTextInput}
                   value={accountNumberFocused ? state.bank.accountNumber : maskAccountNumber(state.bank.accountNumber)}
                   onChangeText={(text) => dispatch({ type: 'UPDATE_BANK', payload: { accountNumber: text.replace(/\D/g, '') } })}
                   placeholder="Enter account number"
-                  placeholderTextColor={theme.colors.textMuted}
+                  placeholderTextColor={palette.textSubtle}
                   editable={!isLocked}
                   keyboardType="numeric"
                   onFocus={() => setAccountNumberFocused(true)}
@@ -1738,70 +1686,44 @@ export default function KycVerificationScreen() {
         </ScrollView>
 
         {/* Sticky Footer */}
-        <View style={[styles.stickyFooter, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
-          <Pressable
-            style={[
-              styles.primaryButton,
-              {
-                backgroundColor: canSubmit ? theme.colors.primary : theme.colors.border,
-              },
-            ]}
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-            accessibilityRole="button"
-            accessibilityLabel={state.status === 'submitted' ? 'Submitted' : 'Submit for Verification'}
-          >
-            <Text
-              style={[
-                styles.primaryButtonText,
-                { color: canSubmit ? '#FFFFFF' : theme.colors.textMuted },
-              ]}
-            >
-              {state.status === 'submitted'
+        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 12 }]}>
+          <PillButton
+            label={
+              state.status === 'submitted'
                 ? 'Submitted'
                 : state.status === 'verified'
                 ? 'Verified'
-                : 'Submit for Verification'}
-            </Text>
-          </Pressable>
+                : 'Submit for Verification'
+            }
+            variant="ink"
+            onPress={handleSubmit}
+            disabled={!canSubmit}
+          />
 
           <View style={styles.secondaryButtons}>
-            <Pressable
-              style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+            <PillButton
+              label="Save Draft"
+              icon="save"
+              variant="grey"
+              size="md"
               onPress={handleSaveDraft}
               disabled={isLocked}
-              accessibilityRole="button"
-              accessibilityLabel="Save Draft"
-            >
-              <Ionicons name="save-outline" size={18} color={isLocked ? theme.colors.textMuted : theme.colors.text} />
-              <Text style={[styles.secondaryButtonText, { color: isLocked ? theme.colors.textMuted : theme.colors.text }]}>
-                Save Draft
-              </Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+              style={styles.secondaryButton}
+            />
+            <PillButton
+              label="Reset"
+              icon="refresh-cw"
+              variant="danger"
+              size="md"
               onPress={() => dispatch({ type: 'SHOW_RESET_CONFIRM', payload: true })}
               disabled={isLocked}
-              accessibilityRole="button"
-              accessibilityLabel="Reset"
-            >
-              <Ionicons name="refresh-outline" size={18} color={isLocked ? theme.colors.textMuted : theme.colors.danger} />
-              <Text style={[styles.secondaryButtonText, { color: isLocked ? theme.colors.textMuted : theme.colors.danger }]}>
-                Reset
-              </Text>
-            </Pressable>
+              style={styles.secondaryButton}
+            />
           </View>
 
-          <Text style={[styles.reviewNote, { color: theme.colors.textMuted }]}>
-            Verification typically takes 1-2 business days
+          <Text style={styles.reviewNote}>
+            {state.isSaving ? 'Saving...' : 'Verification typically takes 1-2 business days'}
           </Text>
-
-          {state.isSaving && (
-            <Text style={[styles.savingIndicator, { color: theme.colors.textMuted }]}>
-              Saving...
-            </Text>
-          )}
         </View>
 
         {/* Upload Modal */}
@@ -1811,27 +1733,33 @@ export default function KycVerificationScreen() {
           title="Upload Document"
           theme={theme}
         >
-          <Pressable
-            style={[styles.modalOption, { borderBottomColor: theme.colors.border }]}
+          <TouchableOpacity
+            style={[styles.modalOption, styles.modalOptionDivider]}
+            activeOpacity={0.6}
             onPress={() => handlePickAndUpload('camera')}
             disabled={uploadBusy}
           >
-            <Ionicons name="camera-outline" size={24} color={theme.colors.text} />
-            <Text style={[styles.modalOptionText, { color: theme.colors.text }]}>
+            <View style={styles.modalOptionIcon}>
+              <Ionicons name="camera-outline" size={19} color={palette.text} />
+            </View>
+            <Text style={styles.modalOptionText}>
               {uploadBusy ? 'Uploading…' : 'Take Photo'}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
 
-          <Pressable
-            style={[styles.modalOption, { borderBottomColor: theme.colors.border }]}
+          <TouchableOpacity
+            style={[styles.modalOption, styles.modalOptionDivider]}
+            activeOpacity={0.6}
             onPress={() => handlePickAndUpload('gallery')}
             disabled={uploadBusy}
           >
-            <Ionicons name="images-outline" size={24} color={theme.colors.text} />
-            <Text style={[styles.modalOptionText, { color: theme.colors.text }]}>
+            <View style={styles.modalOptionIcon}>
+              <Ionicons name="images-outline" size={19} color={palette.text} />
+            </View>
+            <Text style={styles.modalOptionText}>
               {uploadBusy ? 'Uploading…' : 'Choose from Gallery'}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
 
           {state.uploadModalTarget && (
             (() => {
@@ -1845,26 +1773,29 @@ export default function KycVerificationScreen() {
 
               if (currentFile) {
                 return (
-                  <Pressable
-                    style={[styles.modalOption, { borderBottomColor: theme.colors.border }]}
+                  <TouchableOpacity
+                    style={[styles.modalOption, styles.modalOptionDivider]}
+                    activeOpacity={0.6}
                     onPress={() => handleUpload(null)}
                   >
-                    <Ionicons name="trash-outline" size={24} color={theme.colors.danger} />
-                    <Text style={[styles.modalOptionText, { color: theme.colors.danger }]}>Remove</Text>
-                  </Pressable>
+                    <View style={[styles.modalOptionIcon, styles.modalOptionIconDanger]}>
+                      <Ionicons name="trash-outline" size={19} color={palette.danger} />
+                    </View>
+                    <Text style={[styles.modalOptionText, styles.modalOptionTextDanger]}>Remove</Text>
+                  </TouchableOpacity>
                 );
               }
               return null;
             })()
           )}
 
-          <Pressable
-            style={styles.modalOption}
+          <PillButton
+            label="Cancel"
+            variant="grey"
+            size="md"
             onPress={() => dispatch({ type: 'SHOW_UPLOAD_MODAL', payload: null })}
-          >
-            <Ionicons name="close-outline" size={24} color={theme.colors.textSecondary} />
-            <Text style={[styles.modalOptionText, { color: theme.colors.textSecondary }]}>Cancel</Text>
-          </Pressable>
+            style={styles.modalCancel}
+          />
         </BottomSheetModal>
 
         {/* Date Picker Modal — shared component, no native module */}
@@ -1886,32 +1817,29 @@ export default function KycVerificationScreen() {
           theme={theme}
         >
           <ScrollView style={styles.countryList}>
-            {COUNTRIES.map((country) => (
-              <Pressable
-                key={country.value}
-                style={[
-                  styles.countryOption,
-                  { borderBottomColor: theme.colors.border },
-                  state.address.country === country.value && { backgroundColor: theme.colors.primaryLight },
-                ]}
-                onPress={() => {
-                  dispatch({ type: 'UPDATE_ADDRESS', payload: { country: country.value } });
-                  dispatch({ type: 'SHOW_COUNTRY_PICKER', payload: false });
-                }}
-              >
-                <Text
-                  style={[
-                    styles.countryOptionText,
-                    { color: state.address.country === country.value ? theme.colors.primary : theme.colors.text },
-                  ]}
+            {COUNTRIES.map((country) => {
+              const selected = state.address.country === country.value;
+              return (
+                <TouchableOpacity
+                  key={country.value}
+                  style={[styles.countryOption, selected && styles.countryOptionSelected]}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    dispatch({ type: 'UPDATE_ADDRESS', payload: { country: country.value } });
+                    dispatch({ type: 'SHOW_COUNTRY_PICKER', payload: false });
+                  }}
                 >
-                  {country.label}
-                </Text>
-                {state.address.country === country.value && (
-                  <Ionicons name="checkmark" size={20} color={theme.colors.primary} />
-                )}
-              </Pressable>
-            ))}
+                  <Text style={[styles.countryOptionText, selected && styles.countryOptionTextSelected]}>
+                    {country.label}
+                  </Text>
+                  {selected && (
+                    <View style={styles.countryCheck}>
+                      <Ionicons name="checkmark" size={14} color={palette.textInverse} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </BottomSheetModal>
 
@@ -1919,29 +1847,33 @@ export default function KycVerificationScreen() {
         {state.showResetConfirm ? (
 
           <View style={styles.confirmModalOverlay}>
-            <View style={[styles.confirmModal, { backgroundColor: theme.colors.surface }]}>
-              <Ionicons name="warning" size={48} color={theme.colors.danger} />
-              <Text style={[styles.confirmModalTitle, { color: theme.colors.text }]}>Reset KYC Data?</Text>
-              <Text style={[styles.confirmModalMessage, { color: theme.colors.textSecondary }]}>
+            <View style={styles.confirmModal}>
+              <View style={styles.confirmModalIcon}>
+                <Ionicons name="warning-outline" size={28} color={palette.danger} />
+              </View>
+              <Text style={styles.confirmModalTitle}>Reset KYC Data?</Text>
+              <Text style={styles.confirmModalMessage}>
                 This will clear all your entered information and uploaded documents. This action cannot be undone.
               </Text>
               <View style={styles.confirmModalButtons}>
-                <Pressable
-                  style={[styles.confirmModalButton, { backgroundColor: theme.colors.border }]}
+                <PillButton
+                  label="Cancel"
+                  variant="grey"
+                  size="md"
                   onPress={() => dispatch({ type: 'SHOW_RESET_CONFIRM', payload: false })}
-                >
-                  <Text style={[styles.confirmModalButtonText, { color: theme.colors.text }]}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.confirmModalButton, { backgroundColor: theme.colors.danger }]}
+                  style={styles.confirmModalButton}
+                />
+                <PillButton
+                  label="Reset"
+                  variant="ink"
+                  size="md"
                   onPress={handleReset}
-                >
-                  <Text style={[styles.confirmModalButtonText, { color: '#FFFFFF' }]}>Reset</Text>
-                </Pressable>
+                  style={[styles.confirmModalButton, styles.confirmModalButtonDanger]}
+                />
               </View>
             </View>
           </View>
-        
+
         ) : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1953,398 +1885,298 @@ export default function KycVerificationScreen() {
 // ============================================================================
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  flex: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-  },
+  container: { flex: 1, backgroundColor: palette.bg },
+  flex: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { ...fonts.medium, fontSize: 16, color: palette.textMuted },
 
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    height: 56,
+    paddingHorizontal: 20,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: palette.surface,
     justifyContent: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   headerTitle: {
+    ...fonts.semibold,
     flex: 1,
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginRight: 40,
-  },
-
-  // Status Pill
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusPillText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 19,
+    color: palette.text,
+    marginHorizontal: 12,
   },
 
   // Scroll View
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 180,
-  },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 230 },
 
   // Trust Message
   trustMessage: {
+    ...fonts.medium,
     fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
+    lineHeight: 20,
+    color: palette.textMuted,
+    marginHorizontal: 6,
+    marginBottom: 14,
   },
+
+  // Status hero
+  hero: {
+    borderRadius: radii.xl,
+    padding: 20,
+    paddingRight: 110,
+    minHeight: 150,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  heroTitle: {
+    ...fonts.semibold,
+    fontSize: 22,
+    letterSpacing: -0.4,
+    lineHeight: 27,
+    color: palette.text,
+    marginTop: 12,
+  },
+  heroMessage: { ...fonts.medium, fontSize: 13, lineHeight: 18, color: palette.inkSoft, marginTop: 6 },
+  heroArt: { position: 'absolute', right: -30, bottom: -26 },
 
   // Progress Section
   progressSection: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 20,
+    marginBottom: 12,
   },
+  progressTitle: { ...fonts.medium, fontSize: 13, color: palette.textMuted },
   progressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-end',
+    marginTop: 2,
   },
-  progressTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  progressPercent: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  progressBarContainer: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
+  progressPercent: { ...fonts.semibold, fontSize: 38, letterSpacing: -1, color: palette.text },
+  progressCount: { ...fonts.semibold, fontSize: 13, color: palette.textMuted, marginBottom: 8 },
+  progressTrack: { marginTop: 12 },
   jumpLink: {
-    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 16,
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    gap: 6,
   },
-  jumpLinkText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
+  jumpLinkText: { ...fonts.semibold, fontSize: 13, color: palette.text },
 
   // Accordion
   accordionContainer: {
-    borderRadius: 16,
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
     marginBottom: 12,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    borderWidth: 1.5,
+    borderColor: palette.surface,
   },
+  accordionError: { borderColor: palette.danger },
   accordionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
   },
-  accordionHeaderLeft: {
-    flexDirection: 'row',
+  accordionHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  accordionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    flex: 1,
+    justifyContent: 'center',
   },
-  accordionHeaderText: {
-    marginLeft: 12,
-    flex: 1,
+  accordionHeaderText: { marginLeft: 12, flex: 1 },
+  accordionTitle: { ...fonts.semibold, fontSize: 16.5, letterSpacing: -0.2, color: palette.text },
+  accordionDescription: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginTop: 2 },
+  chevron: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
   },
-  accordionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  accordionDescription: {
-    fontSize: 13,
-    marginTop: 2,
-  },
+  chevronOpen: { backgroundColor: palette.ink },
   accordionContent: {
-    padding: 16,
-    paddingTop: 8,
-    borderTopWidth: 1,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
   },
 
   // Same-as-name checkbox row
   sameAsNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: -8,
+    marginTop: -6,
     marginBottom: 16,
-    gap: 8,
+    gap: 10,
   },
   sameAsNameCheckbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 1.5,
+    borderColor: palette.textSubtle,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sameAsNameCheckboxChecked: {
-    backgroundColor: '#0D7377',
-    borderColor: '#0D7377',
-  },
-  sameAsNameText: {
-    fontSize: 13,
-    flex: 1,
-  },
+  sameAsNameCheckboxChecked: { backgroundColor: palette.ink, borderColor: palette.ink },
+  sameAsNameText: { ...fonts.medium, fontSize: 13, color: palette.textMuted, flex: 1 },
+  sameAsNameValue: { ...fonts.semibold, color: palette.text },
 
   // Form Field
-  formFieldContainer: {
-    marginBottom: 16,
-  },
-  formFieldLabelRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  formFieldLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  formFieldRequired: {
-    fontSize: 14,
-  },
+  formFieldContainer: { marginBottom: 16 },
+  formFieldLabelRow: { flexDirection: 'row', marginBottom: 8, marginLeft: 4 },
+  formFieldLabel: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted },
+  formFieldRequired: { ...fonts.medium, fontSize: 12.5, color: palette.danger },
   formFieldInput: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    minHeight: 48,
+    borderColor: palette.fill,
+    backgroundColor: palette.fill,
+    borderRadius: radii.pill,
+    paddingHorizontal: 20,
+    height: 54,
   },
+  formFieldInputFocused: { borderColor: palette.ink, backgroundColor: palette.surface },
+  formFieldInputError: { borderColor: palette.danger },
+  formFieldInputDisabled: { opacity: 0.6 },
   formFieldTextInput: {
+    ...fonts.medium,
     flex: 1,
-    fontSize: 15,
-    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
+    fontSize: 15.5,
+    color: palette.text,
+    paddingVertical: 0,
   },
-  formFieldHelper: {
-    fontSize: 12,
-    marginTop: 4,
-    paddingHorizontal: 2,
-  },
+  formFieldHelper: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 6, marginLeft: 6 },
+  formFieldHelperError: { color: palette.danger },
 
   // Field Group
-  fieldGroup: {
-    marginBottom: 16,
-  },
-  fieldGroupLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
+  fieldGroup: { marginBottom: 16 },
+  fieldGroupLabel: { ...fonts.semibold, fontSize: 14, color: palette.text, marginBottom: 8, marginLeft: 4 },
 
   // Segmented Control
   segmentedControl: {
     flexDirection: 'row',
-    borderRadius: 10,
-    padding: 4,
+    backgroundColor: palette.fill,
+    borderRadius: radii.pill,
+    padding: 5,
   },
   segment: {
     flex: 1,
-    paddingVertical: 10,
+    height: 40,
     alignItems: 'center',
-    borderRadius: 8,
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    paddingHorizontal: 4,
   },
-  segmentSelected: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
-  },
-  segmentText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  segmentTextSelected: {
-    fontWeight: '600',
-  },
+  segmentSelected: { backgroundColor: palette.surface, ...shadow.press },
+  segmentText: { ...fonts.semibold, fontSize: 13, color: palette.textMuted },
+  segmentTextSelected: { color: palette.text },
 
   // Upload Section
-  uploadSection: {
-    marginTop: 8,
-  },
-  uploadGrid: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
+  uploadSection: { marginTop: 4 },
+  uploadGrid: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   uploadCard: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    minHeight: 72,
+    borderRadius: radii.lg,
+    backgroundColor: palette.fill,
+    minHeight: 70,
   },
+  uploadCardFilled: { backgroundColor: palette.successSoft },
+  uploadCardDisabled: { opacity: 0.6 },
   uploadPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: palette.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
   uploadPreview: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: palette.ink,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  uploadCardContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  uploadCardLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  uploadCardAction: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  uploadHint: {
-    fontSize: 12,
-    marginTop: 4,
-  },
+  uploadCardContent: { flex: 1, marginLeft: 12 },
+  uploadCardLabel: { ...fonts.semibold, fontSize: 13.5, color: palette.text },
+  uploadCardAction: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 2 },
+  uploadHint: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 8, marginLeft: 4 },
 
   // Tips
   tipsContainer: {
-    borderRadius: 12,
+    borderRadius: radii.lg,
+    backgroundColor: palette.peachWash,
     marginTop: 12,
+    marginBottom: 12,
     overflow: 'hidden',
   },
   tipsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    padding: 14,
   },
-  tipsHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  tipsTitle: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  tipsContent: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-  },
-  tipItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginTop: 6,
-  },
-  tipText: {
-    fontSize: 12,
-    flex: 1,
-  },
+  tipsHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tipsTitle: { ...fonts.semibold, fontSize: 13.5, color: palette.text },
+  tipsContent: { paddingHorizontal: 14, paddingBottom: 14 },
+  tipItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 6 },
+  tipText: { ...fonts.medium, fontSize: 12.5, color: palette.inkSoft, flex: 1 },
 
   // Row Fields
-  rowFields: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  halfField: {
-    flex: 1,
-  },
+  rowFields: { flexDirection: 'row', gap: 10 },
+  halfField: { flex: 1 },
 
   // Banner
   banner: {
     flexDirection: 'row',
     padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
+    borderRadius: radii.lg,
+    marginBottom: 14,
     gap: 12,
   },
-  bannerContent: {
-    flex: 1,
+  bannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: palette.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  bannerTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  bannerMessage: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  bannerItems: {
-    marginTop: 8,
-  },
-  bannerItem: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 4,
-  },
-  bannerBullet: {
-    fontSize: 13,
-  },
-  bannerItemText: {
-    fontSize: 13,
-    flex: 1,
-  },
+  bannerContent: { flex: 1 },
+  bannerTitle: { ...fonts.semibold, fontSize: 14.5 },
+  bannerMessage: { ...fonts.medium, fontSize: 13, lineHeight: 18, color: palette.inkSoft, marginTop: 3 },
+  bannerItems: { marginTop: 8 },
+  bannerItem: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  bannerBullet: { width: 5, height: 5, borderRadius: 3 },
+  bannerItemText: { ...fonts.medium, fontSize: 13, color: palette.inkSoft, flex: 1 },
 
   // Footer
   stickyFooter: {
@@ -2352,59 +2184,21 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
-    borderTopWidth: 1,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    ...shadow.lifted,
   },
-  primaryButton: {
-    height: 52,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  secondaryButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
-  },
-  secondaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  secondaryButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
+  secondaryButtons: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  secondaryButton: { flex: 1 },
   reviewNote: {
+    ...fonts.medium,
     fontSize: 12,
+    color: palette.textMuted,
     textAlign: 'center',
-    marginTop: 12,
-  },
-  savingIndicator: {
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 4,
+    marginTop: 10,
   },
 
   // Modal
@@ -2418,96 +2212,68 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   bottomSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
     paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
   },
   bottomSheetHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: '#D1D5DB',
-    borderRadius: 2,
+    width: 44,
+    height: 5,
+    backgroundColor: palette.line,
+    borderRadius: 3,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   bottomSheetTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 20,
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
+    marginBottom: 8,
   },
-  modalOption: {
-    flexDirection: 'row',
+  modalOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+  modalOptionDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line },
+  modalOptionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: palette.fill,
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  modalOptionText: {
-    fontSize: 16,
-  },
-
-  // Date Picker
-  datePickerModal: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  datePickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  datePickerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  datePickerAction: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  datePickerContent: {
-    flexDirection: 'row',
-    height: 200,
-    paddingHorizontal: 20,
-  },
-  datePickerColumn: {
-    flex: 1,
-  },
-  datePickerItem: {
-    height: 40,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-    marginVertical: 2,
+    marginRight: 14,
   },
-  datePickerItemText: {
-    fontSize: 16,
-  },
+  modalOptionIconDanger: { backgroundColor: palette.dangerSoft },
+  modalOptionText: { ...fonts.semibold, fontSize: 15.5, color: palette.text },
+  modalOptionTextDanger: { color: palette.danger },
+  modalCancel: { marginTop: 14 },
 
   // Country Picker
-  countryList: {
-    maxHeight: 300,
-  },
+  countryList: { maxHeight: 300 },
   countryOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
+    height: 52,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    marginBottom: 4,
   },
-  countryOptionText: {
-    fontSize: 16,
+  countryOptionSelected: { backgroundColor: palette.fill },
+  countryOptionText: { ...fonts.medium, fontSize: 15.5, color: palette.text },
+  countryOptionTextSelected: { ...fonts.semibold },
+  countryCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: palette.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Confirm Modal
@@ -2521,44 +2287,43 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   confirmModal: {
     width: '100%',
-    maxWidth: 320,
-    borderRadius: 20,
+    maxWidth: 340,
+    borderRadius: radii.xl,
+    backgroundColor: palette.surface,
     padding: 24,
     alignItems: 'center',
   },
+  confirmModalIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: palette.dangerSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   confirmModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
+    marginTop: 14,
+    marginBottom: 6,
   },
   confirmModalMessage: {
+    ...fonts.medium,
     fontSize: 14,
+    color: palette.textMuted,
     textAlign: 'center',
     lineHeight: 20,
   },
-  confirmModalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-    width: '100%',
-  },
-  confirmModalButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmModalButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  confirmModalButtons: { flexDirection: 'row', gap: 10, marginTop: 22, width: '100%' },
+  confirmModalButton: { flex: 1 },
+  confirmModalButtonDanger: { backgroundColor: palette.danger },
 });

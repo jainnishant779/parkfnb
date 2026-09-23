@@ -4,12 +4,12 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   ScrollView,
   Pressable,
   TextInput,
   Switch,
   Platform,
+  TouchableOpacity,
   KeyboardAvoidingView,
   LayoutAnimation,
   UIManager,
@@ -18,8 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import DateTimePickerModal from '../../../components/inputs/DateTimePickerModal';
 import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize, fontWeight } from '../../../theme/typography';
+import { palette, radii, fonts } from '../../../theme/kit';
+import { IconCircle, PillButton, Chip, Segmented } from '../../../components/ui';
 import type {
   Promo,
   PromoFormData,
@@ -63,14 +63,10 @@ interface FormSectionProps {
 }
 
 const FormSection = memo(function FormSection({ title, children }: FormSectionProps) {
-  const theme = useMemo(() => getTheme(false), []);
-
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>
-        {title}
-      </Text>
-      <View style={[styles.sectionContent, { backgroundColor: theme.surface }]}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionContent}>
         {children}
       </View>
     </View>
@@ -92,17 +88,16 @@ const FormField = memo(function FormField({
   children,
   isLast = false,
 }: FormFieldProps) {
-  const theme = useMemo(() => getTheme(false), []);
 
   return (
     <View style={[styles.field, !isLast && styles.fieldBorder]}>
-      <Text style={[styles.fieldLabel, { color: theme.text }]}>{label}</Text>
+      {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
       {children}
       {hint && !error && (
-        <Text style={[styles.fieldHint, { color: theme.textMuted }]}>{hint}</Text>
+        <Text style={styles.fieldHint}>{hint}</Text>
       )}
       {error && (
-        <Text style={[styles.fieldError, { color: theme.danger }]}>{error}</Text>
+        <Text style={styles.fieldError}>{error}</Text>
       )}
     </View>
   );
@@ -232,25 +227,13 @@ function PromoFormModal({
     <>
 
       <KeyboardAvoidingView
-        style={[styles.container, { backgroundColor: theme.background }]}
+        style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {/* Header */}
-        <View
-          style={[
-            styles.header,
-            { backgroundColor: theme.surface, paddingTop: insets.top + spacing[2] },
-          ]}
-        >
-          <Pressable
-            onPress={handleClose}
-            style={styles.headerButton}
-            accessibilityLabel="Close"
-            accessibilityRole="button"
-          >
-            <Ionicons name="close" size={24} color={theme.text} />
-          </Pressable>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <IconCircle icon="x" size={44} onPress={handleClose} />
+          <Text style={styles.headerTitle}>
             {isEditing ? 'Edit Promotion' : 'New Promotion'}
           </Text>
           <View style={styles.headerButton} />
@@ -271,7 +254,7 @@ function PromoFormModal({
               hint="Give your promotion a memorable name"
             >
               <TextInput
-                style={[styles.input, { color: theme.text, borderColor: errors.name ? theme.danger : theme.border }]}
+                style={[styles.input, { color: theme.text, borderColor: errors.name ? theme.danger : 'transparent' }]}
                 value={formData.name}
                 onChangeText={(text) => updateField('name', text)}
                 placeholder="e.g., Weekend Saver"
@@ -291,7 +274,7 @@ function PromoFormModal({
                   style={[
                     styles.input,
                     styles.codeInput,
-                    { color: theme.text, borderColor: errors.code ? theme.danger : theme.border },
+                    { color: theme.text, borderColor: errors.code ? theme.danger : 'transparent' },
                   ]}
                   value={formData.code}
                   onChangeText={(text) => updateField('code', text.toUpperCase().replace(/\s/g, ''))}
@@ -301,29 +284,29 @@ function PromoFormModal({
                   autoCapitalize="characters"
                   testID={testID ? `${testID}-code` : undefined}
                 />
-                <Pressable
+                <TouchableOpacity
                   onPress={handleGenerateCode}
-                  style={[styles.generateButton, { backgroundColor: theme.primaryLight }]}
+                  activeOpacity={0.8}
+                  style={styles.generateButton}
                   accessibilityLabel="Auto-generate code"
                 >
-                  <Ionicons name="sparkles" size={16} color={theme.primary} />
-                  <Text style={[styles.generateButtonText, { color: theme.primary }]}>
-                    Generate
-                  </Text>
-                </Pressable>
+                  <Ionicons name="sparkles-outline" size={16} color={palette.textInverse} />
+                  <Text style={styles.generateButtonText}>Generate</Text>
+                </TouchableOpacity>
               </View>
             </FormField>
 
             <FormField label="Enabled" isLast>
               <View style={styles.switchRow}>
-                <Text style={[styles.switchLabel, { color: theme.textSecondary }]}>
+                <Text style={styles.switchLabel}>
                   Make promotion active immediately
                 </Text>
                 <Switch
                   value={formData.enabled}
                   onValueChange={(val) => updateField('enabled', val)}
-                  trackColor={{ false: theme.borderLight, true: theme.primaryLight }}
-                  thumbColor={formData.enabled ? theme.primary : theme.textMuted}
+                  trackColor={{ false: palette.line, true: palette.ink }}
+                  thumbColor={palette.surface}
+                  ios_backgroundColor={palette.line}
                 />
               </View>
             </FormField>
@@ -332,27 +315,14 @@ function PromoFormModal({
           {/* Section B: Discount */}
           <FormSection title="Discount">
             <FormField label="Discount Type">
-              <View style={styles.segmentedControl}>
-                {(['PERCENT', 'FLAT'] as PromoType[]).map((type) => (
-                  <Pressable
-                    key={type}
-                    onPress={() => updateField('type', type)}
-                    style={[
-                      styles.segment,
-                      formData.type === type && { backgroundColor: theme.primary },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.segmentText,
-                        { color: formData.type === type ? '#FFFFFF' : theme.text },
-                      ]}
-                    >
-                      {type === 'PERCENT' ? 'Percentage' : 'Flat Amount'}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              <Segmented
+                options={[
+                  { id: 'PERCENT', label: 'Percentage' },
+                  { id: 'FLAT', label: 'Flat Amount' },
+                ]}
+                value={formData.type}
+                onChange={(type: PromoType) => updateField('type', type)}
+              />
             </FormField>
 
             <FormField
@@ -361,13 +331,13 @@ function PromoFormModal({
             >
               <View style={styles.valueInputRow}>
                 {formData.type === 'FLAT' && (
-                  <Text style={[styles.valuePrefix, { color: theme.text }]}>₹</Text>
+                  <Text style={styles.valuePrefix}>₹</Text>
                 )}
                 <TextInput
                   style={[
                     styles.input,
                     styles.valueInput,
-                    { color: theme.text, borderColor: errors.value ? theme.danger : theme.border },
+                    { color: theme.text, borderColor: errors.value ? theme.danger : 'transparent' },
                   ]}
                   value={formData.value}
                   onChangeText={(text) => updateField('value', text.replace(/[^0-9.]/g, ''))}
@@ -377,7 +347,7 @@ function PromoFormModal({
                   testID={testID ? `${testID}-value` : undefined}
                 />
                 {formData.type === 'PERCENT' && (
-                  <Text style={[styles.valueSuffix, { color: theme.text }]}>%</Text>
+                  <Text style={styles.valueSuffix}>%</Text>
                 )}
               </View>
             </FormField>
@@ -390,12 +360,12 @@ function PromoFormModal({
                 isLast
               >
                 <View style={styles.valueInputRow}>
-                  <Text style={[styles.valuePrefix, { color: theme.text }]}>₹</Text>
+                  <Text style={styles.valuePrefix}>₹</Text>
                   <TextInput
                     style={[
                       styles.input,
                       styles.valueInput,
-                      { color: theme.text, borderColor: errors.maxDiscountAmount ? theme.danger : theme.border },
+                      { color: theme.text, borderColor: errors.maxDiscountAmount ? theme.danger : 'transparent' },
                     ]}
                     value={formData.maxDiscountAmount}
                     onChangeText={(text) => updateField('maxDiscountAmount', text.replace(/[^0-9]/g, ''))}
@@ -415,12 +385,12 @@ function PromoFormModal({
               error={errors.minBookingAmount}
             >
               <View style={styles.valueInputRow}>
-                <Text style={[styles.valuePrefix, { color: theme.text }]}>₹</Text>
+                <Text style={styles.valuePrefix}>₹</Text>
                 <TextInput
                   style={[
                     styles.input,
                     styles.valueInput,
-                    { color: theme.text, borderColor: errors.minBookingAmount ? theme.danger : theme.border },
+                    { color: theme.text, borderColor: errors.minBookingAmount ? theme.danger : 'transparent' },
                   ]}
                   value={formData.minBookingAmount}
                   onChangeText={(text) => updateField('minBookingAmount', text.replace(/[^0-9]/g, ''))}
@@ -434,14 +404,14 @@ function PromoFormModal({
             <FormField label="Usage Limits (Optional)" isLast>
               <View style={styles.limitsRow}>
                 <View style={styles.limitField}>
-                  <Text style={[styles.limitLabel, { color: theme.textSecondary }]}>
+                  <Text style={styles.limitLabel}>
                     Total uses
                   </Text>
                   <TextInput
                     style={[
                       styles.input,
                       styles.limitInput,
-                      { color: theme.text, borderColor: errors.totalLimit ? theme.danger : theme.border },
+                      { color: theme.text, borderColor: errors.totalLimit ? theme.danger : 'transparent' },
                     ]}
                     value={formData.totalLimit}
                     onChangeText={(text) => updateField('totalLimit', text.replace(/[^0-9]/g, ''))}
@@ -450,18 +420,18 @@ function PromoFormModal({
                     keyboardType="number-pad"
                   />
                   {errors.totalLimit && (
-                    <Text style={[styles.fieldError, { color: theme.danger }]}>{errors.totalLimit}</Text>
+                    <Text style={styles.fieldError}>{errors.totalLimit}</Text>
                   )}
                 </View>
                 <View style={styles.limitField}>
-                  <Text style={[styles.limitLabel, { color: theme.textSecondary }]}>
+                  <Text style={styles.limitLabel}>
                     Per user
                   </Text>
                   <TextInput
                     style={[
                       styles.input,
                       styles.limitInput,
-                      { color: theme.text, borderColor: errors.perUserLimit ? theme.danger : theme.border },
+                      { color: theme.text, borderColor: errors.perUserLimit ? theme.danger : 'transparent' },
                     ]}
                     value={formData.perUserLimit}
                     onChangeText={(text) => updateField('perUserLimit', text.replace(/[^0-9]/g, ''))}
@@ -470,7 +440,7 @@ function PromoFormModal({
                     keyboardType="number-pad"
                   />
                   {errors.perUserLimit && (
-                    <Text style={[styles.fieldError, { color: theme.danger }]}>{errors.perUserLimit}</Text>
+                    <Text style={styles.fieldError}>{errors.perUserLimit}</Text>
                   )}
                 </View>
               </View>
@@ -487,25 +457,22 @@ function PromoFormModal({
                 { key: 'weekend', label: 'Weekend' },
                 { key: 'next7days', label: 'Next 7 Days' },
               ].map((preset) => (
-                <Pressable
+                <Chip
                   key={preset.key}
+                  label={preset.label}
                   onPress={() => handleQuickDate(preset.key as any)}
-                  style={[styles.quickDateChip, { backgroundColor: theme.borderLight }]}
-                >
-                  <Text style={[styles.quickDateText, { color: theme.text }]}>
-                    {preset.label}
-                  </Text>
-                </Pressable>
+                  style={styles.quickDateChip}
+                />
               ))}
             </View>
 
             <FormField label="Start Date" error={errors.startAt}>
               <Pressable
                 onPress={() => setShowStartPicker(true)}
-                style={[styles.dateButton, { borderColor: errors.startAt ? theme.danger : theme.border }]}
+                style={[styles.dateButton, { borderColor: errors.startAt ? theme.danger : 'transparent' }]}
               >
-                <Ionicons name="calendar-outline" size={18} color={theme.textMuted} />
-                <Text style={[styles.dateText, { color: theme.text }]}>
+                <Ionicons name="calendar-outline" size={18} color={palette.textMuted} />
+                <Text style={styles.dateText}>
                   {formatPromoDate(formData.startAt.toISOString(), true)}
                 </Text>
               </Pressable>
@@ -514,10 +481,10 @@ function PromoFormModal({
             <FormField label="End Date" error={errors.endAt} isLast>
               <Pressable
                 onPress={() => setShowEndPicker(true)}
-                style={[styles.dateButton, { borderColor: errors.endAt ? theme.danger : theme.border }]}
+                style={[styles.dateButton, { borderColor: errors.endAt ? theme.danger : 'transparent' }]}
               >
-                <Ionicons name="calendar-outline" size={18} color={theme.textMuted} />
-                <Text style={[styles.dateText, { color: theme.text }]}>
+                <Ionicons name="calendar-outline" size={18} color={palette.textMuted} />
+                <Text style={styles.dateText}>
                   {formatPromoDate(formData.endAt.toISOString(), true)}
                 </Text>
               </Pressable>
@@ -539,15 +506,14 @@ function PromoFormModal({
                   <View
                     style={[
                       styles.radio,
-                      { borderColor: theme.primary },
-                      formData.applyToAllListings && { backgroundColor: theme.primary },
+                                            formData.applyToAllListings && styles.radioOn,
                     ]}
                   >
                     {formData.applyToAllListings && (
                       <View style={styles.radioInner} />
                     )}
                   </View>
-                  <Text style={[styles.radioLabel, { color: theme.text }]}>
+                  <Text style={styles.radioLabel}>
                     All my listings
                   </Text>
                 </Pressable>
@@ -558,15 +524,14 @@ function PromoFormModal({
                   <View
                     style={[
                       styles.radio,
-                      { borderColor: theme.primary },
-                      !formData.applyToAllListings && { backgroundColor: theme.primary },
+                                            !formData.applyToAllListings && styles.radioOn,
                     ]}
                   >
                     {!formData.applyToAllListings && (
                       <View style={styles.radioInner} />
                     )}
                   </View>
-                  <Text style={[styles.radioLabel, { color: theme.text }]}>
+                  <Text style={styles.radioLabel}>
                     Select specific listings
                   </Text>
                 </Pressable>
@@ -575,15 +540,15 @@ function PromoFormModal({
               {!formData.applyToAllListings && (
                 <Pressable
                   onPress={() => setShowListingPicker(true)}
-                  style={[styles.selectListingsButton, { backgroundColor: theme.borderLight }]}
+                  style={styles.selectListingsButton}
                 >
-                  <Ionicons name="add" size={18} color={theme.primary} />
-                  <Text style={[styles.selectListingsText, { color: theme.primary }]}>
+                  <Ionicons name="add" size={18} color={palette.text} />
+                  <Text style={styles.selectListingsText}>
                     {formData.applicableListingIds.length > 0
                       ? `${formData.applicableListingIds.length} listing(s) selected`
                       : 'Select listings'}
                   </Text>
-                  <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+                  <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
                 </Pressable>
               )}
             </FormField>
@@ -596,7 +561,7 @@ function PromoFormModal({
                 style={[
                   styles.input,
                   styles.notesInput,
-                  { color: theme.text, borderColor: theme.border },
+                  { color: theme.text, borderColor: 'transparent' },
                 ]}
                 value={formData.notes}
                 onChangeText={(text) => updateField('notes', text)}
@@ -611,53 +576,38 @@ function PromoFormModal({
 
           {/* Last updated (for edit mode) */}
           {isEditing && promo && (
-            <Text style={[styles.lastUpdated, { color: theme.textMuted }]}>
+            <Text style={styles.lastUpdated}>
               Last updated: {formatPromoDate(promo.updatedAt, true)}
             </Text>
           )}
 
-          <View style={{ height: spacing[20] }} />
+          <View style={styles.bottomSpacer} />
         </ScrollView>
 
         {/* Footer */}
-        <View
-          style={[
-            styles.footer,
-            { backgroundColor: theme.surface, paddingBottom: insets.bottom + spacing[4] },
-          ]}
-        >
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           {showSaveAsDraft && (
-            <Pressable
-              onPress={() => handleSave(true)}
-              style={[styles.secondaryButton, { borderColor: theme.border }]}
-              disabled={isSaving}
-              accessibilityLabel="Save as draft"
-            >
-              <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
-                Save as Draft
-              </Text>
-            </Pressable>
+            <View style={styles.footerSecondary} accessibilityLabel="Save as draft">
+              <PillButton
+                label="Save as Draft"
+                variant="grey"
+                onPress={() => handleSave(true)}
+                disabled={isSaving}
+              />
+            </View>
           )}
-          <Pressable
-            onPress={() => handleSave(false)}
-            style={[
-              styles.primaryButton,
-              { backgroundColor: canSave ? theme.primary : theme.borderLight },
-              showSaveAsDraft && { flex: 1 },
-            ]}
-            disabled={!canSave}
+          <View
+            style={styles.footerPrimary}
             accessibilityLabel="Save promotion"
             testID={testID ? `${testID}-save` : 'save_promo_button'}
           >
-            <Text
-              style={[
-                styles.primaryButtonText,
-                { color: canSave ? '#FFFFFF' : theme.textMuted },
-              ]}
-            >
-              {isSaving ? 'Saving...' : 'Save Promotion'}
-            </Text>
-          </Pressable>
+            <PillButton
+              label={isSaving ? 'Saving...' : 'Save Promotion'}
+              variant="ink"
+              onPress={() => handleSave(false)}
+              disabled={!canSave}
+            />
+          </View>
         </View>
       </KeyboardAvoidingView>
 
@@ -712,110 +662,108 @@ function PromoFormModal({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    // Full-screen overlay (no <Modal> on this build).
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9000,
+    elevation: 20,
+    backgroundColor: palette.bg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing[4],
-    paddingBottom: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
   headerButton: {
     width: 44,
     height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: spacing[4],
+    padding: 16,
   },
   section: {
-    marginBottom: spacing[5],
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing[2],
-    marginLeft: spacing[1],
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.textMuted,
+    marginBottom: 10,
+    marginLeft: 6,
   },
   sectionContent: {
-    borderRadius: borderRadius.lg,
+    borderRadius: radii.xl,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
+    backgroundColor: palette.surface,
   },
   field: {
-    padding: spacing[4],
+    paddingHorizontal: 18,
+    paddingVertical: 16,
   },
   fieldBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
+    borderBottomColor: palette.line,
   },
   fieldLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    marginBottom: spacing[2],
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
+    marginBottom: 8,
   },
   fieldHint: {
-    fontSize: fontSize.xs,
-    marginTop: spacing[1],
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
+    marginTop: 6,
   },
   fieldError: {
-    fontSize: fontSize.xs,
-    marginTop: spacing[1],
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.danger,
+    marginTop: 6,
   },
   input: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2] + 2,
-    fontSize: fontSize.base,
+    ...fonts.medium,
+    minHeight: 52,
+    borderWidth: 1.5,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    fontSize: 15,
   },
   codeInputRow: {
     flexDirection: 'row',
-    gap: spacing[2],
+    gap: 8,
   },
   codeInput: {
+    ...fonts.bold,
     flex: 1,
     textTransform: 'uppercase',
-    fontFamily: Platform.select({
-      ios: 'Menlo',
-      android: 'monospace',
-      default: 'monospace',
-    }),
     letterSpacing: 1,
   },
   generateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.md,
+    gap: 6,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: palette.ink,
   },
   generateButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.textInverse,
   },
   switchRow: {
     flexDirection: 'row',
@@ -823,25 +771,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   switchLabel: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.textMuted,
     flex: 1,
-    marginRight: spacing[3],
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-  },
-  segment: {
-    flex: 1,
-    paddingVertical: spacing[2] + 2,
-    alignItems: 'center',
-  },
-  segmentText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    marginRight: 12,
   },
   valueInputRow: {
     flexDirection: 'row',
@@ -851,143 +785,133 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   valuePrefix: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.medium as any,
-    marginRight: spacing[2],
+    ...fonts.semibold,
+    fontSize: 18,
+    color: palette.text,
+    marginRight: 10,
   },
   valueSuffix: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.medium as any,
-    marginLeft: spacing[2],
+    ...fonts.semibold,
+    fontSize: 18,
+    color: palette.text,
+    marginLeft: 10,
   },
   limitsRow: {
     flexDirection: 'row',
-    gap: spacing[4],
+    gap: 12,
   },
   limitField: {
     flex: 1,
   },
   limitLabel: {
-    fontSize: fontSize.xs,
-    marginBottom: spacing[1],
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
+    marginBottom: 6,
   },
   limitInput: {},
   quickDates: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing[2],
-    padding: spacing[4],
-    paddingBottom: 0,
+    rowGap: 8,
+    paddingHorizontal: 18,
+    paddingTop: 16,
   },
   quickDateChip: {
-    paddingVertical: spacing[1] + 2,
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.full,
-  },
-  quickDateText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    height: 38,
+    paddingHorizontal: 14,
+    marginRight: 8,
+    backgroundColor: palette.fill,
   },
   dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2] + 2,
+    gap: 10,
+    minHeight: 52,
+    borderWidth: 1.5,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    paddingHorizontal: 18,
   },
   dateText: {
-    fontSize: fontSize.base,
+    ...fonts.medium,
+    fontSize: 15,
+    color: palette.text,
   },
   radioGroup: {
-    gap: spacing[3],
-    marginBottom: spacing[3],
+    gap: 14,
+    marginBottom: 14,
   },
   radioRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
+    gap: 12,
   },
   radio: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
+    borderColor: palette.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  radioOn: {
+    backgroundColor: palette.ink,
+  },
   radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FFFFFF',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: palette.surface,
   },
   radioLabel: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    fontSize: 15,
+    color: palette.text,
   },
   selectListingsButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.md,
+    gap: 8,
+    minHeight: 52,
+    paddingHorizontal: 18,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
   },
   selectListingsText: {
+    ...fonts.semibold,
     flex: 1,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    fontSize: 14,
+    color: palette.text,
   },
   notesInput: {
-    minHeight: 80,
-    paddingTop: spacing[2] + 2,
+    minHeight: 96,
+    borderRadius: radii.md,
+    paddingTop: 14,
   },
   lastUpdated: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
     textAlign: 'center',
-    marginTop: spacing[2],
+    marginTop: 8,
+  },
+  bottomSpacer: {
+    height: 80,
   },
   footer: {
     flexDirection: 'row',
-    gap: spacing[3],
-    padding: spacing[4],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.1)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: palette.bg,
   },
-  secondaryButton: {
-    paddingVertical: spacing[3] + 2,
-    paddingHorizontal: spacing[5],
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  footerSecondary: {
+    flex: 1,
   },
-  secondaryButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-  primaryButton: {
-    flex: 2,
-    paddingVertical: spacing[3] + 2,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+  footerPrimary: {
+    flex: 1,
   },
 });
 

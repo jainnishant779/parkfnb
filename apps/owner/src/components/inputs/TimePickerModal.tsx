@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { palette, radii, fonts } from '../../theme/kit';
 
 // ============================================================================
 // Pure-JS time picker modal — three column wheel (hour / minute / am-pm)
@@ -191,10 +192,11 @@ function TimePickerModalImpl({
         <Pressable style={styles.backdropPressable} onPress={onClose} />
 
         <View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={styles.grabber} />
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={22} color="#64748B" />
+              <Ionicons name="close" size={20} color={palette.text} />
             </Pressable>
           </View>
 
@@ -261,26 +263,34 @@ const styles = StyleSheet.create({
   },
   backdropTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   backdropPressable: { flex: 1 },
   container: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingTop: 16,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingTop: 10,
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 16 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.12, shadowRadius: 20 },
       android: { elevation: 24 },
     }),
   },
+  grabber: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    marginBottom: 12,
+  },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 20, paddingBottom: 8,
   },
-  title: { fontSize: 16, fontWeight: '600', color: '#1E293B' },
+  title: { ...fonts.semibold, fontSize: 20, letterSpacing: -0.3, color: palette.text },
   closeBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9',
+    width: 40, height: 40, borderRadius: 20, backgroundColor: palette.fill,
     justifyContent: 'center', alignItems: 'center',
   },
   wheelArea: {
@@ -289,48 +299,47 @@ const styles = StyleSheet.create({
     height: ROW_HEIGHT * VISIBLE_ROWS + 32,
   },
   column: {
-    width: 70,
+    width: 72,
     height: ROW_HEIGHT * VISIBLE_ROWS,
     overflow: 'hidden',
   },
   row: { height: ROW_HEIGHT, alignItems: 'center', justifyContent: 'center' },
-  rowText: { fontSize: 22, color: '#94A3B8', fontVariant: ['tabular-nums'] },
-  rowTextSelected: { color: '#1E293B', fontWeight: '600' },
+  rowText: { ...fonts.medium, fontSize: 22, color: palette.textSubtle, fontVariant: ['tabular-nums'] },
+  rowTextSelected: { ...fonts.bold, color: palette.text },
   selectionLineTop: {
     position: 'absolute', left: 0, right: 0,
-    top: ROW_HEIGHT * COLUMN_PADDING, height: 1, backgroundColor: '#E2E8F0',
+    top: ROW_HEIGHT * COLUMN_PADDING, height: 1, backgroundColor: palette.line,
   },
   selectionLineBottom: {
     position: 'absolute', left: 0, right: 0,
-    top: ROW_HEIGHT * (COLUMN_PADDING + 1), height: 1, backgroundColor: '#E2E8F0',
+    top: ROW_HEIGHT * (COLUMN_PADDING + 1), height: 1, backgroundColor: palette.line,
   },
   colon: {
-    fontSize: 22, fontWeight: '600', color: '#1E293B',
+    ...fonts.bold, fontSize: 22, color: palette.text,
     paddingHorizontal: 8, fontVariant: ['tabular-nums'],
   },
   ampmCol: { marginLeft: 12, justifyContent: 'center', gap: 6 },
   ampmBtn: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16, height: 38, borderRadius: radii.pill,
+    backgroundColor: palette.fill, justifyContent: 'center',
   },
-  ampmBtnActive: { backgroundColor: '#0D7377' },
-  ampmText: { fontSize: 13, fontWeight: '500', color: '#64748B' },
-  ampmTextActive: { color: '#FFFFFF', fontWeight: '600' },
+  ampmBtnActive: { backgroundColor: palette.ink },
+  ampmText: { ...fonts.semibold, fontSize: 13, color: palette.textMuted },
+  ampmTextActive: { color: palette.textInverse },
   actions: {
-    flexDirection: 'row', justifyContent: 'flex-end', gap: 8,
-    paddingHorizontal: 20, paddingTop: 4, paddingBottom: 4,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E2E8F0',
+    flexDirection: 'row', gap: 8,
+    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4,
   },
   cancelBtn: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8,
-    backgroundColor: '#F1F5F9', minHeight: 40, justifyContent: 'center',
+    flex: 1, height: 52, borderRadius: radii.pill,
+    backgroundColor: palette.fill, alignItems: 'center', justifyContent: 'center',
   },
-  cancelBtnText: { fontSize: 14, fontWeight: '500', color: '#64748B' },
+  cancelBtnText: { ...fonts.semibold, fontSize: 15, color: palette.text },
   confirmBtn: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8,
-    backgroundColor: '#0D7377', minHeight: 40, justifyContent: 'center',
+    flex: 1, height: 52, borderRadius: radii.pill,
+    backgroundColor: palette.ink, alignItems: 'center', justifyContent: 'center',
   },
-  confirmBtnText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
+  confirmBtnText: { ...fonts.semibold, fontSize: 15, color: palette.textInverse },
 });
 
 export default memo(TimePickerModalImpl);

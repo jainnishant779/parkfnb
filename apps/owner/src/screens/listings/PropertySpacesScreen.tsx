@@ -1,15 +1,17 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator,
-  RefreshControl, Modal, StatusBar,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
+  RefreshControl, StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { listingService } from '../../services/listingService';
 import { ApiRequestError } from '../../services/api';
 import type { ApiProperty, ApiSpace } from '../../types/api';
+import { palette, radii, fonts } from '../../theme/kit';
+import { ScreenHeader, StatusTag, IsoBlock, EmptyState, ListRow, PillButton } from '../../components/ui';
 
 export default function PropertySpacesScreen() {
   const navigation = useNavigation<any>();
@@ -22,6 +24,7 @@ export default function PropertySpacesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [menuSpace, setMenuSpace] = useState<ApiSpace | null>(null);
   const [errorText, setErrorText] = useState('');
+  const insets = useSafeAreaInsets();
 
   const loadData = useCallback(async () => {
     try {
@@ -95,50 +98,60 @@ export default function PropertySpacesScreen() {
     );
   };
 
-  const renderSpace = ({ item }: { item: ApiSpace }) => {
-    const statusColor = item.isAvailable ? '#059669' : '#D97706';
+  const renderSpace = ({ item, index }: { item: ApiSpace; index: number }) => {
     const statusLabel = item.isAvailable ? 'Active' : 'Paused';
+    const tone = index % 2 === 0 ? 'peach' : 'blue';
     return (
-      <Pressable
-        style={styles.card}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        style={[
+          styles.card,
+          { backgroundColor: tone === 'peach' ? palette.peachSoft : palette.blueSoft },
+        ]}
         onPress={() => navigation.navigate('ListingDetails', { spaceId: item.id })}
       >
-        <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.spaceNum}>Space {item.spaceNumber}</Text>
-            <Text style={styles.spaceType}>{item.spaceType}</Text>
+        <View style={styles.cardArt} pointerEvents="none">
+          <IsoBlock size={140} tone={tone} />
+        </View>
+        <View style={styles.cardTop}>
+          <View style={styles.tagRow}>
+            <StatusTag label={statusLabel} tone={item.isAvailable ? 'ink' : 'warning'} />
+            {item.hasEvCharging ? (
+              <StatusTag label="EV charging" tone="success" style={styles.tagGap} />
+            ) : null}
           </View>
-          <View style={[styles.pill, { backgroundColor: statusColor + '20' }]}>
-            <View style={[styles.dot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.pillText, { color: statusColor }]}>{statusLabel}</Text>
-          </View>
-          <Pressable onPress={() => setMenuSpace(item)} style={styles.menuBtn} hitSlop={8}>
-            <Ionicons name="ellipsis-vertical" size={18} color="#6B7280" />
-          </Pressable>
+          <TouchableOpacity
+            onPress={() => setMenuSpace(item)}
+            style={styles.menuBtn}
+            hitSlop={8}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="ellipsis-horizontal" size={17} color={palette.text} />
+          </TouchableOpacity>
         </View>
         <View style={styles.cardBody}>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Hourly</Text>
-            <Text style={styles.metricValue}>₹{item.pricePerHour}</Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Dimensions</Text>
-            <Text style={styles.metricValue}>
-              {item.lengthMeters}×{item.widthMeters}m
-            </Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Booking</Text>
-            <Text style={styles.metricValue}>{item.bookingMode}</Text>
+          <Text style={styles.spaceNum}>Space {item.spaceNumber}</Text>
+          <Text style={styles.spaceType}>{item.spaceType}</Text>
+          <View style={styles.metaRow}>
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>₹{item.pricePerHour}</Text>
+              <Text style={styles.metricLabel}>Hourly</Text>
+            </View>
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>
+                {item.lengthMeters}×{item.widthMeters}m
+              </Text>
+              <Text style={styles.metricLabel}>Dimensions</Text>
+            </View>
+            <View style={styles.metric}>
+              <Text style={[styles.metricValue, styles.capitalize]} numberOfLines={1}>
+                {item.bookingMode}
+              </Text>
+              <Text style={styles.metricLabel}>Booking</Text>
+            </View>
           </View>
         </View>
-        {item.hasEvCharging && (
-          <View style={styles.evBadge}>
-            <Ionicons name="flash" size={12} color="#059669" />
-            <Text style={styles.evText}>EV charging</Text>
-          </View>
-        )}
-      </Pressable>
+      </TouchableOpacity>
     );
   };
 
@@ -146,7 +159,7 @@ export default function PropertySpacesScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#0D7377" />
+          <ActivityIndicator size="large" color={palette.ink} />
         </View>
       </SafeAreaView>
     );
@@ -154,21 +167,22 @@ export default function PropertySpacesScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color="#1F2937" />
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.propertyName} numberOfLines={1}>{property?.propertyName || 'Property'}</Text>
-          <Text style={styles.propertyAddress} numberOfLines={1}>
-            {property?.address}, {property?.city}
-          </Text>
-        </View>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
+      <ScreenHeader title="Spaces" onBack={() => navigation.goBack()} />
+
+      <View style={styles.intro}>
+        <Text style={styles.propertyName} numberOfLines={1}>{property?.propertyName || 'Property'}</Text>
+        <Text style={styles.propertyAddress} numberOfLines={1}>
+          {property?.address}, {property?.city}
+        </Text>
+        <Text style={styles.count}>
+          {spaces.length} space{spaces.length === 1 ? '' : 's'}
+        </Text>
       </View>
 
       {errorText ? (
         <View style={styles.errorBanner}>
+          <Ionicons name="alert-circle" size={16} color={palette.danger} />
           <Text style={styles.errorText}>{errorText}</Text>
         </View>
       ) : null}
@@ -177,179 +191,178 @@ export default function PropertySpacesScreen() {
         data={spaces}
         keyExtractor={(s) => s.id}
         renderItem={renderSpace}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 110 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.ink} />
+        }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="car-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>No spaces yet</Text>
-            <Text style={styles.emptySub}>Add your first parking space to start receiving bookings.</Text>
-          </View>
+          <EmptyState
+            title="No spaces yet"
+            subtitle="Add your first parking space to start receiving bookings."
+          />
         }
       />
 
-      <Pressable
-        style={styles.fab}
-        onPress={() => navigation.navigate('SpaceWizard', { propertyId })}
-      >
-        <Ionicons name="add" size={28} color="#FFFFFF" />
-      </Pressable>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+        <PillButton
+          label="Add space"
+          icon="plus"
+          variant="ink"
+          onPress={() => navigation.navigate('SpaceWizard', { propertyId })}
+        />
+      </View>
 
-      {/* Menu modal */}
-      {!!menuSpace ? (
-
-        <Pressable style={styles.modalOverlay} onPress={() => setMenuSpace(null)}>
-          <View style={styles.menuSheet}>
+      {/* Menu sheet */}
+      {menuSpace ? (
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setMenuSpace(null)}
+          />
+          <View style={[styles.menuSheet, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.grabber} />
             <Text style={styles.menuTitle}>Space {menuSpace?.spaceNumber}</Text>
-            <Pressable
-              style={styles.menuItem}
+            <ListRow
+              icon="eye"
+              title="View details"
               onPress={() => {
                 setMenuSpace(null);
                 navigation.navigate('ListingDetails', { spaceId: menuSpace!.id });
               }}
-            >
-              <Ionicons name="eye-outline" size={20} color="#1F2937" />
-              <Text style={styles.menuItemText}>View details</Text>
-            </Pressable>
-            <Pressable
-              style={styles.menuItem}
+            />
+            <ListRow
+              icon="edit-2"
+              title="Edit"
               onPress={() => {
                 const space = menuSpace!;
                 setMenuSpace(null);
                 navigation.navigate('SpaceWizard', { propertyId, editSpaceId: space.id });
               }}
-            >
-              <Ionicons name="create-outline" size={20} color="#1F2937" />
-              <Text style={styles.menuItemText}>Edit</Text>
-            </Pressable>
-            <Pressable style={styles.menuItem} onPress={() => handleTogglePause(menuSpace!)}>
-              <Ionicons
-                name={menuSpace?.isAvailable ? 'pause-outline' : 'play-outline'}
-                size={20}
-                color="#1F2937"
-              />
-              <Text style={styles.menuItemText}>
-                {menuSpace?.isAvailable ? 'Pause' : 'Resume'}
-              </Text>
-            </Pressable>
-            <Pressable style={styles.menuItem} onPress={() => handleDelete(menuSpace!)}>
-              <Ionicons name="trash-outline" size={20} color="#EF4444" />
-              <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Delete</Text>
-            </Pressable>
+            />
+            <ListRow
+              icon={menuSpace?.isAvailable ? 'pause' : 'play'}
+              title={menuSpace?.isAvailable ? 'Pause' : 'Resume'}
+              onPress={() => handleTogglePause(menuSpace!)}
+            />
+            <ListRow
+              icon="trash-2"
+              title="Delete"
+              danger
+              isLast
+              onPress={() => handleDelete(menuSpace!)}
+            />
+            <PillButton
+              label="Cancel"
+              variant="grey"
+              onPress={() => setMenuSpace(null)}
+              style={styles.menuCancel}
+            />
           </View>
-        </Pressable>
-      
+        </View>
       ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F9FAFB' },
+  safe: { flex: 1, backgroundColor: palette.bg },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
+  intro: { paddingHorizontal: 20, paddingBottom: 14 },
+  propertyName: { ...fonts.semibold, fontSize: 28, letterSpacing: -0.7, color: palette.text },
+  propertyAddress: { ...fonts.medium, fontSize: 14, color: palette.textMuted, marginTop: 3 },
+  count: { ...fonts.semibold, fontSize: 13, color: palette.text, marginTop: 8 },
+  errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderRadius: radii.lg,
+    backgroundColor: palette.dangerSoft,
   },
-  backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  propertyName: { fontSize: 16, fontWeight: '700', color: '#1F2937' },
-  propertyAddress: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  errorBanner: { padding: 10, backgroundColor: '#FEE2E2' },
-  errorText: { color: '#991B1B', fontSize: 13, textAlign: 'center' },
-  list: { padding: 12, paddingBottom: 80 },
+  errorText: { ...fonts.medium, color: palette.danger, fontSize: 13, marginLeft: 8, flex: 1 },
+  list: { paddingHorizontal: 16, flexGrow: 1 },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: radii.xl,
+    padding: 18,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    minHeight: 160,
+    overflow: 'hidden',
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  spaceNum: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-  spaceType: { fontSize: 12, color: '#6B7280', marginTop: 2, textTransform: 'capitalize' },
-  pill: {
-    flexDirection: 'row',
+  cardArt: { position: 'absolute', right: -30, bottom: -26 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tagRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
+  tagGap: { marginLeft: 6 },
+  menuBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.75)',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 6,
-  },
-  dot: { width: 6, height: 6, borderRadius: 3, marginRight: 4 },
-  pillText: { fontSize: 11, fontWeight: '600' },
-  menuBtn: { padding: 6 },
-  cardBody: { flexDirection: 'row', gap: 16 },
-  metric: { flex: 1 },
-  metricLabel: { fontSize: 11, color: '#6B7280' },
-  metricValue: { fontSize: 14, fontWeight: '600', color: '#1F2937', marginTop: 2 },
-  evBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: '#D1FAE5',
-    marginTop: 10,
-  },
-  evText: { color: '#059669', fontSize: 11, marginLeft: 4, fontWeight: '500' },
-  empty: { paddingVertical: 60, alignItems: 'center' },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginTop: 12 },
-  emptySub: { fontSize: 13, color: '#6B7280', marginTop: 4, textAlign: 'center', paddingHorizontal: 40 },
-  fab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#0D7377',
     justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+  },
+  cardBody: { width: '70%' },
+  spaceNum: {
+    ...fonts.bold,
+    fontSize: 22,
+    letterSpacing: -0.5,
+    color: palette.text,
+    marginTop: 12,
+  },
+  spaceType: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 2,
+    textTransform: 'capitalize',
+  },
+  metaRow: { flexDirection: 'row', marginTop: 14 },
+  metric: { flex: 1, paddingRight: 6 },
+  metricValue: { ...fonts.semibold, fontSize: 13.5, color: palette.text },
+  metricLabel: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 2 },
+  capitalize: { textTransform: 'capitalize' },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    backgroundColor: palette.bg,
   },
   modalOverlay: {
     // Absolutely positioned rather than flex:1 — no longer inside a
     // <Modal>, which does not present on this build.
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   menuSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 16,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  grabber: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   menuTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
+    marginBottom: 6,
   },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 14,
-  },
-  menuItemText: { fontSize: 16, color: '#1F2937', marginLeft: 4 },
+  menuCancel: { marginTop: 12 },
 });

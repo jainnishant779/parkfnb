@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { getTheme } from '../../theme/colors';
 import { spacing, borderRadius } from '../../theme/spacing';
+import { palette, radii } from '../../theme/kit';
 
 // Shimmer animation duration
 const SHIMMER_DURATION = 1200;
@@ -27,8 +28,6 @@ export const Skeleton = memo(function Skeleton({
   borderRadius: radius = borderRadius.md,
   style,
 }: SkeletonProps) {
-  // Force light mode
-  const theme = getTheme(false);
   const shimmerProgress = useSharedValue(0);
 
   useEffect(() => {
@@ -51,7 +50,7 @@ export const Skeleton = memo(function Skeleton({
           width,
           height,
           borderRadius: radius,
-          backgroundColor: theme.border,
+          backgroundColor: palette.fill,
         },
         animatedStyle,
         style,
@@ -67,8 +66,8 @@ export const KpiCardSkeleton = memo(function KpiCardSkeleton() {
 
   return (
     <View style={[styles.kpiCard, { backgroundColor: theme.surface }]}>
-      <Skeleton width={28} height={28} borderRadius={14} />
-      <Skeleton width={60} height={20} style={styles.kpiValue} />
+      <Skeleton width={36} height={36} borderRadius={18} />
+      <Skeleton width={70} height={24} style={styles.kpiValue} />
       <Skeleton width={50} height={10} />
     </View>
   );
@@ -101,7 +100,7 @@ export const ListingRowSkeleton = memo(function ListingRowSkeleton() {
 
   return (
     <View style={[styles.listingRow, { borderBottomColor: theme.borderLight }]}>
-      <Skeleton width={56} height={56} borderRadius={borderRadius.md} />
+      <Skeleton width={58} height={58} borderRadius={radii.md} />
       <View style={styles.listingContent}>
         <Skeleton width={140} height={14} />
         <Skeleton width={100} height={12} style={styles.mt4} />
@@ -124,7 +123,7 @@ export const AlertRowSkeleton = memo(function AlertRowSkeleton() {
         <Skeleton width={160} height={14} />
         <Skeleton width={200} height={12} style={styles.mt4} />
       </View>
-      <Skeleton width={60} height={32} borderRadius={borderRadius.md} />
+      <Skeleton width={60} height={34} borderRadius={17} />
     </View>
   );
 });
@@ -149,9 +148,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   kpiCard: {
-    width: 120,
-    padding: spacing[3],
-    borderRadius: borderRadius.md,
+    width: 128,
+    padding: 14,
+    borderRadius: radii.lg,
     alignItems: 'flex-start',
     gap: spacing[1],
   },
@@ -184,18 +183,18 @@ const styles = StyleSheet.create({
   alertRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing[3],
-    borderRadius: borderRadius.md,
-    marginBottom: spacing[2],
+    padding: 14,
+    borderRadius: radii.lg,
+    marginBottom: 10,
   },
   alertContent: {
     flex: 1,
     marginLeft: spacing[3],
   },
   section: {
-    padding: spacing[4],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[4],
+    padding: 20,
+    borderRadius: radii.xl,
+    marginBottom: 16,
   },
   mt4: {
     marginTop: spacing[1],

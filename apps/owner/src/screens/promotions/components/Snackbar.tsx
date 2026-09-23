@@ -1,11 +1,10 @@
 // Snackbar Component - Toast notifications with undo support
-import React, { memo, useMemo, useCallback, useEffect } from 'react';
+import React, { memo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -13,12 +12,9 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  runOnJS,
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize, fontWeight } from '../../../theme/typography';
+import { palette, radii, fonts } from '../../../theme/kit';
 
 export interface SnackbarProps {
   visible: boolean;
@@ -42,7 +38,6 @@ function Snackbar({
   onDismiss,
   testID,
 }: SnackbarProps) {
-  const theme = useMemo(() => getTheme(false), []);
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(100);
   const opacity = useSharedValue(0);
@@ -70,27 +65,23 @@ function Snackbar({
       case 'success':
         return {
           icon: 'checkmark-circle',
-          iconColor: '#10B981',
-          bgColor: '#0D1F17',
+          iconColor: palette.success,
         };
       case 'error':
         return {
           icon: 'close-circle',
-          iconColor: '#EF4444',
-          bgColor: '#1F0D0D',
+          iconColor: palette.danger,
         };
       case 'warning':
         return {
           icon: 'warning',
-          iconColor: '#F59E0B',
-          bgColor: '#1F1A0D',
+          iconColor: palette.warning,
         };
       case 'info':
       default:
         return {
           icon: 'information-circle',
-          iconColor: '#0D7377',
-          bgColor: '#0D151F',
+          iconColor: palette.peach,
         };
     }
   }, [variant]);
@@ -113,12 +104,12 @@ function Snackbar({
     <Animated.View
       style={[
         styles.container,
-        { bottom: insets.bottom + spacing[4] },
+        { bottom: insets.bottom + 16 },
         animatedStyle,
       ]}
       testID={testID}
     >
-      <View style={[styles.snackbar, { backgroundColor: variantStyles.bgColor }]}>
+      <View style={styles.snackbar}>
         <Ionicons
           name={variantStyles.icon}
           size={20}
@@ -139,7 +130,7 @@ function Snackbar({
             accessibilityRole="button"
             testID={testID ? `${testID}-action` : undefined}
           >
-            <Text style={[styles.actionLabel, { color: variantStyles.iconColor }]}>
+            <Text style={styles.actionLabel}>
               {action.label}
             </Text>
           </Pressable>
@@ -153,7 +144,7 @@ function Snackbar({
           <Ionicons
             name="close"
             size={18}
-            color="#9CA3AF"
+            color={palette.textSubtle}
           />
         </Pressable>
       </View>
@@ -164,51 +155,43 @@ function Snackbar({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    left: spacing[4],
-    right: spacing[4],
+    left: 16,
+    right: 16,
     zIndex: 1000,
   },
   snackbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    borderRadius: borderRadius.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    paddingVertical: 12,
+    paddingLeft: 18,
+    paddingRight: 10,
+    borderRadius: radii.pill,
+    backgroundColor: palette.ink,
   },
   icon: {
-    marginRight: spacing[3],
+    marginRight: 10,
   },
   message: {
+    ...fonts.medium,
     flex: 1,
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    color: palette.textInverse,
+    fontSize: 14,
   },
   actionButton: {
-    marginLeft: spacing[2],
-    paddingVertical: spacing[1],
-    paddingHorizontal: spacing[2],
+    marginLeft: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: palette.peach,
   },
   actionLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.text,
   },
   dismissButton: {
-    marginLeft: spacing[2],
-    padding: spacing[1],
+    marginLeft: 6,
+    padding: 4,
   },
 });
 

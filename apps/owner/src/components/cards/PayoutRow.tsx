@@ -3,12 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
-  Platform,
+  TouchableOpacity,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 import type { Payout, PayoutStatus } from '../../constants/mockPayoutsData';
 import { PAYOUT_STATUS_CONFIG } from '../../constants/mockPayoutsData';
 
@@ -54,6 +52,22 @@ const getMethodLabel = (method: string): string => {
   return labels[method] || method;
 };
 
+// Status colours re-mapped onto the kit palette (labels/icons still come
+// from PAYOUT_STATUS_CONFIG).
+const STATUS_TONE: Partial<Record<PayoutStatus, { color: string; bgColor: string }>> = {
+  paid: { color: palette.success, bgColor: palette.successSoft },
+  pending: { color: palette.warning, bgColor: palette.warningSoft },
+  processing: { color: palette.text, bgColor: palette.blueSoft },
+  failed: { color: palette.danger, bgColor: palette.dangerSoft },
+  scheduled: { color: palette.text, bgColor: palette.peachSoft },
+  on_hold: { color: palette.warning, bgColor: palette.warningSoft },
+};
+
+const toneFor = (status: PayoutStatus) => {
+  const config = PAYOUT_STATUS_CONFIG[status];
+  return { ...config, ...(STATUS_TONE[status] || {}) };
+};
+
 // ============================================================================
 // STATUS BADGE COMPONENT
 // ============================================================================
@@ -63,7 +77,7 @@ interface StatusBadgeProps {
 }
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
-  const config = PAYOUT_STATUS_CONFIG[status];
+  const config = toneFor(status);
 
   return (
     <View style={[styles.statusBadge, { backgroundColor: config.bgColor }]}>
@@ -85,17 +99,13 @@ function PayoutRow({
   isLast = false,
   testID,
 }: PayoutRowProps) {
-  const statusConfig = PAYOUT_STATUS_CONFIG[payout.status];
+  const statusConfig = toneFor(payout.status);
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={() => onPress?.(payout)}
-      style={({ pressed }) => [
-        styles.container,
-        !isLast && styles.borderBottom,
-        pressed && styles.pressed,
-      ]}
-      android_ripple={{ color: 'rgba(0, 0, 0, 0.05)' }}
+      activeOpacity={0.85}
+      style={[styles.container, !isLast && styles.borderBottom]}
       accessibilityRole="button"
       accessibilityLabel={`Payout ${payout.id}, ${formatCurrency(payout.amount)}, ${PAYOUT_STATUS_CONFIG[payout.status].label}`}
       testID={testID}
@@ -107,7 +117,7 @@ function PayoutRow({
           <View style={[styles.iconContainer, { backgroundColor: statusConfig.bgColor }]}>
             <Ionicons
               name={statusConfig.icon as any}
-              size={14}
+              size={18}
               color={statusConfig.color}
             />
           </View>
@@ -118,7 +128,7 @@ function PayoutRow({
             {formatCurrency(payout.netAmount)}
           </Text>
           {/* Chevron */}
-          <Ionicons name="chevron-forward" size={18} color="#94A3B8" style={styles.chevron} />
+          <Ionicons name="chevron-forward" size={18} color={palette.textSubtle} style={styles.chevron} />
         </View>
 
         <View style={styles.bottomRow}>
@@ -126,7 +136,7 @@ function PayoutRow({
             <Text style={styles.date}>
               {formatDate(payout.date)}
             </Text>
-            <Text style={styles.separator}>•</Text>
+            <View style={styles.separator} />
             <Text style={styles.method}>
               {getMethodLabel(payout.method)}
             </Text>
@@ -137,14 +147,14 @@ function PayoutRow({
         {/* Failure reason if applicable */}
         {payout.status === 'failed' && payout.failureReason && (
           <View style={styles.failureContainer}>
-            <Ionicons name="information-circle" size={14} color="#EF4444" />
+            <Ionicons name="information-circle" size={14} color={palette.danger} />
             <Text style={styles.failureText} numberOfLines={1}>
               {payout.failureReason}
             </Text>
           </View>
         )}
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -156,95 +166,100 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing[4],
-    paddingHorizontal: spacing[4],
-    backgroundColor: '#FFFFFF',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: palette.surface,
     minHeight: 76,
-    marginBottom: spacing[3],
-    borderRadius: borderRadius.lg,
+    marginBottom: 12,
+    borderRadius: radii.xl,
   },
   borderBottom: {
     borderBottomWidth: 0,
   },
-  pressed: {
-    backgroundColor: '#F8FAFC',
-  },
   iconContainer: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing[2],
+    marginRight: 12,
   },
   content: {
     flex: 1,
-    marginRight: spacing[2],
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing[1],
+    marginBottom: 4,
   },
   payoutId: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    color: '#1E293B',
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
     flex: 1,
-    marginRight: spacing[2],
+    marginRight: 8,
   },
   amount: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold as any,
-    color: '#1E293B',
+    ...fonts.bold,
+    fontSize: 16,
+    letterSpacing: -0.3,
+    color: palette.text,
   },
   bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginLeft: 52,
   },
   metaContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
   },
   date: {
-    fontSize: fontSize.xs,
-    color: '#64748B',
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
   },
   separator: {
-    fontSize: fontSize.xs,
-    color: '#94A3B8',
-    marginHorizontal: spacing[1],
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: palette.textSubtle,
+    marginHorizontal: 6,
   },
   method: {
-    fontSize: fontSize.xs,
-    color: '#64748B',
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[2],
-    paddingVertical: 2,
-    borderRadius: borderRadius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
     gap: 4,
   },
   statusText: {
+    ...fonts.semibold,
     fontSize: 11,
-    fontWeight: fontWeight.medium as any,
   },
   failureContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing[2],
+    marginTop: 8,
+    marginLeft: 52,
     gap: 4,
   },
   failureText: {
-    fontSize: fontSize.xs,
-    color: '#EF4444',
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.danger,
     flex: 1,
   },
   chevron: {
-    marginLeft: spacing[2],
+    marginLeft: 6,
   },
 });
 

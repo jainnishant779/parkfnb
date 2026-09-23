@@ -4,11 +4,12 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import WizardHeader from '../../../components/wizard/WizardHeader';
 import WizardFooter from '../../../components/wizard/WizardFooter';
 import FormTextInput from '../../../components/inputs/FormTextInput';
-import FormPickerInput from '../../../components/inputs/FormPickerInput';
 import { useSpaceWizard } from '../../../context/ListingWizardContext';
 import { listingService } from '../../../services/listingService';
 import { useScrollToInput } from '../../../hooks/useScrollToInput';
 import type { SpaceType } from '../../../types/api';
+import { palette, radii, fonts } from '../../../theme/kit';
+import { Chip } from '../../../components/ui';
 
 const SPACE_TYPES: { value: SpaceType; label: string }[] = [
   { value: 'outdoor', label: 'Outdoor' },
@@ -174,86 +175,102 @@ export default function StepDimensionsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <View style={styles.screen}>
       <WizardHeader
         title={editSpaceId ? 'Edit Space' : 'Add Space'}
         step={1}
         totalSteps={5}
         onBack={() => navigation.goBack()}
       />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.h1}>Space details</Text>
           <Text style={styles.sub}>Tell us about this specific parking spot.</Text>
 
-          <FormTextInput
-            label="Space number / label"
-            required
-            value={data.spaceNumber}
-            onChangeText={(v) => updateField('spaceNumber', v)}
-            placeholder={suggestedNumber || 'e.g., A-1'}
-            error={errors.spaceNumber}
-            containerStyle={styles.input}
-            helperText={suggestedNumber ? `Suggested: ${suggestedNumber}` : undefined}
-          />
+          <View style={styles.card}>
+            <FormTextInput
+              label="Space number / label"
+              required
+              value={data.spaceNumber}
+              onChangeText={(v) => updateField('spaceNumber', v)}
+              placeholder={suggestedNumber || 'e.g., A-1'}
+              error={errors.spaceNumber}
+              containerStyle={styles.input}
+              helperText={suggestedNumber ? `Suggested: ${suggestedNumber}` : undefined}
+            />
 
-          <FormPickerInput
-            label="Space type"
-            required
-            value={data.spaceType}
-            options={SPACE_TYPES}
-            onSelect={(v) => updateField('spaceType', v as SpaceType)}
-            placeholder="Select type"
-            error={errors.spaceType}
-            containerStyle={styles.input}
-          />
-
-          <FormTextInput
-            label="Number of spots"
-            required
-            value={spotsText}
-            onChangeText={(v) => {
-              const cleaned = v.replace(/[^0-9]/g, '');
-              setSpotsText(cleaned);
-              const n = cleaned === '' ? NaN : parseInt(cleaned, 10);
-              const next = isNaN(n) ? 0 : n;
-              lastWrittenSpots.current = next;
-              updateField('totalSpots', next);
-            }}
-            placeholder="1"
-            keyboardType="number-pad"
-            helperText="How many identical spots does this space have?"
-            error={errors.totalSpots}
-            containerStyle={styles.input}
-          />
-
-          <Text style={styles.sectionTitle}>Dimensions (meters)</Text>
-          <View style={styles.row}>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <FormTextInput
-                label="Length"
-                required
-                value={data.lengthMeters != null ? String(data.lengthMeters) : ''}
-                onChangeText={(v) => updateField('lengthMeters', parseNum(v))}
-                placeholder="5.0"
-                keyboardType="decimal-pad"
-                error={errors.lengthMeters}
-              />
+            <Text style={styles.fieldLabel}>
+              Space type <Text style={styles.required}>*</Text>
+            </Text>
+            <View style={styles.chipWrap}>
+              {SPACE_TYPES.map((t) => (
+                <Chip
+                  key={t.value}
+                  label={t.label}
+                  selected={data.spaceType === t.value}
+                  onPress={() => updateField('spaceType', t.value)}
+                  style={styles.chip}
+                />
+              ))}
             </View>
-            <View style={{ flex: 1, marginLeft: 8 }}>
-              <FormTextInput
-                label="Width"
-                required
-                value={data.widthMeters != null ? String(data.widthMeters) : ''}
-                onChangeText={(v) => updateField('widthMeters', parseNum(v))}
-                placeholder="2.5"
-                keyboardType="decimal-pad"
-                error={errors.widthMeters}
-              />
+            {errors.spaceType ? <Text style={styles.errorText}>{errors.spaceType}</Text> : null}
+
+            <FormTextInput
+              label="Number of spots"
+              required
+              value={spotsText}
+              onChangeText={(v) => {
+                const cleaned = v.replace(/[^0-9]/g, '');
+                setSpotsText(cleaned);
+                const n = cleaned === '' ? NaN : parseInt(cleaned, 10);
+                const next = isNaN(n) ? 0 : n;
+                lastWrittenSpots.current = next;
+                updateField('totalSpots', next);
+              }}
+              placeholder="1"
+              keyboardType="number-pad"
+              helperText="How many identical spots does this space have?"
+              error={errors.totalSpots}
+              containerStyle={styles.spotsInput}
+            />
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Dimensions (meters)</Text>
+            <View style={styles.row}>
+              <View style={styles.rowLeft}>
+                <FormTextInput
+                  label="Length"
+                  required
+                  value={data.lengthMeters != null ? String(data.lengthMeters) : ''}
+                  onChangeText={(v) => updateField('lengthMeters', parseNum(v))}
+                  placeholder="5.0"
+                  keyboardType="decimal-pad"
+                  error={errors.lengthMeters}
+                />
+              </View>
+              <View style={styles.rowRight}>
+                <FormTextInput
+                  label="Width"
+                  required
+                  value={data.widthMeters != null ? String(data.widthMeters) : ''}
+                  onChangeText={(v) => updateField('widthMeters', parseNum(v))}
+                  placeholder="2.5"
+                  keyboardType="decimal-pad"
+                  error={errors.widthMeters}
+                />
+              </View>
             </View>
           </View>
 
-          <View onLayout={registerField('height')}>
+          {/* Registered fields stay top-level cards so their onLayout y is
+              relative to the scroll content (useScrollToInput relies on it). */}
+          <View onLayout={registerField('height')} style={styles.card}>
             <FormTextInput
               label="Height clearance (optional)"
               value={data.heightMeters != null ? String(data.heightMeters) : ''}
@@ -261,20 +278,18 @@ export default function StepDimensionsScreen() {
               placeholder="e.g., 2.1 for basement parking"
               keyboardType="decimal-pad"
               error={errors.heightMeters}
-              containerStyle={styles.input}
               helperText="Leave blank for outdoor/uncovered spaces"
               onFocus={focusField('height')}
             />
           </View>
 
-          <View onLayout={registerField('desc')}>
+          <View onLayout={registerField('desc')} style={styles.card}>
             <FormTextInput
               label="Description (optional)"
               value={data.spaceDescription}
               onChangeText={(v) => updateField('spaceDescription', v)}
               placeholder="Anything renters should know"
               multiline
-              containerStyle={styles.input}
               onFocus={focusField('desc')}
             />
           </View>
@@ -286,10 +301,26 @@ export default function StepDimensionsScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: palette.bg },
+  flex: { flex: 1 },
   content: { padding: 16, paddingBottom: 200 },
-  h1: { fontSize: 22, fontWeight: '700', color: '#1F2937', marginBottom: 6 },
-  sub: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginTop: 12, marginBottom: 8 },
-  input: { marginBottom: 14 },
-  row: { flexDirection: 'row', marginBottom: 14 },
+  h1: { ...fonts.semibold, fontSize: 26, letterSpacing: -0.6, color: palette.text, marginBottom: 6 },
+  sub: { ...fonts.medium, fontSize: 14.5, lineHeight: 20, color: palette.textMuted, marginBottom: 18 },
+  card: {
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 18,
+    marginBottom: 12,
+  },
+  cardTitle: { ...fonts.semibold, fontSize: 17, color: palette.text, marginBottom: 12 },
+  fieldLabel: { ...fonts.semibold, fontSize: 14, color: palette.text, marginBottom: 10 },
+  required: { color: palette.danger },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap' },
+  chip: { marginRight: 8, marginBottom: 8, backgroundColor: palette.fill },
+  errorText: { ...fonts.medium, color: palette.danger, fontSize: 12.5, marginTop: 2 },
+  input: { marginBottom: 16 },
+  spotsInput: { marginTop: 12 },
+  row: { flexDirection: 'row' },
+  rowLeft: { flex: 1, marginRight: 6 },
+  rowRight: { flex: 1, marginLeft: 6 },
 });

@@ -11,11 +11,9 @@ import {
   StyleSheet,
   Animated,
   Platform,
-  useColorScheme,
   Keyboard,
 } from 'react-native';
-import { colors } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
+import { palette, radii, fonts } from '../../theme/kit';
 
 // ============================================================================
 // TYPES
@@ -48,16 +46,17 @@ const BOX_SIZE = 48;
 // THEME HELPERS
 // ============================================================================
 
-const getTheme = (isDark: boolean) => ({
-  background: isDark ? colors.gray[800] : colors.white,
-  surface: isDark ? colors.gray[700] : colors.gray[50],
-  border: isDark ? colors.gray[600] : colors.gray[300],
-  borderFocused: colors.primary[500],
-  borderError: colors.error[500],
-  borderFilled: isDark ? colors.gray[500] : colors.gray[400],
-  text: isDark ? colors.white : colors.gray[900],
-  placeholder: isDark ? colors.gray[500] : colors.gray[400],
-});
+// Light-only, matching the consumer OTP cells: grey fill when empty, white
+// once focused/filled, ink border on focus, red on error.
+const theme = {
+  surface: palette.fill,
+  surfaceActive: palette.surface,
+  border: palette.fill,
+  borderFocused: palette.ink,
+  borderError: palette.danger,
+  borderFilled: palette.line,
+  text: palette.text,
+};
 
 // ============================================================================
 // OTP INPUT ROW COMPONENT
@@ -75,10 +74,6 @@ const OtpInputRow = forwardRef<OtpInputRowRef, OtpInputRowProps>(
     },
     ref
   ) => {
-    const colorScheme = useColorScheme();
-    const isDark = colorScheme === 'dark';
-    const theme = getTheme(isDark);
-
     // Refs for each input
     const inputRefs = useRef<(TextInput | null)[]>([]);
 
@@ -166,7 +161,7 @@ const OtpInputRow = forwardRef<OtpInputRowRef, OtpInputRowProps>(
             useNativeDriver: false,
           }),
           Animated.spring(scaleAnimations[index], {
-            toValue: isFocused ? 1.05 : 1,
+            toValue: isFocused ? 1.03 : 1,
             friction: 8,
             tension: 100,
             useNativeDriver: true,
@@ -270,11 +265,13 @@ const OtpInputRow = forwardRef<OtpInputRowRef, OtpInputRowProps>(
         ],
       });
 
-      // Interpolate border width
-      const borderWidth = focusAnimations[index].interpolate({
-        inputRange: [0, 1],
-        outputRange: [1.5, 2],
-      });
+      // Grey when empty, white once focused or filled
+      const backgroundColor = isFilled
+        ? theme.surfaceActive
+        : focusAnimations[index].interpolate({
+            inputRange: [0, 1],
+            outputRange: [theme.surface, theme.surfaceActive],
+          });
 
       return (
         <Animated.View
@@ -293,9 +290,8 @@ const OtpInputRow = forwardRef<OtpInputRowRef, OtpInputRowProps>(
             style={[
               styles.box,
               {
-                backgroundColor: theme.surface,
+                backgroundColor,
                 borderColor,
-                borderWidth,
               },
               error && styles.boxError,
             ]}
@@ -361,38 +357,28 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing[2],
+    gap: 8,
   },
   boxContainer: {
     // For individual scaling
   },
   box: {
     width: BOX_SIZE,
-    height: BOX_SIZE + 8,
-    borderRadius: borderRadius.lg,
+    height: BOX_SIZE + 12,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.black,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
   },
   boxError: {
     // Error state handled via animated borderColor
   },
   input: {
+    ...fonts.semibold,
     width: '100%',
     height: '100%',
     textAlign: 'center',
-    fontSize: 24,
-    fontWeight: '600',
+    fontSize: 26,
     padding: 0,
     // Android adds a font-padding band above the glyph and aligns text to the
     // top of the box, which pushed the digit past the border.

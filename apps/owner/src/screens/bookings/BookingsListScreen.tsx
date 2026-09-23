@@ -2,7 +2,6 @@ import React, {
   useState,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
 } from 'react';
 import {
@@ -10,28 +9,17 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Pressable,
-  TextInput,
+  TouchableOpacity,
   RefreshControl,
-  Modal,
-  Platform,
   StatusBar,
   ScrollView,
-  Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  FadeIn,
-  FadeOut,
-} from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, shadow, fonts } from '../../theme/kit';
+import { PillButton, IconCircle, SearchPill, EmptyState } from '../../components/ui';
 import type {
   FullBooking,
   BookingTabType,
@@ -53,8 +41,6 @@ import { useAuth } from '../../context/AuthContext';
 import { bookingService } from '../../services/bookingService';
 import { transformBooking, getRefundPolicy } from '../../utils/bookingTransform';
 import { BookingCard, BookingsSkeleton } from './components';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Tab configuration
 const TABS: { key: BookingTabType; label: string }[] = [
@@ -98,23 +84,27 @@ const PAST_STATUS_OPTIONS: { key: BookingStatus | 'all'; label: string }[] = [
 ];
 
 // Empty state config per tab
-const EMPTY_STATE_CONFIG: Record<BookingTabType, { icon: string; title: string; subtitle: string }> = {
+const EMPTY_STATE_CONFIG: Record<BookingTabType, { icon: string; title: string; subtitle: string; tone: 'peach' | 'blue' | 'grey' }> = {
   requests: {
+    tone: 'peach',
     icon: 'time-outline',
     title: 'No booking requests',
     subtitle: 'New booking requests will appear here for your approval',
   },
   upcoming: {
+    tone: 'blue',
     icon: 'calendar-outline',
     title: 'No upcoming bookings',
     subtitle: 'Approved bookings scheduled for the future will show here',
   },
   active: {
+    tone: 'peach',
     icon: 'car-outline',
     title: 'No active bookings',
     subtitle: 'Bookings currently in progress will appear here',
   },
   past: {
+    tone: 'grey',
     icon: 'archive-outline',
     title: 'No past bookings',
     subtitle: 'Completed, cancelled, or no-show bookings will be listed here',
@@ -126,7 +116,8 @@ interface ActionConfig {
   title: string;
   message: string;
   confirmText: string;
-  confirmColor: string;
+  confirmVariant: 'ink' | 'danger';
+  icon: string;
 }
 
 type ActionType = 'approve' | 'reject' | 'cancel' | 'complete' | 'noshow';
@@ -136,36 +127,41 @@ const ACTION_CONFIG: Record<ActionType, ActionConfig> = {
     title: 'Approve Booking',
     message: 'Are you sure you want to approve this booking request?',
     confirmText: 'Approve',
-    confirmColor: '#10B981',
+    confirmVariant: 'ink',
+    icon: 'checkmark-circle-outline',
   },
   reject: {
     title: 'Reject Booking',
     message: 'Are you sure you want to reject this booking request? The renter will be notified.',
     confirmText: 'Reject',
-    confirmColor: '#EF4444',
+    confirmVariant: 'danger',
+    icon: 'close-circle-outline',
   },
   cancel: {
     title: 'Cancel Booking',
     message: 'Are you sure you want to cancel this booking?',
     confirmText: 'Cancel Booking',
-    confirmColor: '#EF4444',
+    confirmVariant: 'danger',
+    icon: 'close-circle-outline',
   },
   complete: {
     title: 'Check Out Renter',
     message: 'Check out the renter? Overtime charges (1.5×) apply if past the end time.',
     confirmText: 'Check Out',
-    confirmColor: '#10B981',
+    confirmVariant: 'ink',
+    icon: 'checkmark-done-outline',
   },
   noshow: {
     title: 'Mark No-Show',
     message: 'Mark the renter as a no-show? This will be recorded on the booking.',
     confirmText: 'Mark No-Show',
-    confirmColor: '#F59E0B',
+    confirmVariant: 'ink',
+    icon: 'alert-circle-outline',
   },
 };
 
 export default function BookingsListScreen() {
-  const theme = useMemo(() => getTheme(false), []);
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { owner } = useAuth();
 
@@ -430,41 +426,29 @@ export default function BookingsListScreen() {
     if (hasFilters) {
       return (
         <Animated.View entering={FadeIn} style={styles.emptyContainer}>
-          <View style={[styles.emptyIconContainer, { backgroundColor: theme.borderLight }]}>
-            <Ionicons name="search-outline" size={48} color={theme.textMuted} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: theme.text }]}>No results found</Text>
-          <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
-            Try adjusting your filters or search term
-          </Text>
-          <Pressable
-            style={[styles.clearFiltersButton, { backgroundColor: theme.primary }]}
-            onPress={() => {
+          <EmptyState
+            tone="grey"
+            title="No results found"
+            subtitle="Try adjusting your filters or search term"
+            action="Clear Filters"
+            onAction={() => {
               setSearchText('');
               setDebouncedSearch('');
               setVehicleFilter('all');
               setDateRange('all');
               setPastStatusFilter('all');
             }}
-          >
-            <Text style={styles.clearFiltersText}>Clear Filters</Text>
-          </Pressable>
+          />
         </Animated.View>
       );
     }
 
     return (
       <Animated.View entering={FadeIn} style={styles.emptyContainer}>
-        <View style={[styles.emptyIconContainer, { backgroundColor: theme.borderLight }]}>
-          <Ionicons name={config.icon} size={48} color={theme.textMuted} />
-        </View>
-        <Text style={[styles.emptyTitle, { color: theme.text }]}>{config.title}</Text>
-        <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
-          {config.subtitle}
-        </Text>
+        <EmptyState tone={config.tone} title={config.title} subtitle={config.subtitle} />
       </Animated.View>
     );
-  }, [selectedTab, debouncedSearch, vehicleFilter, dateRange, pastStatusFilter, theme]);
+  }, [selectedTab, debouncedSearch, vehicleFilter, dateRange, pastStatusFilter]);
 
   // Render list header (filters)
   const renderListHeader = useCallback(() => (
@@ -478,224 +462,229 @@ export default function BookingsListScreen() {
         {VEHICLE_OPTIONS.map((option) => {
           const isActive = vehicleFilter === option.key;
           return (
-            <Pressable
+            <TouchableOpacity
               key={option.key}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: isActive ? theme.primary : theme.surface,
-                  borderColor: isActive ? theme.primary : theme.border,
-                },
-              ]}
+              activeOpacity={0.75}
+              style={[styles.filterChip, isActive && styles.filterChipActive]}
               onPress={() => setVehicleFilter(option.key)}
             >
               <Ionicons
                 name={option.icon}
-                size={14}
-                color={isActive ? '#FFFFFF' : theme.textSecondary}
+                size={15}
+                color={isActive ? palette.textInverse : palette.text}
               />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  { color: isActive ? '#FFFFFF' : theme.textSecondary },
-                ]}
-              >
+              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
                 {option.label}
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           );
         })}
       </ScrollView>
 
-      {/* Filter Row: Date Range + Sort + Status (for past tab) */}
-      <View style={styles.filterRow}>
-        {/* Date Range */}
-        <Pressable
-          style={[styles.filterButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-          onPress={() => setShowDateModal(true)}
-        >
-          <Ionicons name="calendar-outline" size={16} color={theme.textSecondary} />
-          <Text style={[styles.filterButtonText, { color: theme.text }]}>
-            {DATE_RANGE_OPTIONS.find((o) => o.key === dateRange)?.label || 'Date'}
-          </Text>
-          <Ionicons name="chevron-down" size={14} color={theme.textMuted} />
-        </Pressable>
+      {/* Active date range / sort summary */}
+      {(dateRange !== 'all' || sortOption !== 'newest') && (
+        <View style={styles.summaryRow}>
+          {dateRange !== 'all' && (
+            <TouchableOpacity style={styles.summaryPill} onPress={() => setShowDateModal(true)} activeOpacity={0.75}>
+              <Ionicons name="calendar-outline" size={13} color={palette.text} />
+              <Text style={styles.summaryPillText}>
+                {DATE_RANGE_OPTIONS.find((o) => o.key === dateRange)?.label || 'Date'}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {sortOption !== 'newest' && (
+            <TouchableOpacity style={styles.summaryPill} onPress={() => setShowSortModal(true)} activeOpacity={0.75}>
+              <Ionicons name="swap-vertical-outline" size={13} color={palette.text} />
+              <Text style={styles.summaryPillText}>
+                {SORT_OPTIONS.find((o) => o.key === sortOption)?.label}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
-        {/* Sort */}
-        <Pressable
-          style={[styles.filterButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-          onPress={() => setShowSortModal(true)}
+      {/* Past Status Filter (only for past tab) */}
+      {selectedTab === 'past' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsScrollContent}
+          style={styles.pastStatusScroll}
         >
-          <Ionicons name="swap-vertical-outline" size={16} color={theme.textSecondary} />
-          <Text style={[styles.filterButtonText, { color: theme.text }]}>Sort</Text>
-          <Ionicons name="chevron-down" size={14} color={theme.textMuted} />
-        </Pressable>
-
-        {/* Past Status Filter (only for past tab) */}
-        {selectedTab === 'past' && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.pastStatusScroll}
-          >
-            {PAST_STATUS_OPTIONS.map((option) => {
-              const isActive = pastStatusFilter === option.key;
-              return (
-                <Pressable
-                  key={option.key}
-                  style={[
-                    styles.statusChip,
-                    {
-                      backgroundColor: isActive ? theme.primaryLight : theme.surface,
-                      borderColor: isActive ? theme.primary : theme.border,
-                    },
-                  ]}
-                  onPress={() => setPastStatusFilter(option.key)}
-                >
-                  <Text
-                    style={[
-                      styles.statusChipText,
-                      { color: isActive ? theme.primary : theme.textSecondary },
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
+          {PAST_STATUS_OPTIONS.map((option) => {
+            const isActive = pastStatusFilter === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                activeOpacity={0.75}
+                style={[styles.statusChip, isActive && styles.statusChipActive]}
+                onPress={() => setPastStatusFilter(option.key)}
+              >
+                <Text style={[styles.statusChipText, isActive && styles.filterChipTextActive]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
     </View>
-  ), [vehicleFilter, dateRange, selectedTab, pastStatusFilter, theme]);
+  ), [vehicleFilter, dateRange, sortOption, selectedTab, pastStatusFilter]);
+
+  // Header: title + icon circles (date range, sort)
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>Bookings</Text>
+      <IconCircle
+        icon="calendar"
+        size={46}
+        badge={dateRange !== 'all'}
+        onPress={() => setShowDateModal(true)}
+      />
+      <IconCircle
+        icon="sliders"
+        size={46}
+        badge={sortOption !== 'newest'}
+        onPress={() => setShowSortModal(true)}
+        style={styles.headerGap}
+      />
+    </View>
+  );
 
   // Render owner not set up state
   if (!owner?.id && !isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.errorContainer}>
-          <Ionicons name="calendar-outline" size={64} color={theme.textMuted} />
-          <Text style={[styles.errorTitle, { color: theme.text }]}>Complete onboarding first</Text>
-          <Text style={[styles.errorSubtitle, { color: theme.textSecondary }]}>
-            Set up your owner profile to start managing bookings.
-          </Text>
+          <EmptyState
+            tone="peach"
+            title="Complete onboarding first"
+            subtitle="Set up your owner profile to start managing bookings."
+          />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // Render error state
   if (error && !isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={64} color={theme.danger} />
-          <Text style={[styles.errorTitle, { color: theme.text }]}>Something went wrong</Text>
-          <Text style={[styles.errorSubtitle, { color: theme.textSecondary }]}>{error}</Text>
-          <Pressable
-            style={[styles.retryButton, { backgroundColor: theme.primary }]}
-            onPress={handleRetry}
-          >
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </Pressable>
+          <EmptyState
+            tone="grey"
+            title="Something went wrong"
+            subtitle={error}
+            action="Try Again"
+            onAction={handleRetry}
+          />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // Render loading state
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.background }]}>
-          <View>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>Bookings</Text>
-          </View>
-        </View>
+      <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
+        {renderHeader()}
         <BookingsSkeleton count={4} showTabs showSearch showFilters />
-      </SafeAreaView>
+      </View>
     );
   }
 
+  const sheetOptions = (
+    title: string,
+    options: { key: string; label: string }[],
+    value: string,
+    onSelect: (key: any) => void,
+    onClose: () => void,
+  ) => (
+    <View style={[styles.modalOverlay, styles.overlayFill]}>
+      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
+        <View style={styles.grabber} />
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>{title}</Text>
+          <IconCircle icon="x" size={40} variant="grey" onPress={onClose} />
+        </View>
+        {options.map((option, i) => {
+          const isActive = value === option.key;
+          return (
+            <TouchableOpacity
+              key={option.key}
+              activeOpacity={0.6}
+              style={[styles.sheetOption, i < options.length - 1 && styles.sheetOptionDivider]}
+              onPress={() => onSelect(option.key)}
+            >
+              <Text style={[styles.sheetOptionText, isActive && styles.sheetOptionTextActive]}>
+                {option.label}
+              </Text>
+              {isActive ? (
+                <View style={styles.checkDot}>
+                  <Ionicons name="checkmark" size={16} color={palette.textInverse} />
+                </View>
+              ) : (
+                <View style={styles.uncheckDot} />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
+    <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.background }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Bookings</Text>
-        </View>
-      </View>
+      {renderHeader()}
 
       {/* Search Bar */}
-      <View style={[styles.searchContainer, { backgroundColor: theme.surface }]}>
-        <View style={[styles.searchInputContainer, { backgroundColor: theme.borderLight }]}>
-          <Ionicons name="search-outline" size={20} color={theme.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.text }]}
-            placeholder="Search bookings..."
-            placeholderTextColor={theme.textMuted}
-            value={searchText}
-            onChangeText={setSearchText}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {searchText.length > 0 && (
-            <Pressable onPress={() => setSearchText('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color={theme.textMuted} />
-            </Pressable>
-          )}
-        </View>
-      </View>
+      <SearchPill
+        value={searchText}
+        onChangeText={setSearchText}
+        placeholder="Search bookings"
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={styles.search}
+        right={
+          searchText.length > 0 ? (
+            <TouchableOpacity onPress={() => setSearchText('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={18} color={palette.textMuted} />
+            </TouchableOpacity>
+          ) : null
+        }
+      />
 
-      {/* Tab Bar */}
-      <View style={[styles.tabBar, { backgroundColor: theme.surface }]}>
+      {/* Tab Bar — segmented pill with counts */}
+      <View style={styles.tabBar}>
         {TABS.map((tab) => {
           const isActive = selectedTab === tab.key;
           const count = tabCounts[tab.key];
           return (
-            <Pressable
+            <TouchableOpacity
               key={tab.key}
-              style={[
-                styles.tab,
-                isActive && { backgroundColor: theme.primary },
-              ]}
+              activeOpacity={0.8}
+              style={[styles.tab, isActive && styles.tabActive]}
               onPress={() => handleTabChange(tab.key)}
             >
-              <View style={styles.tabContent}>
-                <Text
-                  style={[
-                    styles.tabText,
-                    { color: isActive ? '#FFFFFF' : theme.textSecondary },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
-                {count > 0 && (
-                  <View
-                    style={[
-                      styles.tabBadge,
-                      {
-                        backgroundColor: isActive ? 'rgba(255,255,255,0.3)' : theme.primary,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.tabBadgeText,
-                        { color: '#FFFFFF' },
-                      ]}
-                    >
-                      {count > 99 ? '99+' : count}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </Pressable>
+              <Text
+                style={[styles.tabText, isActive && styles.tabTextActive]}
+                numberOfLines={1}
+              >
+                {tab.label}
+              </Text>
+              {count > 0 && (
+                <View style={[styles.tabBadge, isActive && styles.tabBadgeActive]}>
+                  <Text style={[styles.tabBadgeText, isActive && styles.tabBadgeTextActive]}>
+                    {count > 99 ? '99+' : count}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -705,15 +694,15 @@ export default function BookingsListScreen() {
         data={filteredBookings}
         renderItem={renderBookingCard}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 120 }]}
         ListHeaderComponent={renderListHeader}
         ListEmptyComponent={renderEmptyState}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            colors={[theme.primary]}
-            tintColor={theme.primary}
+            colors={[palette.ink]}
+            tintColor={palette.ink}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -722,144 +711,98 @@ export default function BookingsListScreen() {
         windowSize={5}
       />
 
-      {/* Sort Modal */}
-      {showSortModal ? (
+      {/* Sort sheet */}
+      {showSortModal
+        ? sheetOptions(
+            'Sort by',
+            SORT_OPTIONS,
+            sortOption,
+            (key: BookingSortOption) => {
+              setSortOption(key);
+              setShowSortModal(false);
+            },
+            () => setShowSortModal(false),
+          )
+        : null}
 
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowSortModal(false)}
-        >
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Sort By</Text>
-            {SORT_OPTIONS.map((option) => {
-              const isActive = sortOption === option.key;
-              return (
-                <Pressable
-                  key={option.key}
-                  style={[
-                    styles.modalOption,
-                    isActive && { backgroundColor: theme.primaryLight },
-                  ]}
-                  onPress={() => {
-                    setSortOption(option.key);
-                    setShowSortModal(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.modalOptionText,
-                      { color: isActive ? theme.primary : theme.text },
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                  {isActive && (
-                    <Ionicons name="checkmark" size={20} color={theme.primary} />
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-        </Pressable>
-      
-      ) : null}
-
-      {/* Date Range Modal */}
-      {showDateModal ? (
-
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowDateModal(false)}
-        >
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Date Range</Text>
-            {DATE_RANGE_OPTIONS.map((option) => {
-              const isActive = dateRange === option.key;
-              return (
-                <Pressable
-                  key={option.key}
-                  style={[
-                    styles.modalOption,
-                    isActive && { backgroundColor: theme.primaryLight },
-                  ]}
-                  onPress={() => {
-                    setDateRange(option.key);
-                    setShowDateModal(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.modalOptionText,
-                      { color: isActive ? theme.primary : theme.text },
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                  {isActive && (
-                    <Ionicons name="checkmark" size={20} color={theme.primary} />
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-        </Pressable>
-      
-      ) : null}
+      {/* Date range sheet */}
+      {showDateModal
+        ? sheetOptions(
+            'Date range',
+            DATE_RANGE_OPTIONS,
+            dateRange,
+            (key: DateRangeOption) => {
+              setDateRange(key);
+              setShowDateModal(false);
+            },
+            () => setShowDateModal(false),
+          )
+        : null}
 
       {/* Confirm Action — an overlay, not a <Modal>: modals do not present on
           this build, so the confirmation was invisible and Approve appeared
           to do nothing. */}
       {confirmModal.visible ? (
         <View style={[styles.modalOverlay, styles.overlayFill]}>
-          <View style={[styles.confirmModalContent, { backgroundColor: theme.surface }]}>
+          <View style={styles.backdrop} />
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.grabber} />
             {confirmModal.actionType && (
               <>
-                <Text style={[styles.confirmTitle, { color: theme.text }]}>
+                <View
+                  style={[
+                    styles.sheetIcon,
+                    ACTION_CONFIG[confirmModal.actionType].confirmVariant === 'danger' && styles.sheetIconDanger,
+                  ]}
+                >
+                  <Ionicons
+                    name={ACTION_CONFIG[confirmModal.actionType].icon}
+                    size={26}
+                    color={
+                      ACTION_CONFIG[confirmModal.actionType].confirmVariant === 'danger'
+                        ? palette.danger
+                        : palette.text
+                    }
+                  />
+                </View>
+                <Text style={styles.confirmTitle}>
                   {ACTION_CONFIG[confirmModal.actionType].title}
                 </Text>
-                <Text style={[styles.confirmMessage, { color: theme.textSecondary }]}>
+                <Text style={styles.confirmMessage}>
                   {ACTION_CONFIG[confirmModal.actionType].message}
                   {confirmModal.cancelRefundLabel ? `\n\n${confirmModal.cancelRefundLabel}` : ''}
                 </Text>
                 {confirmModal.booking && (
-                  <View style={[styles.confirmBookingInfo, { backgroundColor: theme.borderLight }]}>
-                    <Text style={[styles.confirmBookingName, { color: theme.text }]}>
+                  <View style={styles.confirmBookingInfo}>
+                    <Text style={styles.confirmBookingName}>
                       {confirmModal.booking.listingName}
                     </Text>
-                    <Text style={[styles.confirmBookingRenter, { color: theme.textSecondary }]}>
+                    <Text style={styles.confirmBookingRenter}>
                       {confirmModal.booking.renterName} - {confirmModal.booking.vehicle.plate}
                     </Text>
                   </View>
                 )}
                 <View style={styles.confirmButtons}>
-                  <Pressable
-                    style={[styles.confirmButton, styles.cancelButton, { borderColor: theme.border }]}
+                  <PillButton
+                    variant="grey"
+                    label="Cancel"
                     onPress={handleCancelConfirm}
-                  >
-                    <Text style={[styles.cancelButtonText, { color: theme.textSecondary }]}>
-                      Cancel
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[
-                      styles.confirmButton,
-                      { backgroundColor: ACTION_CONFIG[confirmModal.actionType].confirmColor },
-                      actionLoading && { opacity: 0.7 },
-                    ]}
+                    style={styles.confirmBtnLeft}
+                  />
+                  <PillButton
+                    variant={ACTION_CONFIG[confirmModal.actionType].confirmVariant}
+                    label={actionLoading ? 'Processing...' : ACTION_CONFIG[confirmModal.actionType].confirmText}
                     onPress={handleConfirmAction}
                     disabled={actionLoading}
-                  >
-                    <Text style={styles.confirmButtonText}>
-                      {actionLoading ? 'Processing...' : ACTION_CONFIG[confirmModal.actionType].confirmText}
-                    </Text>
-                  </Pressable>
+                    style={styles.confirmBtnRight}
+                  />
                 </View>
               </>
             )}
           </View>
         </View>
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -876,197 +819,148 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    backgroundColor: palette.bg,
   },
   header: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[2],
-    paddingBottom: spacing[3],
-  },
-  headerTitle: {
-    fontSize: fontSize['2xl'],
-    fontWeight: fontWeight.bold as any,
-  },
-  headerSubtitle: {
-    fontSize: fontSize.sm,
-    marginTop: spacing[1],
-  },
-  searchContainer: {
-    paddingHorizontal: spacing[4],
-    paddingBottom: spacing[3],
-  },
-  searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: Platform.OS === 'ios' ? spacing[3] : spacing[2],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
+    paddingHorizontal: 20,
+    marginBottom: 14,
   },
-  searchInput: {
+  headerTitle: {
+    ...fonts.semibold,
     flex: 1,
-    fontSize: fontSize.base,
-    padding: 0,
+    fontSize: 28,
+    letterSpacing: -0.7,
+    color: palette.text,
+  },
+  headerGap: { marginLeft: 10 },
+  search: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: palette.surface,
   },
   tabBar: {
     flexDirection: 'row',
-    marginHorizontal: spacing[4],
-    padding: spacing[1],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[3],
+    marginHorizontal: 16,
+    marginBottom: 14,
+    padding: 5,
+    borderRadius: radii.pill,
+    backgroundColor: palette.bgSoft,
   },
   tab: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[1],
-    borderRadius: borderRadius.md,
-  },
-  tabContent: {
+    height: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    borderRadius: radii.pill,
+    paddingHorizontal: 4,
+  },
+  tabActive: {
+    backgroundColor: palette.surface,
+    ...shadow.press,
   },
   tabText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 13.5,
+    color: palette.textMuted,
+    flexShrink: 1,
   },
+  tabTextActive: { color: palette.text },
   tabBadge: {
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
+    marginLeft: 4,
+    backgroundColor: palette.surface,
   },
+  tabBadgeActive: { backgroundColor: palette.ink },
   tabBadgeText: {
-    fontSize: 9,
-    fontWeight: fontWeight.bold as any,
+    ...fonts.bold,
+    fontSize: 10,
+    color: palette.text,
   },
+  tabBadgeTextActive: { color: palette.textInverse },
   filtersContainer: {
-    marginBottom: spacing[3],
+    marginBottom: 12,
   },
   chipsScrollContent: {
-    paddingHorizontal: spacing[4],
-    gap: spacing[2],
-    marginBottom: spacing[2],
+    paddingHorizontal: 16,
+    gap: 8,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    gap: spacing[1],
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surface,
+    gap: 6,
   },
+  filterChipActive: { backgroundColor: palette.ink },
   filterChipText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 13.5,
+    color: palette.text,
   },
-  filterRow: {
+  filterChipTextActive: { color: palette.textInverse },
+  summaryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    marginTop: 10,
+    gap: 8,
+  },
+  summaryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[4],
-    gap: spacing[2],
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: radii.pill,
+    backgroundColor: palette.peachSoft,
+    gap: 6,
   },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    gap: spacing[1],
-  },
-  filterButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+  summaryPillText: {
+    ...fonts.semibold,
+    fontSize: 12.5,
+    color: palette.text,
   },
   pastStatusScroll: {
-    flex: 1,
+    marginTop: 10,
   },
   statusChip: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    marginRight: spacing[2],
+    height: 34,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: palette.bgSoft,
   },
+  statusChipActive: { backgroundColor: palette.ink },
   statusChipText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 12.5,
+    color: palette.textMuted,
   },
   listContent: {
-    paddingBottom: spacing[6],
     flexGrow: 1,
   },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing[6],
-    paddingVertical: spacing[12],
-  },
-  emptyIconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[4],
-  },
-  emptyTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[2],
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  clearFiltersButton: {
-    marginTop: spacing[4],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.lg,
-  },
-  clearFiltersText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
+    paddingHorizontal: 24,
   },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing[6],
+    paddingHorizontal: 24,
   },
-  errorTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold as any,
-    marginTop: spacing[4],
-    marginBottom: spacing[2],
-  },
-  errorSubtitle: {
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-    marginBottom: spacing[4],
-  },
-  retryButton: {
-    paddingHorizontal: spacing[6],
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-  // Modal styles
+  // Bottom sheets (overlays)
   modalOverlay: {
     // Absolutely positioned rather than flex:1 — no longer inside a
     // <Modal>, which does not present on this build.
@@ -1077,110 +971,112 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
-  modalContent: {
-    width: SCREEN_WIDTH - spacing[8],
-    maxWidth: 340,
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[3],
-    textAlign: 'center',
+  sheet: {
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 20,
+    paddingTop: 12,
   },
-  modalOption: {
+  grabber: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    marginBottom: 16,
+  },
+  sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[1],
+    marginBottom: 6,
   },
-  modalOptionText: {
-    fontSize: fontSize.base,
+  sheetTitle: {
+    ...fonts.semibold,
+    fontSize: 22,
+    color: palette.text,
   },
-  // Confirm modal styles
-  confirmModalContent: {
-    width: SCREEN_WIDTH - spacing[8],
-    maxWidth: 360,
-    borderRadius: borderRadius.xl,
-    padding: spacing[5],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
-  confirmTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[2],
-    textAlign: 'center',
-  },
-  confirmMessage: {
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: spacing[4],
-  },
-  confirmBookingInfo: {
-    padding: spacing[3],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[4],
-  },
-  confirmBookingName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[1],
-  },
-  confirmBookingRenter: {
-    fontSize: fontSize.sm,
-  },
-  confirmButtons: {
+  sheetOption: {
     flexDirection: 'row',
-    gap: spacing[3],
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
   },
-  confirmButton: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
+  sheetOptionDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
+  },
+  sheetOptionText: {
+    ...fonts.medium,
+    fontSize: 16,
+    color: palette.text,
+  },
+  sheetOptionTextActive: { ...fonts.semibold },
+  checkDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: palette.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelButton: {
-    borderWidth: 1,
-    backgroundColor: 'transparent',
+  uncheckDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    borderColor: palette.line,
   },
-  cancelButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
+  sheetIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+    backgroundColor: palette.peachSoft,
   },
-  confirmButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+  sheetIconDanger: { backgroundColor: palette.dangerSoft },
+  confirmTitle: {
+    ...fonts.semibold,
+    fontSize: 22,
+    color: palette.text,
   },
+  confirmMessage: {
+    ...fonts.medium,
+    fontSize: 14,
+    lineHeight: 20,
+    color: palette.textMuted,
+    marginTop: 6,
+  },
+  confirmBookingInfo: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: radii.lg,
+    backgroundColor: palette.fill,
+  },
+  confirmBookingName: {
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
+    marginBottom: 3,
+  },
+  confirmBookingRenter: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+  },
+  confirmButtons: {
+    flexDirection: 'row',
+    marginTop: 20,
+  },
+  confirmBtnLeft: { flex: 1, marginRight: 10 },
+  confirmBtnRight: { flex: 1.4 },
 });

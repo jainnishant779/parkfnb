@@ -3,11 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts, shadow } from '../../theme/kit';
 
 export interface SegmentOption<T extends string> {
   key: T;
@@ -33,15 +32,16 @@ function SegmentedControl<T extends string>({
 
   return (
     <View
-      style={[styles.container, { backgroundColor: theme.borderLight }]}
+      style={[styles.container, { backgroundColor: palette.fill }]}
       testID={testID}
     >
       {options.map((option) => {
         const isSelected = option.key === selectedKey;
 
         return (
-          <Pressable
+          <TouchableOpacity
             key={option.key}
+            activeOpacity={0.8}
             onPress={() => onSelect(option.key)}
             style={[
               styles.segment,
@@ -55,8 +55,8 @@ function SegmentedControl<T extends string>({
               style={[
                 styles.segmentText,
                 { color: isSelected ? theme.text : theme.textMuted },
-                isSelected && styles.segmentTextSelected,
               ]}
+              numberOfLines={1}
             >
               {option.label}
             </Text>
@@ -64,7 +64,7 @@ function SegmentedControl<T extends string>({
               <View
                 style={[
                   styles.badge,
-                  { backgroundColor: isSelected ? theme.danger : theme.textMuted },
+                  { backgroundColor: isSelected ? palette.ink : palette.textSubtle },
                 ]}
               >
                 <Text style={styles.badgeText}>
@@ -72,7 +72,7 @@ function SegmentedControl<T extends string>({
                 </Text>
               </View>
             )}
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -82,33 +82,25 @@ function SegmentedControl<T extends string>({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    borderRadius: borderRadius.md,
-    padding: 3,
-    gap: 2,
+    borderRadius: radii.pill,
+    padding: 5,
   },
   segment: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[2],
-    borderRadius: borderRadius.md - 2,
-    gap: 4,
+    height: 42,
+    paddingHorizontal: 8,
+    borderRadius: radii.pill,
+    gap: 6,
   },
   segmentSelected: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    ...shadow.press,
   },
   segmentText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-  },
-  segmentTextSelected: {
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 14,
   },
   badge: {
     minWidth: 18,
@@ -119,9 +111,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   badgeText: {
-    color: '#FFFFFF',
+    ...fonts.bold,
+    color: palette.textInverse,
     fontSize: 10,
-    fontWeight: fontWeight.bold as any,
   },
 });
 

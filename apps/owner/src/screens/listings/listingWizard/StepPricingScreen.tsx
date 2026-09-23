@@ -6,6 +6,8 @@ import WizardFooter from '../../../components/wizard/WizardFooter';
 import FormTextInput from '../../../components/inputs/FormTextInput';
 import { useSpaceWizard } from '../../../context/ListingWizardContext';
 import { useScrollToInput } from '../../../hooks/useScrollToInput';
+import { palette, radii, fonts } from '../../../theme/kit';
+import { IsoBlock } from '../../../components/ui';
 
 export default function StepPricingScreen() {
   const navigation = useNavigation<any>();
@@ -51,30 +53,38 @@ export default function StepPricingScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <View style={styles.screen}>
       <WizardHeader
         title={data.editSpaceId ? 'Edit Space' : 'Add Space'}
         step={3}
         totalSteps={5}
         onBack={() => navigation.goBack()}
       />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.h1}>Set your price</Text>
           <Text style={styles.sub}>Hourly rate is required. Daily and monthly are optional discount tiers.</Text>
 
-          <FormTextInput
-            label="Price per hour (₹)"
-            required
-            value={data.pricePerHour != null ? String(data.pricePerHour) : ''}
-            onChangeText={(v) => updateField('pricePerHour', parseNum(v))}
-            placeholder="50"
-            keyboardType="decimal-pad"
-            error={errors.pricePerHour}
-            containerStyle={styles.input}
-          />
+          {/* Each registered field is a top-level card so its onLayout y is
+              relative to the scroll content (useScrollToInput relies on it). */}
+          <View style={styles.card}>
+            <FormTextInput
+              label="Price per hour (₹)"
+              required
+              value={data.pricePerHour != null ? String(data.pricePerHour) : ''}
+              onChangeText={(v) => updateField('pricePerHour', parseNum(v))}
+              placeholder="50"
+              keyboardType="decimal-pad"
+              error={errors.pricePerHour}
+            />
+          </View>
 
-          <View onLayout={registerField('day')}>
+          <View onLayout={registerField('day')} style={styles.card}>
             <FormTextInput
               label="Price per day (₹)"
               value={data.pricePerDay != null ? String(data.pricePerDay) : ''}
@@ -82,13 +92,12 @@ export default function StepPricingScreen() {
               placeholder={suggestedDaily ? `Suggested: ₹${suggestedDaily}` : 'Optional'}
               keyboardType="decimal-pad"
               error={errors.pricePerDay}
-              containerStyle={styles.input}
               helperText="Leave blank if you only charge hourly"
               onFocus={focusField('day')}
             />
           </View>
 
-          <View onLayout={registerField('month')}>
+          <View onLayout={registerField('month')} style={styles.card}>
             <FormTextInput
               label="Price per month (₹)"
               value={data.pricePerMonth != null ? String(data.pricePerMonth) : ''}
@@ -96,7 +105,6 @@ export default function StepPricingScreen() {
               placeholder={suggestedMonthly ? `Suggested: ₹${suggestedMonthly}` : 'Optional'}
               keyboardType="decimal-pad"
               error={errors.pricePerMonth}
-              containerStyle={styles.input}
               helperText="For long-term monthly renters"
               onFocus={focusField('month')}
             />
@@ -104,7 +112,11 @@ export default function StepPricingScreen() {
 
           {data.pricePerHour ? (
             <View style={styles.hintBox}>
+              <View style={styles.hintArt} pointerEvents="none">
+                <IsoBlock size={120} tone="peach" />
+              </View>
               <Text style={styles.hintTitle}>Earnings estimate</Text>
+              <Text style={styles.hintValue}>₹{data.pricePerHour * 8}</Text>
               <Text style={styles.hintText}>
                 At ₹{data.pricePerHour}/hr, a fully-booked 8-hour day earns ₹{data.pricePerHour * 8}.
               </Text>
@@ -118,16 +130,33 @@ export default function StepPricingScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 200 },
-  h1: { fontSize: 22, fontWeight: '700', color: '#1F2937', marginBottom: 6 },
-  sub: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
-  input: { marginBottom: 14 },
-  hintBox: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#E8F5F4',
+  screen: { flex: 1, backgroundColor: palette.bg },
+  flex: { flex: 1 },
+  h1: { ...fonts.semibold, fontSize: 26, letterSpacing: -0.6, color: palette.text, marginBottom: 6 },
+  sub: { ...fonts.medium, fontSize: 14.5, lineHeight: 20, color: palette.textMuted, marginBottom: 18 },
+  card: {
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 18,
+    marginBottom: 12,
   },
-  hintTitle: { fontSize: 13, fontWeight: '600', color: '#0A5C5F', marginBottom: 4 },
-  hintText: { fontSize: 13, color: '#0A5C5F' },
+  cardTitle: { ...fonts.semibold, fontSize: 17, color: palette.text, marginBottom: 4 },
+  content: { padding: 16, paddingBottom: 200 },
+  hintBox: {
+    padding: 18,
+    borderRadius: radii.xl,
+    backgroundColor: palette.peachSoft,
+    overflow: 'hidden',
+    minHeight: 130,
+  },
+  hintArt: { position: 'absolute', right: -26, bottom: -22 },
+  hintTitle: { ...fonts.semibold, fontSize: 14, color: palette.text },
+  hintValue: {
+    ...fonts.semibold,
+    fontSize: 34,
+    letterSpacing: -1,
+    color: palette.text,
+    marginTop: 4,
+  },
+  hintText: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginTop: 4, width: '68%' },
 });

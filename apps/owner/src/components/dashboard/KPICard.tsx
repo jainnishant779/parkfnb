@@ -12,8 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts, shadow } from '../../theme/kit';
 
 export type KpiIconName = 'cash' | 'calendar' | 'car' | 'trending-up' | 'stats-chart';
 
@@ -81,7 +80,7 @@ function KpiCard({
         return theme.dangerLight;
       case 'primary':
       default:
-        return theme.primaryLight;
+        return palette.peachSoft;
     }
   }, [color, theme]);
 
@@ -119,7 +118,7 @@ function KpiCard({
       >
         {/* Icon Container */}
         <View style={[styles.iconContainer, { backgroundColor: accentBgColor }]}>
-          <Ionicons name={iconName} size={14} color={accentColor} />
+          <Ionicons name={iconName} size={18} color={accentColor} />
         </View>
 
         {/* Value */}
@@ -144,7 +143,7 @@ function KpiCard({
             <View style={styles.trendContainer}>
               <Ionicons
                 name={trend.isPositive ? 'arrow-up' : 'arrow-down'}
-                size={10}
+                size={11}
                 color={trend.isPositive ? theme.success : theme.danger}
               />
               <Text
@@ -166,37 +165,33 @@ function KpiCard({
 const styles = StyleSheet.create({
   pressable: {},
   container: {
-    width: 120,
-    padding: spacing[3],
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    width: 128,
+    padding: 14,
+    borderRadius: radii.lg,
+    ...shadow.soft,
   },
   iconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing[1],
+    marginBottom: 12,
   },
   value: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as any,
-    marginBottom: spacing[1],
+    ...fonts.semibold,
+    fontSize: 24,
+    letterSpacing: -0.8,
+    marginBottom: 2,
   },
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
+    gap: 4,
   },
   label: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12,
     flexShrink: 1,
   },
   trendContainer: {
@@ -205,8 +200,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   trendText: {
-    fontSize: fontSize.xs - 1,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 11,
   },
 });
 

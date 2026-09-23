@@ -1,8 +1,8 @@
 export const fontFamily = {
-  regular: 'System',
-  medium: 'System',
-  semibold: 'System',
-  bold: 'System',
+  regular: 'Urbanist',
+  medium: 'Urbanist',
+  semibold: 'Urbanist',
+  bold: 'Urbanist',
 } as const;
 
 export const fontSize = {

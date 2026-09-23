@@ -1,15 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TextInput,
-  Pressable,
-  StatusBar,
-  ActivityIndicator,
+  TouchableOpacity,
+  type TextStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -17,6 +15,15 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import type { AuthStackParamList } from '../../navigation/types';
 import { authService } from '../../services/authService';
 import { ApiRequestError } from '../../services/api';
+import AuthLayoutJs from '../../components/ui/AuthLayout';
+import * as UI from '../../components/ui';
+import * as Kit from '../../theme/kit';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const AuthLayout = AuthLayoutJs as React.ComponentType<any>;
+const { T, PillButton } = UI as unknown as Record<string, React.ComponentType<any>>;
+const { palette, radii } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
 
@@ -37,28 +44,6 @@ const maskPhone = (digits: string): string => {
 };
 
 // ============================================================================
-// THEME
-// ============================================================================
-
-const theme = {
-  colors: {
-    background: '#FFFFFF',
-    primary: '#0D7377',
-    textPrimary: '#1F2937',
-    textSecondary: '#6B7280',
-    inputBg: '#F3F4F6',
-    inputPlaceholder: '#9CA3AF',
-    border: '#E5E7EB',
-    buttonDisabled: '#9CA3AF',
-    buttonText: '#FFFFFF',
-    google: '#FFFFFF',
-    googleBorder: '#E5E7EB',
-    apple: '#000000',
-    facebook: '#1877F2',
-  },
-};
-
-// ============================================================================
 // MAIN SCREEN
 // ============================================================================
 
@@ -68,6 +53,7 @@ export default function SignInScreen() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [focused, setFocused] = useState(false);
 
   const parsedPhone = parseIndianPhone(phone);
   const isFormValid = parsedPhone !== null && termsAccepted && !isLoading;
@@ -112,106 +98,114 @@ export default function SignInScreen() {
   const handleAppleSignIn = () => { console.log('Apple Sign In'); };
   const handleFacebookSignIn = () => { console.log('Facebook Sign In'); };
 
+  // Keep the form + CTA above the keyboard once the field is focused.
+  const scrollRef = useRef<ScrollView>(null);
+  const handleInputFocus = () => {
+    setFocused(true);
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Decorative Circles */}
-        <View style={styles.circleTopRight} />
-        <View style={styles.circleTopRightInner} />
-        <View style={styles.circleBottomLeft} />
+    <AuthLayout
+      image={require('../../assets/images/login.jpg')}
+      title={'List your\nspace'}
+      subtitle="Sign in to manage your parking."
+      onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      scrollRef={scrollRef}
+    >
+      <T variant="h2">Sign in / Sign up</T>
+      <T variant="bodySmall" style={styles.lede}>
+        We'll send an OTP to verify your number.
+      </T>
 
-        {/* Back Button */}
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Sign In / Sign Up</Text>
-          <Text style={styles.signUpText}>We'll send an OTP to verify your number.</Text>
+      {/* Phone row: country code pill + grey pill field */}
+      <View style={styles.phoneRow}>
+        <View style={styles.cc}>
+          <Text style={styles.ccText}>+91</Text>
         </View>
-
-        {/* Form */}
-        <View style={styles.form}>
-          {/* Phone Input */}
-          <View style={styles.inputContainer}>
-            <Ionicons name="call-outline" size={22} color={theme.colors.textSecondary} style={styles.inputIcon} />
-            <Text style={styles.countryCode}>+91</Text>
-            <View style={styles.divider} />
-            <TextInput
-              style={styles.input}
-              placeholder="Phone number"
-              placeholderTextColor={theme.colors.inputPlaceholder}
-              value={phone}
-              onChangeText={(v) => {
-                setErrorMessage('');
-                setPhone(v);
-              }}
-              keyboardType="phone-pad"
-              autoComplete="tel"
-              maxLength={15}
-            />
-            {parsedPhone && (
-              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-            )}
-          </View>
-
-          {/* Terms Checkbox */}
-          <Pressable
-            style={styles.termsRow}
-            onPress={() => setTermsAccepted(!termsAccepted)}
-          >
-            <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
-              {termsAccepted && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
+        <View style={[styles.field, focused && styles.fieldFocused, !!errorMessage && styles.fieldError]}>
+          <Ionicons name="call-outline" size={18} color={palette.textMuted} />
+          <TextInput
+            style={styles.input}
+            placeholder="Phone number"
+            placeholderTextColor={palette.textSubtle}
+            value={phone}
+            onChangeText={(v) => {
+              setErrorMessage('');
+              setPhone(v);
+            }}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            maxLength={15}
+            onFocus={handleInputFocus}
+            onBlur={() => setFocused(false)}
+          />
+          {parsedPhone && (
+            <View style={styles.tick}>
+              <Ionicons name="checkmark" size={14} color={palette.textInverse} />
             </View>
-            <Text style={styles.termsText}>Accept all the Terms & Conditions</Text>
-          </Pressable>
-
-          {/* Error message */}
-          {errorMessage ? (
-            <Text
-              style={styles.errorText}
-              accessibilityRole="alert"
-              accessibilityLiveRegion="assertive"
-            >
-              {errorMessage}
-            </Text>
-          ) : null}
-
-          {/* Sign In Button */}
-          <Pressable
-            style={[styles.signInButton, !isFormValid && styles.signInButtonDisabled]}
-            onPress={handleSignIn}
-            disabled={!isFormValid}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.signInButtonText}>Continue</Text>
-            )}
-          </Pressable>
-
-          {/* Social Login */}
-          <View style={styles.socialContainer}>
-            <Pressable style={styles.socialButtonGoogle} onPress={handleGoogleSignIn}>
-              <FontAwesome name="google" size={24} color="#EA4335" />
-            </Pressable>
-            <Pressable style={styles.socialButtonApple} onPress={handleAppleSignIn}>
-              <FontAwesome name="apple" size={28} color="#FFFFFF" />
-            </Pressable>
-            <Pressable style={styles.socialButtonFacebook} onPress={handleFacebookSignIn}>
-              <FontAwesome name="facebook" size={28} color="#FFFFFF" />
-            </Pressable>
-          </View>
+          )}
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      </View>
+
+      {/* Error message */}
+      {errorMessage ? (
+        <Text
+          style={styles.errorText}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
+        >
+          {errorMessage}
+        </Text>
+      ) : null}
+
+      {/* Terms Checkbox */}
+      <TouchableOpacity
+        style={styles.terms}
+        onPress={() => setTermsAccepted(!termsAccepted)}
+        activeOpacity={0.7}
+        hitSlop={6}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: termsAccepted }}
+      >
+        <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+          {termsAccepted && <Ionicons name="checkmark" size={14} color={palette.textInverse} />}
+        </View>
+        <Text style={styles.termsText}>
+          Accept all the <Text style={styles.termsLink}>Terms & Conditions</Text>
+        </Text>
+      </TouchableOpacity>
+
+      <PillButton
+        label="Continue"
+        iconRight="arrow-right"
+        variant="ink"
+        onPress={handleSignIn}
+        disabled={!isFormValid}
+        loading={isLoading}
+        style={styles.cta}
+      />
+
+      {/* Social Login */}
+      <View style={styles.dividerRow}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>or continue with</Text>
+        <View style={styles.dividerLine} />
+      </View>
+      <View style={styles.socialContainer}>
+        <TouchableOpacity style={styles.socialButton} onPress={handleGoogleSignIn} activeOpacity={0.75}>
+          <FontAwesome name="google" size={22} color={palette.text} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn} activeOpacity={0.75}>
+          <FontAwesome name="apple" size={24} color={palette.text} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.socialButton} onPress={handleFacebookSignIn} activeOpacity={0.75}>
+          <FontAwesome name="facebook" size={22} color={palette.text} />
+        </TouchableOpacity>
+      </View>
+    </AuthLayout>
   );
 }
 
@@ -220,189 +214,83 @@ export default function SignInScreen() {
 // ============================================================================
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 40,
-  },
+  lede: { marginTop: 6, fontSize: 14, lineHeight: 20 },
 
-  // Decorative Circles
-  circleTopRight: {
-    position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 130,
-    height: 130,
-    borderRadius: 70,
-    backgroundColor: '#EBF4FF',
-  },
-  circleTopRightInner: {
-    position: 'absolute',
-    top: 50,
-    right: 70,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1E6FE8',
-  },
-  circleBottomLeft: {
-    position: 'absolute',
-    bottom: -60,
-    left: -60,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: '#EBF4FF',
-  },
-
-  // Back Button
-  backButton: {
-    width: 40,
-    height: 40,
+  phoneRow: { flexDirection: 'row', alignItems: 'center', marginTop: 24 },
+  cc: {
+    height: 58,
+    paddingHorizontal: 20,
+    borderRadius: radii.pill,
+    backgroundColor: palette.ink,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    backgroundColor: '#EBF4FF',
-    borderRadius: 20,
+    marginRight: 10,
   },
-
-  // Header
-  header: {
-    marginBottom: 40,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
-    marginBottom: 8,
-  },
-  signUpText: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-  },
-
-  // Form
-  form: {
+  ccText: { ...fonts.semibold, fontSize: 16, color: palette.textInverse },
+  field: {
     flex: 1,
-  },
-  inputContainer: {
+    height: 58,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    borderWidth: 1.5,
+    borderColor: palette.fill,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.inputBg,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 60,
-    marginBottom: 24,
+    paddingHorizontal: 18,
   },
-  inputIcon: {
-    marginRight: 10,
-  },
-  countryCode: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.textPrimary,
-    marginRight: 10,
-  },
-  divider: {
-    width: 1,
-    height: 24,
-    backgroundColor: theme.colors.border,
-    marginRight: 10,
-  },
+  fieldFocused: { borderColor: palette.ink, backgroundColor: palette.surface },
+  fieldError: { borderColor: palette.danger },
   input: {
+    ...fonts.semibold,
     flex: 1,
-    fontSize: 16,
-    color: theme.colors.textPrimary,
+    fontSize: 17,
+    letterSpacing: 0.4,
+    color: palette.text,
+    marginLeft: 10,
+    paddingVertical: 0,
   },
-
-  // Terms
-  termsRow: {
-    flexDirection: 'row',
+  tick: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: palette.success,
     alignItems: 'center',
-    marginBottom: 24,
+    justifyContent: 'center',
   },
+  errorText: { ...fonts.medium, fontSize: 13, color: palette.danger, marginTop: 10, marginLeft: 6 },
+
+  terms: { flexDirection: 'row', alignItems: 'center', marginTop: 20 },
   checkbox: {
     width: 24,
     height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: theme.colors.primary,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: palette.textSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  checkboxChecked: {
-    backgroundColor: theme.colors.primary,
-  },
-  termsText: {
-    fontSize: 15,
-    color: theme.colors.textSecondary,
-  },
+  checkboxChecked: { backgroundColor: palette.ink, borderColor: palette.ink },
+  termsText: { ...fonts.medium, flex: 1, fontSize: 14, color: palette.textMuted },
+  termsLink: { ...fonts.semibold, color: palette.text },
 
-  // Error
-  errorText: {
-    color: '#EF4444',
-    fontSize: 14,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
+  cta: { marginTop: 26 },
 
-  // Sign In Button
-  signInButton: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  signInButtonDisabled: {
-    backgroundColor: theme.colors.buttonDisabled,
-  },
-  signInButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.buttonText,
-  },
-
-  // Social Login
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 26 },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: palette.line },
+  dividerText: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginHorizontal: 12 },
   socialContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 20,
+    gap: 14,
+    marginTop: 18,
   },
-  socialButtonGoogle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: theme.colors.google,
-    borderWidth: 1,
-    borderColor: theme.colors.googleBorder,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  socialButtonApple: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: theme.colors.apple,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  socialButtonFacebook: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: theme.colors.facebook,
+  socialButton: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: palette.fill,
     justifyContent: 'center',
     alignItems: 'center',
   },

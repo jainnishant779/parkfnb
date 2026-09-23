@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   FlatList,
-  Modal,
   Pressable,
   ActivityIndicator,
   RefreshControl,
@@ -15,13 +14,25 @@ import {
   Platform,
   Animated,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
+import {
+  PillButton,
+  IconCircle,
+  SearchPill,
+  ScreenHeader,
+  StatusTag,
+  ProgressTrack,
+  InfoGrid,
+  TimelineItem,
+  IsoBlock,
+  EmptyState as KitEmptyState,
+} from '../../components/ui';
+
+type TagTone = 'ink' | 'warning' | 'success' | 'danger' | 'grey';
 
 // ============================================================================
 // TYPES
@@ -116,17 +127,31 @@ const formatRelativeTime = (dateStr: string) => {
 };
 
 const STATUS_CONFIG: Record<DisputeStatus, { label: string; color: string; bg: string }> = {
-  open: { label: 'Open', color: '#1976D2', bg: '#E3F2FD' },
-  under_review: { label: 'Under Review', color: '#F57C00', bg: '#FFF3E0' },
-  resolved: { label: 'Resolved', color: '#388E3C', bg: '#E8F5E9' },
-  rejected: { label: 'Rejected', color: '#D32F2F', bg: '#FFEBEE' },
-  archived: { label: 'Archived', color: '#757575', bg: '#F5F5F5' },
+  open: { label: 'Open', color: palette.textInverse, bg: palette.ink },
+  under_review: { label: 'Under Review', color: palette.warning, bg: palette.warningSoft },
+  resolved: { label: 'Resolved', color: palette.success, bg: palette.successSoft },
+  rejected: { label: 'Rejected', color: palette.danger, bg: palette.dangerSoft },
+  archived: { label: 'Archived', color: palette.textMuted, bg: palette.fill },
+};
+
+const STATUS_TONE: Record<DisputeStatus, TagTone> = {
+  open: 'ink',
+  under_review: 'warning',
+  resolved: 'success',
+  rejected: 'danger',
+  archived: 'grey',
 };
 
 const PRIORITY_CONFIG: Record<DisputePriority, { label: string; color: string; bg: string }> = {
-  low: { label: 'Low', color: '#388E3C', bg: '#E8F5E9' },
-  medium: { label: 'Medium', color: '#F57C00', bg: '#FFF3E0' },
-  high: { label: 'High', color: '#D32F2F', bg: '#FFEBEE' },
+  low: { label: 'Low', color: palette.success, bg: palette.successSoft },
+  medium: { label: 'Medium', color: palette.warning, bg: palette.warningSoft },
+  high: { label: 'High', color: palette.danger, bg: palette.dangerSoft },
+};
+
+const PRIORITY_TONE: Record<DisputePriority, TagTone> = {
+  low: 'grey',
+  medium: 'warning',
+  high: 'danger',
 };
 
 const CATEGORY_CONFIG: Record<DisputeCategory, { label: string; icon: string }> = {
@@ -283,50 +308,34 @@ async function savePrefs(prefs: UIPrefs): Promise<void> {
 // ============================================================================
 // COMPONENTS
 // ============================================================================
-const StatusPill = ({ status }: { status: DisputeStatus }) => {
-  const cfg = STATUS_CONFIG[status];
-  return (
-    <View style={[styles.pill, { backgroundColor: cfg.bg }]}>
-      <Text style={[styles.pillText, { color: cfg.color }]}>{cfg.label}</Text>
-    </View>
-  );
-};
+const StatusPill = ({ status }: { status: DisputeStatus }) => (
+  <StatusTag label={STATUS_CONFIG[status].label} tone={STATUS_TONE[status]} />
+);
 
-const PriorityPill = ({ priority }: { priority: DisputePriority }) => {
-  const cfg = PRIORITY_CONFIG[priority];
-  return (
-    <View style={[styles.pill, { backgroundColor: cfg.bg }]}>
-      <Text style={[styles.pillText, { color: cfg.color }]}>{cfg.label}</Text>
-    </View>
-  );
-};
+const PriorityPill = ({ priority }: { priority: DisputePriority }) => (
+  <StatusTag label={`${PRIORITY_CONFIG[priority].label} priority`} tone={PRIORITY_TONE[priority]} />
+);
 
-const KpiCard = ({ label, count, active, onPress }: { label: string; count: number; active: boolean; onPress: () => void }) => {
-  const theme = getTheme(false);
-  return (
-    <TouchableOpacity
-      style={[styles.kpiCard, active && { borderColor: theme.primary, borderWidth: 2 }]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Text style={[styles.kpiCount, { color: theme.primary }]}>{count}</Text>
-      <Text style={styles.kpiLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
-};
+const KpiCard = ({ label, count, active, onPress }: { label: string; count: number; active: boolean; onPress: () => void }) => (
+  <TouchableOpacity
+    style={[styles.kpiCard, active && styles.kpiCardActive]}
+    onPress={onPress}
+    activeOpacity={0.8}
+  >
+    <Text style={[styles.kpiCount, active && styles.kpiTextActive]}>{count}</Text>
+    <Text style={[styles.kpiLabel, active && styles.kpiLabelActive]} numberOfLines={1}>{label}</Text>
+  </TouchableOpacity>
+);
 
-const FilterChip = ({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) => {
-  const theme = getTheme(false);
-  return (
-    <TouchableOpacity
-      style={[styles.chip, active && { backgroundColor: theme.primary }]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Text style={[styles.chipText, active && { color: '#FFF' }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-};
+const FilterChip = ({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) => (
+  <TouchableOpacity
+    style={[styles.chip, active && styles.chipActive]}
+    onPress={onPress}
+    activeOpacity={0.75}
+  >
+    <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+  </TouchableOpacity>
+);
 
 const Toast = ({ message, visible, onHide }: { message: string; visible: boolean; onHide: () => void }) => {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -348,52 +357,57 @@ const Toast = ({ message, visible, onHide }: { message: string; visible: boolean
 };
 
 const EmptyState = ({ title, body, actionLabel, onAction }: { title: string; body: string; actionLabel?: string; onAction?: () => void }) => (
-  <View style={styles.emptyState}>
-    <Ionicons name="document-text-outline" size={64} color="#CCC" />
-    <Text style={styles.emptyTitle}>{title}</Text>
-    <Text style={styles.emptyBody}>{body}</Text>
-    {actionLabel && onAction && (
-      <TouchableOpacity style={styles.emptyBtn} onPress={onAction}>
-        <Text style={styles.emptyBtnText}>{actionLabel}</Text>
-      </TouchableOpacity>
-    )}
-  </View>
+  <KitEmptyState
+    tone="peach"
+    title={title}
+    subtitle={body}
+    action={actionLabel && onAction ? actionLabel : undefined}
+    onAction={onAction}
+  />
 );
+
+// Status → position on the Open → Under review → Closed track.
+const STATUS_STEP: Record<DisputeStatus, number> = {
+  open: 0,
+  under_review: 1,
+  resolved: 3,
+  rejected: 3,
+  archived: 3,
+};
 
 // ============================================================================
 // DISPUTE CARD
 // ============================================================================
 const DisputeCard = ({ item, onPress, onLongPress }: { item: DisputeCase; onPress: () => void; onLongPress: () => void }) => {
-  const theme = getTheme(false);
   const lastNote = item.notes[item.notes.length - 1];
   return (
-    <TouchableOpacity style={styles.disputeCard} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.7}>
+    <TouchableOpacity style={styles.disputeCard} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.85}>
       <View style={styles.cardHeader}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-          <View style={styles.cardPills}>
-            <StatusPill status={item.status} />
-            <PriorityPill priority={item.priority} />
-            {item.requiresAction && (
-              <View style={[styles.pill, { backgroundColor: '#FFEBEE' }]}>
-                <Text style={[styles.pillText, { color: '#D32F2F' }]}>Action Required</Text>
-              </View>
-            )}
-          </View>
+        <View style={styles.cardPills}>
+          <StatusPill status={item.status} />
+          <PriorityPill priority={item.priority} />
+          {item.requiresAction && <StatusTag label="Action Required" tone="danger" />}
         </View>
-        <Ionicons name="chevron-forward" size={20} color="#999" />
+        <Ionicons name="chevron-forward" size={20} color={palette.textSubtle} />
       </View>
+      <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
+      <ProgressTrack
+        steps={4}
+        current={STATUS_STEP[item.status]}
+        trackColor={palette.line}
+        style={styles.cardTrack}
+      />
       <View style={styles.cardMeta}>
         <View style={styles.metaRow}>
-          <Ionicons name="bookmark-outline" size={14} color="#666" />
+          <Ionicons name="bookmark-outline" size={13} color={palette.text} />
           <Text style={styles.metaText}>{item.bookingRef.id}</Text>
         </View>
         <View style={styles.metaRow}>
-          <Ionicons name="location-outline" size={14} color="#666" />
+          <Ionicons name="location-outline" size={13} color={palette.text} />
           <Text style={styles.metaText}>{item.lotSection.name}</Text>
         </View>
         <View style={styles.metaRow}>
-          <Ionicons name={CATEGORY_CONFIG[item.category].icon as any} size={14} color="#666" />
+          <Ionicons name={CATEGORY_CONFIG[item.category].icon as any} size={13} color={palette.text} />
           <Text style={styles.metaText}>{CATEGORY_CONFIG[item.category].label}</Text>
         </View>
       </View>
@@ -409,7 +423,6 @@ const DisputeCard = ({ item, onPress, onLongPress }: { item: DisputeCase; onPres
 // MAIN SCREEN
 // ============================================================================
 export default function DisputesScreen() {
-  const theme = getTheme(false);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
@@ -633,28 +646,23 @@ export default function DisputesScreen() {
   // Render
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
+          <ActivityIndicator size="large" color={palette.ink} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBackBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color="#1E293B" />
-        </TouchableOpacity>
+        <IconCircle icon="arrow-left" size={46} onPress={() => navigation.goBack()} />
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Disputes</Text>
         </View>
-        <TouchableOpacity style={[styles.newBtn, { backgroundColor: theme.primary }]} onPress={() => setShowCreate(true)}>
-          <Ionicons name="add" size={20} color="#FFF" />
-          <Text style={styles.newBtnText}>New</Text>
-        </TouchableOpacity>
+        <PillButton variant="ink" size="sm" icon="plus" label="New" onPress={() => setShowCreate(true)} />
       </View>
 
       {/* Dispute List */}
@@ -669,16 +677,16 @@ export default function DisputesScreen() {
           />
         )}
         style={styles.list}
-        contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.ink} />}
         ListHeaderComponent={
           <>
             {/* Save failed banner */}
             {saveFailed && (
               <View style={styles.banner}>
-                <Ionicons name="warning-outline" size={18} color="#F57C00" />
+                <Ionicons name="warning-outline" size={18} color={palette.warning} />
                 <Text style={styles.bannerText}>Couldn't save locally. Changes may not persist.</Text>
-                <TouchableOpacity onPress={() => setSaveFailed(false)}><Ionicons name="close" size={18} color="#666" /></TouchableOpacity>
+                <TouchableOpacity onPress={() => setSaveFailed(false)}><Ionicons name="close" size={18} color={palette.textMuted} /></TouchableOpacity>
               </View>
             )}
 
@@ -699,24 +707,25 @@ export default function DisputesScreen() {
 
             {/* Search */}
             <View style={styles.searchContainer}>
-              <View style={[styles.searchBar, { backgroundColor: theme.surface }]}>
-                <Ionicons name="search-outline" size={18} color={theme.textMuted} />
-                <TextInput
-                  style={[styles.searchInput, { color: theme.text }]}
-                  placeholder="Search by booking ID"
-                  placeholderTextColor={theme.textMuted}
-                  value={prefs.searchText}
-                  onChangeText={t => updatePrefs({ searchText: t })}
-                />
-                {prefs.searchText.length > 0 && (
-                  <TouchableOpacity onPress={() => updatePrefs({ searchText: '' })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close-circle" size={18} color={theme.textMuted} />
-                  </TouchableOpacity>
-                )}
-              </View>
-              <TouchableOpacity style={[styles.sortBtn, { backgroundColor: theme.surface }]} onPress={() => setShowSortSheet(true)}>
-                <Ionicons name="funnel-outline" size={20} color={theme.text} />
-              </TouchableOpacity>
+              <SearchPill
+                value={prefs.searchText}
+                onChangeText={(t: string) => updatePrefs({ searchText: t })}
+                placeholder="Search by booking ID"
+                style={styles.searchBar}
+                right={
+                  prefs.searchText.length > 0 ? (
+                    <TouchableOpacity onPress={() => updatePrefs({ searchText: '' })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={18} color={palette.textMuted} />
+                    </TouchableOpacity>
+                  ) : null
+                }
+              />
+              <IconCircle
+                icon="sliders"
+                size={52}
+                badge={prefs.sortBy !== 'newest'}
+                onPress={() => setShowSortSheet(true)}
+              />
             </View>
 
             {/* Category Filters */}
@@ -749,115 +758,122 @@ export default function DisputesScreen() {
 
       {/* Quick Actions Sheet */}
       {showQuickActions ? (
-
-        <Pressable style={styles.modalOverlay} onPress={() => setShowQuickActions(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.backdrop} onPress={() => setShowQuickActions(false)} />
           <View style={[styles.actionSheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.grabber} />
             <Text style={styles.sheetTitle}>Quick Actions</Text>
             {quickActionTarget && (
               <>
                 <TouchableOpacity style={styles.actionRow} onPress={() => { setShowQuickActions(false); setSelectedDispute(quickActionTarget); setShowAddNote(true); }}>
-                  <Ionicons name="create-outline" size={22} color="#333" /><Text style={styles.actionText}>Add Note</Text>
+                  <View style={styles.actionIcon}><Ionicons name="create-outline" size={20} color={palette.text} /></View>
+                  <Text style={styles.actionText}>Add Note</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionRow} onPress={() => { setShowQuickActions(false); setSelectedDispute(quickActionTarget); addEvidence(`evidence_${Date.now()}.jpg`, 'photo'); }}>
-                  <Ionicons name="attach-outline" size={22} color="#333" /><Text style={styles.actionText}>Attach Evidence</Text>
+                  <View style={styles.actionIcon}><Ionicons name="attach-outline" size={20} color={palette.text} /></View>
+                  <Text style={styles.actionText}>Attach Evidence</Text>
                 </TouchableOpacity>
                 {(quickActionTarget.status === 'open' || quickActionTarget.status === 'under_review') && (
                   <TouchableOpacity style={styles.actionRow} onPress={() => markResolved(quickActionTarget)}>
-                    <Ionicons name="checkmark-circle-outline" size={22} color="#388E3C" /><Text style={[styles.actionText, { color: '#388E3C' }]}>Mark Resolved</Text>
+                    <View style={[styles.actionIcon, styles.actionIconSuccess]}><Ionicons name="checkmark-circle-outline" size={20} color={palette.success} /></View>
+                    <Text style={[styles.actionText, styles.actionTextSuccess]}>Mark Resolved</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity style={styles.actionRow} onPress={() => archiveDispute(quickActionTarget)}>
-                  <Ionicons name="archive-outline" size={22} color="#666" /><Text style={styles.actionText}>Archive</Text>
+                  <View style={styles.actionIcon}><Ionicons name="archive-outline" size={20} color={palette.text} /></View>
+                  <Text style={styles.actionText}>Archive</Text>
                 </TouchableOpacity>
               </>
             )}
-            <TouchableOpacity style={[styles.actionRow, styles.cancelRow]} onPress={() => setShowQuickActions(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
+            <PillButton variant="grey" label="Cancel" onPress={() => setShowQuickActions(false)} style={styles.sheetCancel} />
           </View>
-        </Pressable>
-      
+        </View>
       ) : null}
 
       {/* Sort Sheet */}
       {showSortSheet ? (
-
-        <Pressable style={styles.modalOverlay} onPress={() => setShowSortSheet(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.backdrop} onPress={() => setShowSortSheet(false)} />
           <View style={[styles.actionSheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.grabber} />
             <Text style={styles.sheetTitle}>Sort By</Text>
             {[
               { key: 'newest', label: 'Newest first' },
               { key: 'oldest', label: 'Oldest first' },
               { key: 'priority', label: 'Priority (High→Low)' },
               { key: 'requires_action', label: 'Requires action first' },
-            ].map(opt => (
-              <TouchableOpacity key={opt.key} style={styles.actionRow} onPress={() => { updatePrefs({ sortBy: opt.key as any }); setShowSortSheet(false); }}>
-                <Text style={[styles.actionText, prefs.sortBy === opt.key && { color: theme.primary, fontWeight: '600' }]}>{opt.label}</Text>
-                {prefs.sortBy === opt.key && <Ionicons name="checkmark" size={20} color={theme.primary} />}
+            ].map((opt, i, arr) => (
+              <TouchableOpacity key={opt.key} style={[styles.sortRow, i < arr.length - 1 && styles.sortRowDivider]} onPress={() => { updatePrefs({ sortBy: opt.key as any }); setShowSortSheet(false); }}>
+                <Text style={[styles.sortText, prefs.sortBy === opt.key && styles.sortTextActive]}>{opt.label}</Text>
+                {prefs.sortBy === opt.key ? (
+                  <View style={styles.checkDot}><Ionicons name="checkmark" size={16} color={palette.textInverse} /></View>
+                ) : (
+                  <View style={styles.uncheckDot} />
+                )}
               </TouchableOpacity>
             ))}
           </View>
-        </Pressable>
-      
+        </View>
       ) : null}
 
       {/* Details Modal */}
       {showDetails ? (
-
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.fullOverlay, styles.detailRoot, { paddingTop: insets.top }]}>
           {selectedDispute && (
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-              <View style={styles.detailHeader}>
-                <TouchableOpacity onPress={() => setShowDetails(false)} style={styles.backBtn}>
-                  <Ionicons name="arrow-back" size={24} color="#333" />
-                </TouchableOpacity>
-                <Text style={styles.detailTitle} numberOfLines={1}>{selectedDispute.title}</Text>
-              </View>
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.detailContent}>
-                {/* Status & Priority */}
-                <View style={styles.detailPills}>
-                  <StatusPill status={selectedDispute.status} />
-                  <PriorityPill priority={selectedDispute.priority} />
-                  {selectedDispute.requiresAction && (
-                    <View style={[styles.pill, { backgroundColor: '#FFEBEE' }]}>
-                      <Text style={[styles.pillText, { color: '#D32F2F' }]}>Action Required</Text>
-                    </View>
-                  )}
+            <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <ScreenHeader title="Details" onBack={() => setShowDetails(false)} />
+              <ScrollView style={styles.flex} contentContainerStyle={styles.detailContent}>
+                {/* Summary card */}
+                <View style={styles.summaryCard}>
+                  <View style={styles.summaryArt} pointerEvents="none">
+                    <IsoBlock size={140} tone={selectedDispute.requiresAction ? 'peach' : 'blue'} />
+                  </View>
+                  <View style={styles.detailPills}>
+                    <StatusPill status={selectedDispute.status} />
+                    <PriorityPill priority={selectedDispute.priority} />
+                    {selectedDispute.requiresAction && <StatusTag label="Action Required" tone="danger" />}
+                  </View>
+                  <Text style={styles.detailTitle}>{selectedDispute.title}</Text>
+                  <ProgressTrack
+                    steps={4}
+                    current={STATUS_STEP[selectedDispute.status]}
+                    style={styles.summaryTrack}
+                  />
+                  <InfoGrid
+                    style={styles.summaryGrid}
+                    items={[
+                      { label: 'Booking', value: selectedDispute.bookingRef.id },
+                      { label: 'Section', value: selectedDispute.lotSection.name },
+                      { label: 'Category', value: CATEGORY_CONFIG[selectedDispute.category].label },
+                      { label: 'Created', value: formatDate(selectedDispute.createdAt) },
+                    ]}
+                  />
                 </View>
 
-                {/* Meta */}
-                <View style={styles.detailMeta}>
-                  <View style={styles.metaItem}><Text style={styles.metaLabel}>Booking</Text><Text style={styles.metaValue}>{selectedDispute.bookingRef.id}</Text></View>
-                  <View style={styles.metaItem}><Text style={styles.metaLabel}>Section</Text><Text style={styles.metaValue}>{selectedDispute.lotSection.name}</Text></View>
-                  <View style={styles.metaItem}><Text style={styles.metaLabel}>Category</Text><Text style={styles.metaValue}>{CATEGORY_CONFIG[selectedDispute.category].label}</Text></View>
-                  <View style={styles.metaItem}><Text style={styles.metaLabel}>Created</Text><Text style={styles.metaValue}>{formatDate(selectedDispute.createdAt)}</Text></View>
-                </View>
+                {/* Sheet */}
+                <View style={styles.detailSheet}>
+                  <View style={styles.grabber} />
 
-                {/* Description */}
-                <View style={styles.section}><Text style={styles.sectionTitle}>Description</Text><Text style={styles.descText}>{selectedDispute.description}</Text></View>
+                  {/* Description */}
+                  <Text style={styles.sectionTitle}>Description</Text>
+                  <Text style={styles.descText}>{selectedDispute.description}</Text>
 
-                {/* Timeline */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Timeline</Text>
+                  {/* Timeline */}
+                  <Text style={[styles.sectionTitle, styles.sectionGap]}>Timeline</Text>
                   {selectedDispute.timeline.map((ev, i) => (
-                    <View key={ev.id} style={styles.timelineItem}>
-                      <View style={[styles.timelineDot, i === 0 && { backgroundColor: theme.primary }]} />
-                      {i < selectedDispute.timeline.length - 1 && <View style={styles.timelineLine} />}
-                      <View style={styles.timelineContent}>
-                        <Text style={styles.timelineLabel}>{ev.label}</Text>
-                        <Text style={styles.timelineTime}>{formatRelativeTime(ev.createdAt)}</Text>
-                      </View>
-                    </View>
+                    <TimelineItem
+                      key={ev.id}
+                      title={ev.label}
+                      time={formatRelativeTime(ev.createdAt)}
+                      active={i === 0}
+                      isLast={i === selectedDispute.timeline.length - 1}
+                    />
                   ))}
-                </View>
 
-                {/* Evidence */}
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
+                  {/* Evidence */}
+                  <View style={[styles.sectionHeader, styles.sectionGap]}>
                     <Text style={styles.sectionTitle}>Evidence</Text>
-                    <TouchableOpacity onPress={() => addEvidence(`photo_${Date.now()}.jpg`, 'photo')}>
-                      <Text style={[styles.addLink, { color: theme.primary }]}>+ Add</Text>
-                    </TouchableOpacity>
+                    <PillButton size="sm" variant="grey" icon="plus" label="Add" onPress={() => addEvidence(`photo_${Date.now()}.jpg`, 'photo')} />
                   </View>
                   {selectedDispute.evidence.length === 0 ? (
                     <Text style={styles.emptyText}>No evidence added yet</Text>
@@ -865,21 +881,17 @@ export default function DisputesScreen() {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                       {selectedDispute.evidence.map(ev => (
                         <View key={ev.id} style={styles.evidenceChip}>
-                          <Ionicons name={ev.type === 'photo' ? 'image-outline' : ev.type === 'video' ? 'videocam-outline' : 'document-outline'} size={16} color="#666" />
+                          <Ionicons name={ev.type === 'photo' ? 'image-outline' : ev.type === 'video' ? 'videocam-outline' : 'document-outline'} size={16} color={palette.text} />
                           <Text style={styles.evidenceName} numberOfLines={1}>{ev.name}</Text>
                         </View>
                       ))}
                     </ScrollView>
                   )}
-                </View>
 
-                {/* Notes */}
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
+                  {/* Notes */}
+                  <View style={[styles.sectionHeader, styles.sectionGap]}>
                     <Text style={styles.sectionTitle}>Notes</Text>
-                    <TouchableOpacity onPress={() => setShowAddNote(true)}>
-                      <Text style={[styles.addLink, { color: theme.primary }]}>+ Add Note</Text>
-                    </TouchableOpacity>
+                    <PillButton size="sm" variant="grey" icon="plus" label="Add Note" onPress={() => setShowAddNote(true)} />
                   </View>
                   {selectedDispute.notes.length === 0 ? (
                     <Text style={styles.emptyText}>No notes yet</Text>
@@ -891,119 +903,91 @@ export default function DisputesScreen() {
                       </View>
                     ))
                   )}
-                </View>
 
-                {/* Actions */}
-                <View style={styles.detailActions}>
-                  {(selectedDispute.status === 'open' || selectedDispute.status === 'under_review') && (
-                    <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: theme.primary }]} onPress={() => markResolved(selectedDispute)}>
-                      <Text style={styles.primaryBtnText}>Mark as Resolved</Text>
-                    </TouchableOpacity>
-                  )}
-                  {selectedDispute.status === 'resolved' && (
-                    <TouchableOpacity style={styles.secondaryBtn} onPress={() => reopenDispute(selectedDispute)}>
-                      <Text style={styles.secondaryBtnText}>Reopen Dispute</Text>
-                    </TouchableOpacity>
-                  )}
                   {selectedDispute.status === 'rejected' && selectedDispute.rejectionReason && (
                     <View style={styles.rejectionBox}><Text style={styles.rejectionTitle}>Rejection Reason</Text><Text style={styles.rejectionText}>{selectedDispute.rejectionReason}</Text></View>
                   )}
                 </View>
               </ScrollView>
+
+              {/* Sticky actions */}
+              {(selectedDispute.status === 'open' || selectedDispute.status === 'under_review' || selectedDispute.status === 'resolved') && (
+                <View style={[styles.detailFooter, { paddingBottom: insets.bottom + 12 }]}>
+                  {(selectedDispute.status === 'open' || selectedDispute.status === 'under_review') && (
+                    <PillButton variant="ink" icon="check-circle" label="Mark as Resolved" onPress={() => markResolved(selectedDispute)} style={styles.flex} />
+                  )}
+                  {selectedDispute.status === 'resolved' && (
+                    <PillButton variant="grey" icon="rotate-ccw" label="Reopen Dispute" onPress={() => reopenDispute(selectedDispute)} style={styles.flex} />
+                  )}
+                </View>
+              )}
             </KeyboardAvoidingView>
           )}
-        </SafeAreaView>
-      
+        </View>
       ) : null}
 
-      {/* Add Note Modal */}
+      {/* Add Note Sheet */}
       {showAddNote ? (
-
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.noteModal}>
+          <View style={styles.backdrop} />
+          <View style={[styles.actionSheet, styles.noteSheet, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.grabber} />
             <Text style={styles.noteModalTitle}>Add Note</Text>
             <TextInput
               style={styles.noteInput}
               placeholder="Enter your note (min 10 characters)"
-              placeholderTextColor="#999"
+              placeholderTextColor={palette.textSubtle}
               multiline
               value={noteText}
               onChangeText={setNoteText}
             />
             {noteText.length > 0 && noteText.length < 10 && <Text style={styles.errorText}>Note must be at least 10 characters</Text>}
             <View style={styles.noteModalBtns}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowAddNote(false); setNoteText(''); }}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.submitBtn, { backgroundColor: noteText.length >= 10 ? theme.primary : '#CCC' }]} onPress={addNote} disabled={noteText.length < 10}>
-                <Text style={styles.submitBtnText}>Add Note</Text>
-              </TouchableOpacity>
+              <PillButton variant="grey" label="Cancel" onPress={() => { setShowAddNote(false); setNoteText(''); }} style={styles.flex} />
+              <PillButton variant="ink" label="Add Note" onPress={addNote} disabled={noteText.length < 10} style={styles.flexWide} />
             </View>
           </View>
         </KeyboardAvoidingView>
-      
       ) : null}
 
       {/* Create Dispute Modal */}
       {showCreate ? (
-
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View style={styles.createHeader}>
-              <TouchableOpacity onPress={() => { setShowCreate(false); resetCreateForm(); }}>
-                <Ionicons name="close" size={28} color="#333" />
-              </TouchableOpacity>
-              <Text style={styles.createTitle}>Create Dispute</Text>
-              <View style={{ width: 28 }} />
-            </View>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.createContent}>
+        <View style={[styles.fullOverlay, styles.createRoot, { paddingTop: insets.top }]}>
+          <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <ScreenHeader
+              title="Create Dispute"
+              right={<IconCircle icon="x" size={40} variant="grey" onPress={() => { setShowCreate(false); resetCreateForm(); }} />}
+            />
+            <ScrollView style={styles.flex} contentContainerStyle={styles.createContent}>
               {/* Category */}
               <Text style={styles.fieldLabel}>Category *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow}>
                 {(Object.keys(CATEGORY_CONFIG) as DisputeCategory[]).map(cat => (
-                  <TouchableOpacity key={cat} style={[styles.categoryChip, createCategory === cat && { backgroundColor: theme.primary }]} onPress={() => setCreateCategory(cat)}>
-                    <Ionicons name={CATEGORY_CONFIG[cat].icon as any} size={18} color={createCategory === cat ? '#FFF' : '#666'} />
-                    <Text style={[styles.categoryText, createCategory === cat && { color: '#FFF' }]}>{CATEGORY_CONFIG[cat].label}</Text>
+                  <TouchableOpacity key={cat} style={[styles.categoryChip, createCategory === cat && styles.chipActive]} onPress={() => setCreateCategory(cat)}>
+                    <Ionicons name={CATEGORY_CONFIG[cat].icon as any} size={17} color={createCategory === cat ? palette.textInverse : palette.text} />
+                    <Text style={[styles.categoryText, createCategory === cat && styles.chipTextActive]}>{CATEGORY_CONFIG[cat].label}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
 
               {/* Booking — TODO: populate from real bookings API */}
-              {/* <Text style={styles.fieldLabel}>Related Booking *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectRow}>
-                {MOCK_BOOKINGS.map(b => (
-                  <TouchableOpacity key={b.id} style={[styles.selectChip, createBooking?.id === b.id && { borderColor: theme.primary, backgroundColor: '#E3F2FD' }]} onPress={() => setCreateBooking(b)}>
-                    <Text style={styles.selectChipTitle}>{b.id}</Text>
-                    <Text style={styles.selectChipSub}>{b.renterName}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView> */}
-
               {/* Section — TODO: populate from real lot sections API */}
-              {/* <Text style={styles.fieldLabel}>Lot Section *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectRow}>
-                {MOCK_SECTIONS.map(s => (
-                  <TouchableOpacity key={s.id} style={[styles.selectChip, createSection?.id === s.id && { borderColor: theme.primary, backgroundColor: '#E3F2FD' }]} onPress={() => setCreateSection(s)}>
-                    <Text style={styles.selectChipTitle}>{s.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView> */}
 
               {/* Title */}
               <Text style={styles.fieldLabel}>Title * (min 6 chars)</Text>
-              <TextInput style={styles.textInput} placeholder="Brief title for this dispute" placeholderTextColor="#999" value={createTitle} onChangeText={setCreateTitle} />
+              <TextInput style={styles.textInput} placeholder="Brief title for this dispute" placeholderTextColor={palette.textSubtle} value={createTitle} onChangeText={setCreateTitle} />
               {createTitle.length > 0 && createTitle.length < 6 && <Text style={styles.errorText}>Title must be at least 6 characters</Text>}
 
               {/* Description */}
               <Text style={styles.fieldLabel}>Description * (min 20 chars)</Text>
-              <TextInput style={[styles.textInput, styles.textArea]} placeholder="Describe the issue in detail..." placeholderTextColor="#999" multiline value={createDesc} onChangeText={setCreateDesc} />
+              <TextInput style={[styles.textInput, styles.textArea]} placeholder="Describe the issue in detail..." placeholderTextColor={palette.textSubtle} multiline value={createDesc} onChangeText={setCreateDesc} />
               {createDesc.length > 0 && createDesc.length < 20 && <Text style={styles.errorText}>Description must be at least 20 characters</Text>}
 
               {/* Priority */}
               <Text style={styles.fieldLabel}>Priority</Text>
               <View style={styles.priorityRow}>
                 {(['low', 'medium', 'high'] as DisputePriority[]).map(p => (
-                  <TouchableOpacity key={p} style={[styles.priorityChip, createPriority === p && { backgroundColor: PRIORITY_CONFIG[p].bg, borderColor: PRIORITY_CONFIG[p].color }]} onPress={() => setCreatePriority(p)}>
+                  <TouchableOpacity key={p} style={[styles.priorityChip, createPriority === p && { backgroundColor: PRIORITY_CONFIG[p].bg }]} onPress={() => setCreatePriority(p)}>
                     <Text style={[styles.priorityText, createPriority === p && { color: PRIORITY_CONFIG[p].color }]}>{PRIORITY_CONFIG[p].label}</Text>
                   </TouchableOpacity>
                 ))}
@@ -1011,12 +995,12 @@ export default function DisputesScreen() {
 
               {/* Pause Listing */}
               <TouchableOpacity style={styles.checkRow} onPress={() => setCreatePause(!createPause)}>
-                <Ionicons name={createPause ? 'checkbox' : 'square-outline'} size={24} color={createPause ? theme.primary : '#666'} />
+                <Ionicons name={createPause ? 'checkbox' : 'square-outline'} size={24} color={createPause ? palette.ink : palette.textMuted} />
                 <Text style={styles.checkLabel}>Pause listing temporarily</Text>
               </TouchableOpacity>
               {createPause && (
                 <View style={styles.warningBanner}>
-                  <Ionicons name="warning-outline" size={18} color="#F57C00" />
+                  <Ionicons name="warning-outline" size={18} color={palette.warning} />
                   <Text style={styles.warningText}>This will mark your listing as paused locally.</Text>
                 </View>
               )}
@@ -1028,26 +1012,23 @@ export default function DisputesScreen() {
                   <View key={ev.id} style={styles.evidenceChip}>
                     <Text style={styles.evidenceName}>{ev.name}</Text>
                     <TouchableOpacity onPress={() => setCreateEvidence(prev => prev.filter(e => e.id !== ev.id))}>
-                      <Ionicons name="close-circle" size={18} color="#999" />
+                      <Ionicons name="close-circle" size={18} color={palette.textMuted} />
                     </TouchableOpacity>
                   </View>
                 ))}
                 <TouchableOpacity style={styles.addEvidenceBtn} onPress={() => setCreateEvidence(prev => [...prev, { id: generateId(), name: `photo_${prev.length + 1}.jpg`, type: 'photo', createdAt: new Date().toISOString() }])}>
-                  <Ionicons name="add" size={20} color="#666" />
+                  <Ionicons name="add" size={18} color={palette.text} />
                   <Text style={styles.addEvidenceText}>Add</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
             <View style={[styles.createFooter, { paddingBottom: insets.bottom + 16 }]}>
-              <TouchableOpacity style={[styles.submitBtn, { backgroundColor: canSubmitCreate ? theme.primary : '#CCC', flex: 1 }]} onPress={createDispute} disabled={!canSubmitCreate}>
-                <Text style={styles.submitBtnText}>Create Dispute</Text>
-              </TouchableOpacity>
+              <PillButton variant="ink" label="Create Dispute" onPress={createDispute} disabled={!canSubmitCreate} />
             </View>
           </KeyboardAvoidingView>
-        </SafeAreaView>
-      
+        </View>
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -1055,124 +1036,114 @@ export default function DisputesScreen() {
 // STYLES
 // ============================================================================
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: palette.bg },
+  flex: { flex: 1 },
+  flexWide: { flex: 1.4 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  headerBackBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', marginRight: 8, backgroundColor: '#E8F5F4', borderRadius: 20 },
-  headerContent: { flex: 1 },
-  headerTitle: { fontSize: 22, fontWeight: '700', color: '#1E293B' },
-  headerSubtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
-  newBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  newBtnText: { color: '#FFF', fontWeight: '600', marginLeft: 4 },
-  banner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF3E0', paddingHorizontal: 16, paddingVertical: 10, marginHorizontal: 16, borderRadius: 8, marginBottom: 8 },
-  bannerText: { flex: 1, fontSize: 13, color: '#666', marginLeft: 8 },
-  kpiWrapper: { overflow: 'visible', marginBottom: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  headerContent: { flex: 1, marginLeft: 12 },
+  headerTitle: { ...fonts.semibold, fontSize: 28, letterSpacing: -0.7, color: palette.text },
+  banner: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.warningSoft, paddingHorizontal: 16, paddingVertical: 12, borderRadius: radii.pill, marginBottom: 8 },
+  bannerText: { ...fonts.medium, flex: 1, fontSize: 13, color: palette.text, marginLeft: 8 },
+  kpiWrapper: { overflow: 'visible', marginBottom: 8, marginHorizontal: -16 },
   kpiStrip: { overflow: 'visible' },
-  kpiContent: { marginLeft: -4, paddingRight: 16, paddingVertical: 8 },
-  kpiCard: { backgroundColor: '#FFF', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, marginHorizontal: 4, minWidth: 90, alignItems: 'center', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 }, android: { elevation: 2 } }) },
-  kpiCount: { fontSize: 24, fontWeight: '700' },
-  kpiLabel: { fontSize: 12, color: '#666', marginTop: 2 },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', paddingLeft: 0, paddingRight: spacing[4], marginBottom: spacing[2], gap: spacing[2] },
-  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: borderRadius.lg, gap: spacing[2] },
-  searchInput: { flex: 1, fontSize: fontSize.sm, padding: 0 },
-  sortBtn: { width: 40, height: 40, borderRadius: borderRadius.lg, justifyContent: 'center', alignItems: 'center' },
-  filterWrapper: { marginBottom: 8 },
+  kpiContent: { paddingHorizontal: 16, gap: 10 },
+  kpiCard: { backgroundColor: palette.surface, borderRadius: radii.lg, paddingVertical: 14, paddingHorizontal: 16, minWidth: 104 },
+  kpiCardActive: { backgroundColor: palette.ink },
+  kpiCount: { ...fonts.semibold, fontSize: 32, letterSpacing: -1, color: palette.text },
+  kpiTextActive: { color: palette.textInverse },
+  kpiLabel: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginTop: 2 },
+  kpiLabelActive: { color: palette.textSubtle },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 4, gap: 10 },
+  searchBar: { flex: 1, backgroundColor: palette.surface },
+  filterWrapper: { marginBottom: 4, marginHorizontal: -16 },
   filterStrip: {},
-  filterContent: { paddingLeft: 0, paddingRight: 16, paddingVertical: 4 },
+  filterContent: { paddingHorizontal: 16, paddingVertical: 2 },
   list: { flex: 1 },
-  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F0F0F0', marginLeft: 0, marginRight: 8 },
-  chipText: { fontSize: 13, color: '#333', fontWeight: '500' },
-  listContent: { paddingHorizontal: 16, paddingBottom: 16 },
-  disputeCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, marginTop: 12, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 }, android: { elevation: 2 } }) },
+  chip: { height: 40, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radii.pill, backgroundColor: palette.surface, marginRight: 8 },
+  chipActive: { backgroundColor: palette.ink },
+  chipText: { ...fonts.semibold, fontSize: 13.5, color: palette.text },
+  chipTextActive: { color: palette.textInverse },
+  listContent: { paddingHorizontal: 16, flexGrow: 1 },
+  disputeCard: { backgroundColor: palette.surface, borderRadius: radii.xl, padding: 18, marginTop: 12 },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start' },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: '#1A1A1A', marginBottom: 8 },
-  cardPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  pillText: { fontSize: 12, fontWeight: '600' },
-  cardMeta: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 12 },
-  metaRow: { flexDirection: 'row', alignItems: 'center' },
-  metaText: { fontSize: 13, color: '#666', marginLeft: 4 },
-  cardSnippet: { fontSize: 13, color: '#666', fontStyle: 'italic', marginTop: 10 },
-  cardTime: { fontSize: 12, color: '#999', marginTop: 8 },
-  emptyState: { alignItems: 'center', paddingVertical: 60 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#333', marginTop: 16 },
-  emptyBody: { fontSize: 14, color: '#666', marginTop: 8, textAlign: 'center', paddingHorizontal: 40 },
-  emptyBtn: { marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#1976D2', borderRadius: 24 },
-  emptyBtnText: { color: '#FFF', fontWeight: '600' },
-  toast: { position: 'absolute', bottom: 100, left: 24, right: 24, backgroundColor: '#333', borderRadius: 10, padding: 14, alignItems: 'center' },
-  toastText: { color: '#FFF', fontSize: 14, fontWeight: '500' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  actionSheet: { backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 16 },
-  sheetTitle: { fontSize: 18, fontWeight: '600', color: '#333', textAlign: 'center', marginBottom: 16 },
-  actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20 },
-  actionText: { fontSize: 16, color: '#333', marginLeft: 12, flex: 1 },
-  cancelRow: { borderTopWidth: 1, borderTopColor: '#EEE', marginTop: 8 },
-  cancelText: { fontSize: 16, color: '#666', textAlign: 'center', flex: 1 },
-  detailHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EEE' },
-  backBtn: { width: 44, height: 44, justifyContent: 'center' },
-  detailTitle: { flex: 1, fontSize: 18, fontWeight: '600', color: '#333' },
-  detailContent: { padding: 16, paddingBottom: 40 },
-  detailPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  detailMeta: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, backgroundColor: '#F9F9F9', borderRadius: 12, padding: 12, gap: 16 },
-  metaItem: {},
-  metaLabel: { fontSize: 11, color: '#999', textTransform: 'uppercase' },
-  metaValue: { fontSize: 14, color: '#333', fontWeight: '500', marginTop: 2 },
-  section: { marginTop: 24 },
+  cardTitle: { ...fonts.bold, fontSize: 19, letterSpacing: -0.3, color: palette.text, marginTop: 12 },
+  cardPills: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  cardTrack: { marginTop: 14, width: '70%' },
+  cardMeta: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, gap: 6 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', height: 30, paddingHorizontal: 11, borderRadius: radii.pill, backgroundColor: palette.fill },
+  metaText: { ...fonts.semibold, fontSize: 12, color: palette.text, marginLeft: 5 },
+  cardSnippet: { ...fonts.medium, fontSize: 13, color: palette.textMuted, fontStyle: 'italic', marginTop: 12, lineHeight: 18 },
+  cardTime: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 8 },
+  toast: { position: 'absolute', bottom: 100, left: 24, right: 24, backgroundColor: palette.ink, borderRadius: radii.pill, paddingVertical: 14, paddingHorizontal: 20, alignItems: 'center' },
+  toastText: { ...fonts.semibold, color: palette.textInverse, fontSize: 14 },
+  // Overlays — absolutely positioned (modals do not present on this build)
+  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, elevation: 24, justifyContent: 'flex-end' },
+  fullOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9000, elevation: 20 },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  actionSheet: { backgroundColor: palette.surface, borderTopLeftRadius: radii.xxl, borderTopRightRadius: radii.xxl, paddingTop: 12, paddingHorizontal: 20 },
+  grabber: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: palette.line, marginBottom: 16 },
+  sheetTitle: { ...fonts.semibold, fontSize: 22, color: palette.text, marginBottom: 8 },
+  actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  actionIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: palette.fill, alignItems: 'center', justifyContent: 'center' },
+  actionIconSuccess: { backgroundColor: palette.successSoft },
+  actionText: { ...fonts.semibold, fontSize: 15.5, color: palette.text, marginLeft: 14, flex: 1 },
+  actionTextSuccess: { color: palette.success },
+  sheetCancel: { marginTop: 14 },
+  sortRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
+  sortRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line },
+  sortText: { ...fonts.medium, fontSize: 16, color: palette.text },
+  sortTextActive: { ...fonts.semibold },
+  checkDot: { width: 26, height: 26, borderRadius: 13, backgroundColor: palette.ink, alignItems: 'center', justifyContent: 'center' },
+  uncheckDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: palette.line },
+  // Details
+  detailRoot: { backgroundColor: palette.bgCream },
+  detailContent: { flexGrow: 1 },
+  summaryCard: { marginHorizontal: 16, marginTop: 4, backgroundColor: palette.surface, borderRadius: radii.xl, padding: 20, overflow: 'hidden' },
+  summaryArt: { position: 'absolute', right: -34, top: 84 },
+  detailPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  detailTitle: { ...fonts.bold, fontSize: 24, letterSpacing: -0.5, color: palette.text, marginTop: 12 },
+  summaryTrack: { marginTop: 16, width: '66%' },
+  summaryGrid: { marginTop: 18, width: '72%' },
+  detailSheet: { flex: 1, marginTop: 14, backgroundColor: palette.surface, borderTopLeftRadius: radii.xxl, borderTopRightRadius: radii.xxl, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 32 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#333' },
-  addLink: { fontSize: 14, fontWeight: '600' },
-  descText: { fontSize: 15, color: '#444', lineHeight: 22, marginTop: 8 },
-  timelineItem: { flexDirection: 'row', marginTop: 12, minHeight: 40 },
-  timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#CCC', marginTop: 4 },
-  timelineLine: { position: 'absolute', left: 4, top: 18, width: 2, height: '100%', backgroundColor: '#EEE' },
-  timelineContent: { marginLeft: 12, flex: 1 },
-  timelineLabel: { fontSize: 14, color: '#333' },
-  timelineTime: { fontSize: 12, color: '#999', marginTop: 2 },
-  emptyText: { fontSize: 14, color: '#999', marginTop: 8 },
-  evidenceChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginRight: 8, marginTop: 8 },
-  evidenceName: { fontSize: 13, color: '#333', marginLeft: 6, maxWidth: 120 },
-  noteCard: { backgroundColor: '#F9F9F9', borderRadius: 10, padding: 12, marginTop: 10 },
-  noteText: { fontSize: 14, color: '#333', lineHeight: 20 },
-  noteTime: { fontSize: 12, color: '#999', marginTop: 6 },
-  detailActions: { marginTop: 32 },
-  primaryBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  secondaryBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#DDD' },
-  secondaryBtnText: { color: '#333', fontSize: 16, fontWeight: '600' },
-  rejectionBox: { backgroundColor: '#FFEBEE', borderRadius: 10, padding: 14 },
-  rejectionTitle: { fontSize: 14, fontWeight: '600', color: '#D32F2F' },
-  rejectionText: { fontSize: 14, color: '#666', marginTop: 4 },
-  noteModal: { backgroundColor: '#FFF', marginHorizontal: 20, borderRadius: 16, padding: 20 },
-  noteModalTitle: { fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 16 },
-  noteInput: { backgroundColor: '#F5F5F5', borderRadius: 10, padding: 14, fontSize: 15, color: '#333', minHeight: 100, textAlignVertical: 'top' },
-  errorText: { fontSize: 12, color: '#D32F2F', marginTop: 4 },
-  noteModalBtns: { flexDirection: 'row', marginTop: 16, gap: 12 },
-  cancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#F0F0F0', alignItems: 'center' },
-  cancelBtnText: { fontSize: 15, color: '#666', fontWeight: '600' },
-  submitBtn: { paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  submitBtnText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
-  createHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EEE' },
-  createTitle: { fontSize: 18, fontWeight: '600', color: '#333' },
-  createContent: { padding: 16, paddingBottom: 40 },
-  fieldLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginTop: 16, marginBottom: 8 },
+  sectionTitle: { ...fonts.semibold, fontSize: 18, color: palette.text },
+  sectionGap: { marginTop: 22, marginBottom: 12 },
+  descText: { ...fonts.medium, fontSize: 14.5, color: palette.textMuted, lineHeight: 21, marginTop: 8 },
+  emptyText: { ...fonts.medium, fontSize: 14, color: palette.textMuted },
+  evidenceChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.fill, borderRadius: radii.pill, paddingHorizontal: 12, height: 36, marginRight: 8, marginTop: 8 },
+  evidenceName: { ...fonts.semibold, fontSize: 12.5, color: palette.text, marginLeft: 6, marginRight: 4, maxWidth: 140 },
+  noteCard: { backgroundColor: palette.surfaceDim, borderRadius: radii.lg, padding: 14, marginBottom: 10 },
+  noteText: { ...fonts.medium, fontSize: 14, color: palette.text, lineHeight: 20 },
+  noteTime: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 6 },
+  rejectionBox: { backgroundColor: palette.dangerSoft, borderRadius: radii.lg, padding: 16, marginTop: 20 },
+  rejectionTitle: { ...fonts.semibold, fontSize: 14, color: palette.danger },
+  rejectionText: { ...fonts.medium, fontSize: 14, color: palette.text, marginTop: 4 },
+  detailFooter: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12, backgroundColor: palette.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.line, gap: 10 },
+  // Add note sheet
+  noteSheet: {},
+  noteModalTitle: { ...fonts.semibold, fontSize: 22, color: palette.text, marginBottom: 14 },
+  noteInput: { ...fonts.medium, backgroundColor: palette.fill, borderRadius: radii.lg, paddingHorizontal: 18, paddingVertical: 16, fontSize: 15, color: palette.text, minHeight: 110, textAlignVertical: 'top' },
+  errorText: { ...fonts.medium, fontSize: 12, color: palette.danger, marginTop: 6, marginLeft: 4 },
+  noteModalBtns: { flexDirection: 'row', marginTop: 20, gap: 10 },
+  // Create
+  createRoot: { backgroundColor: palette.bg },
+  createContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  fieldLabel: { ...fonts.semibold, fontSize: 14, color: palette.text, marginTop: 18, marginBottom: 8, marginLeft: 4 },
   categoryRow: { flexDirection: 'row' },
-  categoryChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: '#F0F0F0', marginRight: 8 },
-  categoryText: { fontSize: 13, color: '#333', marginLeft: 6, fontWeight: '500' },
-  selectRow: { flexDirection: 'row' },
-  selectChip: { borderWidth: 1, borderColor: '#DDD', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginRight: 8, minWidth: 80 },
-  selectChipTitle: { fontSize: 14, fontWeight: '600', color: '#333' },
-  selectChipSub: { fontSize: 12, color: '#666', marginTop: 2 },
-  textInput: { backgroundColor: '#F5F5F5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#333' },
-  textArea: { minHeight: 100, textAlignVertical: 'top' },
+  categoryChip: { flexDirection: 'row', alignItems: 'center', height: 42, paddingHorizontal: 16, borderRadius: radii.pill, backgroundColor: palette.surface, marginRight: 8 },
+  categoryText: { ...fonts.semibold, fontSize: 13.5, color: palette.text, marginLeft: 6 },
+  textInput: { ...fonts.medium, backgroundColor: palette.surface, borderRadius: radii.pill, paddingHorizontal: 20, height: 56, fontSize: 15, color: palette.text },
+  textArea: { height: undefined, minHeight: 120, borderRadius: radii.lg, paddingTop: 16, paddingBottom: 16, textAlignVertical: 'top' },
   priorityRow: { flexDirection: 'row', gap: 10 },
-  priorityChip: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#DDD' },
-  priorityText: { fontSize: 14, fontWeight: '600', color: '#666' },
+  priorityChip: { flex: 1, height: 48, borderRadius: radii.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.surface },
+  priorityText: { ...fonts.semibold, fontSize: 14, color: palette.textMuted },
   checkRow: { flexDirection: 'row', alignItems: 'center', marginTop: 20, paddingVertical: 8 },
-  checkLabel: { fontSize: 15, color: '#333', marginLeft: 10 },
-  warningBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF3E0', padding: 12, borderRadius: 10, marginTop: 8 },
-  warningText: { fontSize: 13, color: '#666', marginLeft: 8, flex: 1 },
+  checkLabel: { ...fonts.medium, fontSize: 15, color: palette.text, marginLeft: 10 },
+  warningBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.warningSoft, padding: 14, borderRadius: radii.lg, marginTop: 8 },
+  warningText: { ...fonts.medium, fontSize: 13, color: palette.text, marginLeft: 8, flex: 1 },
   evidenceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
-  addEvidenceBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#DDD', borderStyle: 'dashed', marginTop: 8 },
-  addEvidenceText: { fontSize: 13, color: '#666', marginLeft: 4 },
-  createFooter: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#EEE' },
+  addEvidenceBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 36, borderRadius: radii.pill, borderWidth: 1.5, borderColor: palette.textSubtle, borderStyle: 'dashed', marginTop: 8 },
+  addEvidenceText: { ...fonts.semibold, fontSize: 13, color: palette.text, marginLeft: 4 },
+  createFooter: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: palette.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.line },
 });

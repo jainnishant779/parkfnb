@@ -11,8 +11,7 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  Pressable,
-  TextInput,
+  TouchableOpacity,
   Switch,
   Platform,
   Animated,
@@ -25,16 +24,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 // Components
-import StatCard from '../../components/cards/StatCard';
 import PayoutRow from '../../components/cards/PayoutRow';
 import BottomSheetModal from '../../components/modals/BottomSheetModal';
-import PrimaryButton from '../../components/buttons/PrimaryButton';
 import FormTextInput from '../../components/inputs/FormTextInput';
+import { PillButton, IconCircle, SearchPill, Chip, StatusTag, ProgressTrack, InfoGrid, TimelineItem, EmptyState, IsoBlock } from '../../components/ui';
 
 // Theme
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
-import { getTheme } from '../../theme/colors';
+import { palette, radii, fonts } from '../../theme/kit';
 
 // Auth
 import { useAuth } from '../../context/AuthContext';
@@ -60,6 +56,22 @@ import {
   type PayoutAccount,
   type PayoutPreferences,
 } from '../../constants/mockPayoutsData';
+
+// Payout status -> kit StatusTag tone
+const STATUS_TAG_TONE: Record<PayoutStatus, string> = {
+  paid: 'success',
+  pending: 'warning',
+  processing: 'ink',
+  failed: 'danger',
+  scheduled: 'ink',
+  on_hold: 'warning',
+} as Record<PayoutStatus, string>;
+
+const SWITCH_PROPS = {
+  trackColor: { false: palette.line, true: palette.ink },
+  thumbColor: palette.surface,
+  ios_backgroundColor: palette.line,
+};
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -183,14 +195,6 @@ function bookingToPayout(b: ApiBooking, bankName: string, accountLast4: string):
 // SKELETON COMPONENTS
 // ============================================================================
 
-const StatCardSkeleton: React.FC = () => (
-  <View style={styles.skeletonStatCard}>
-    <View style={[styles.skeletonBox, styles.skeletonIcon]} />
-    <View style={[styles.skeletonBox, styles.skeletonAmount]} />
-    <View style={[styles.skeletonBox, styles.skeletonLabel]} />
-  </View>
-);
-
 const PayoutRowSkeleton: React.FC = () => (
   <View style={styles.skeletonPayoutRow}>
     <View style={[styles.skeletonBox, styles.skeletonRowIcon]} />
@@ -202,84 +206,16 @@ const PayoutRowSkeleton: React.FC = () => (
 );
 
 // ============================================================================
-// FILTER CHIP COMPONENT
-// ============================================================================
-
-interface FilterChipProps {
-  label: string;
-  isSelected: boolean;
-  onPress: () => void;
-}
-
-const FilterChip: React.FC<FilterChipProps> = ({ label, isSelected, onPress }) => (
-  <Pressable
-    onPress={onPress}
-    style={[
-      styles.filterChip,
-      isSelected && styles.filterChipSelected,
-    ]}
-    accessibilityRole="button"
-    accessibilityState={{ selected: isSelected }}
-  >
-    <Text style={[
-      styles.filterChipText,
-      isSelected && styles.filterChipTextSelected,
-    ]}>
-      {label}
-    </Text>
-  </Pressable>
-);
-
-// ============================================================================
-// TIMELINE STEP COMPONENT
-// ============================================================================
-
-interface TimelineStepProps {
-  label: string;
-  isActive: boolean;
-  isCompleted: boolean;
-  isLast?: boolean;
-}
-
-const TimelineStep: React.FC<TimelineStepProps> = ({
-  label,
-  isActive,
-  isCompleted,
-  isLast = false,
-}) => {
-  const dotColor = isCompleted ? '#10B981' : isActive ? '#0D7377' : '#D1D5DB';
-  const textColor = isCompleted || isActive ? '#1E293B' : '#94A3B8';
-
-  return (
-    <View style={styles.timelineStep}>
-      <View style={styles.timelineStepContent}>
-        <View style={[styles.timelineDot, { backgroundColor: dotColor }]}>
-          {isCompleted && (
-            <Ionicons name="checkmark" size={10} color="#FFFFFF" />
-          )}
-        </View>
-        <Text style={[styles.timelineLabel, { color: textColor }]}>{label}</Text>
-      </View>
-      {!isLast && (
-        <View style={[
-          styles.timelineLine,
-          { backgroundColor: isCompleted ? '#10B981' : '#D1D5DB' },
-        ]} />
-      )}
-    </View>
-  );
-};
-
-// ============================================================================
 // TOAST COMPONENT
 // ============================================================================
 
 interface ToastProps {
   toast: ToastState;
   onHide: () => void;
+  top: number;
 }
 
-const Toast: React.FC<ToastProps> = ({ toast, onHide }) => {
+const Toast: React.FC<ToastProps> = ({ toast, onHide, top }) => {
   const translateY = useRef(new Animated.Value(-100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -319,19 +255,18 @@ const Toast: React.FC<ToastProps> = ({ toast, onHide }) => {
 
   if (!toast.visible) return null;
 
-  const bgColor = toast.type === 'success' ? '#ECFDF5' : toast.type === 'error' ? '#FEF2F2' : '#E8F5F4';
-  const textColor = toast.type === 'success' ? '#10B981' : toast.type === 'error' ? '#EF4444' : '#0D7377';
+  const iconColor = toast.type === 'success' ? palette.success : toast.type === 'error' ? palette.danger : palette.peach;
   const icon = toast.type === 'success' ? 'checkmark-circle' : toast.type === 'error' ? 'close-circle' : 'information-circle';
 
   return (
     <Animated.View
       style={[
         styles.toast,
-        { backgroundColor: bgColor, transform: [{ translateY }], opacity },
+        { top, transform: [{ translateY }], opacity },
       ]}
     >
-      <Ionicons name={icon} size={20} color={textColor} />
-      <Text style={[styles.toastText, { color: textColor }]}>{toast.message}</Text>
+      <Ionicons name={icon} size={20} color={iconColor} />
+      <Text style={styles.toastText}>{toast.message}</Text>
     </Animated.View>
   );
 };
@@ -343,7 +278,6 @@ const Toast: React.FC<ToastProps> = ({ toast, onHide }) => {
 export default function PayoutsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const theme = useMemo(() => getTheme(false), []);
   const { owner } = useAuth();
 
   // Live API state
@@ -627,386 +561,320 @@ export default function PayoutsScreen() {
   // RENDER
   // ============================================================================
 
+  const renderHeader = (withInfo: boolean) => (
+    <View style={styles.header}>
+      <IconCircle icon="arrow-left" size={46} onPress={() => navigation.goBack()} />
+      <Text style={styles.headerTitle}>Payouts</Text>
+      {withInfo ? (
+        <IconCircle icon="info" size={46} onPress={() => setShowHelpModal(true)} />
+      ) : (
+        <View style={styles.headerSpacer} />
+      )}
+    </View>
+  );
+
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-        {/* Decorative Circles */}
-        <View style={styles.circleTopRight} />
-        <View style={styles.circleTopRightInner} />
-        <View style={styles.circleBottomLeft} />
-
-        <View style={styles.header}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1E293B" />
-          </Pressable>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Payouts</Text>
-          </View>
-          <View style={styles.headerRight} />
-        </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {renderHeader(false)}
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsRow}>
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-          </ScrollView>
-
-          <View style={styles.section}>
-            <View style={[styles.skeletonBox, { width: 150, height: 20, marginBottom: spacing[3] }]} />
-            <View style={[styles.card, { height: 120 }]}>
-              <View style={styles.skeletonBox} />
-            </View>
+          <View style={styles.balance}>
+            <View style={[styles.skeletonBox, styles.skeletonLabel]} />
+            <View style={[styles.skeletonBox, styles.skeletonAmount]} />
           </View>
 
+          <View style={[styles.skeletonBox, styles.skeletonHero]} />
+
           <View style={styles.section}>
-            <View style={[styles.skeletonBox, { width: 120, height: 20, marginBottom: spacing[3] }]} />
-            <PayoutRowSkeleton />
-            <PayoutRowSkeleton />
-            <PayoutRowSkeleton />
+            <View style={[styles.skeletonBox, styles.skeletonSectionTitle]} />
+            <View style={styles.card}>
+              <PayoutRowSkeleton />
+              <PayoutRowSkeleton />
+              <PayoutRowSkeleton />
+            </View>
           </View>
         </ScrollView>
       </SafeAreaView>
     );
   }
 
+  const upcomingStatus = PAYOUT_STATUS_CONFIG[upcomingPayout.status];
+
+  const selectedTimeline = selectedPayout?.timeline
+    ? [
+        selectedPayout.timeline.initiated && { key: 'initiated', label: 'Initiated', at: selectedPayout.timeline.initiated },
+        selectedPayout.timeline.processing && { key: 'processing', label: 'Processing', at: selectedPayout.timeline.processing },
+        selectedPayout.timeline.completed && { key: 'completed', label: 'Completed', at: selectedPayout.timeline.completed },
+        selectedPayout.timeline.failed && { key: 'failed', label: 'Failed', at: selectedPayout.timeline.failed },
+      ].filter(Boolean) as { key: string; label: string; at: string }[]
+    : [];
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Decorative Circles */}
-      <View style={styles.circleTopRight} />
-      <View style={styles.circleTopRightInner} />
-      <View style={styles.circleBottomLeft} />
-
       {/* Toast */}
-      <Toast toast={toast} onHide={() => setToast(prev => ({ ...prev, visible: false }))} />
+      <Toast
+        toast={toast}
+        top={insets.top + 8}
+        onHide={() => setToast(prev => ({ ...prev, visible: false }))}
+      />
 
       {/* Header */}
-      <Animated.View style={[styles.header, { opacity: headerAnim }]}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1E293B" />
-        </Pressable>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Payouts</Text>
-        </View>
-        <Pressable onPress={() => setShowHelpModal(true)} style={styles.infoButton}>
-          <Ionicons name="information-circle-outline" size={24} color="#64748B" />
-        </Pressable>
+      <Animated.View style={{ opacity: headerAnim }}>
+        {renderHeader(true)}
       </Animated.View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#0D7377" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={palette.ink} colors={[palette.ink]} />
         }
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Summary Stats */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.statsRow}
-          contentContainerStyle={styles.statsRowContent}
+        {/* Balance */}
+        <View style={styles.balance}>
+          <Text style={styles.balanceLabel}>Available balance</Text>
+          <View style={styles.balanceRow}>
+            <Text style={styles.balanceValue} numberOfLines={1} adjustsFontSizeToFit>
+              {formatCurrency(summary.availableBalance)}
+            </Text>
+            <PillButton
+              label="Request"
+              icon="arrow-up-right"
+              variant="white"
+              size="md"
+              onPress={() => setToast({
+                visible: true,
+                message: 'Payout request submitted. Funds will be transferred to your bank account within 3–5 business days.',
+                type: 'success',
+              })}
+            />
+          </View>
+        </View>
+
+        {/* Stat tiles */}
+        <View style={styles.tiles}>
+          <View style={styles.tile}>
+            <View style={styles.tileIcon}>
+              <Ionicons name="time-outline" size={16} color={palette.text} />
+            </View>
+            <Text style={styles.tileLabel}>Pending</Text>
+            <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
+              {formatCurrency(summary.pendingAmount)}
+            </Text>
+          </View>
+          <View style={styles.tile}>
+            <View style={styles.tileIcon}>
+              <Ionicons name="trending-up-outline" size={16} color={palette.text} />
+            </View>
+            <Text style={styles.tileLabel}>Paid (YTD)</Text>
+            <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
+              {formatCurrency(summary.paidYTD)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Upcoming Payout — peach hero */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => setShowUpcomingModal(true)}
+          style={styles.hero}
         >
-          <StatCard
-            label="Available Balance"
-            amount={formatCurrency(summary.availableBalance)}
-            trendValue={summary.availableTrend}
-            trendText="vs last month"
-            iconName="wallet-outline"
-            variant="success"
+          <View style={styles.heroArt} pointerEvents="none">
+            <IsoBlock size={130} tone="peach" />
+          </View>
+          <StatusTag label={upcomingStatus.label} tone={STATUS_TAG_TONE[upcomingPayout.status]} />
+          <Text style={styles.heroLabel}>Next payout</Text>
+          <Text style={styles.heroAmount}>{formatCurrencyFull(upcomingPayout.expectedAmount)}</Text>
+          <ProgressTrack
+            steps={3}
+            current={upcomingPayout.currentStep}
+            trackColor="#F7D3A6"
+            style={styles.heroTrack}
           />
-          <StatCard
-            label="Pending"
-            amount={formatCurrency(summary.pendingAmount)}
-            trendValue={summary.pendingTrend}
-            trendText="vs last month"
-            iconName="time-outline"
-            variant="warning"
-          />
-          <StatCard
-            label="Paid (YTD)"
-            amount={formatCurrency(summary.paidYTD)}
-            trendValue={summary.paidTrend}
-            trendText="vs last year"
-            iconName="trending-up-outline"
-            variant="info"
-          />
-        </ScrollView>
+          <View style={styles.heroSteps}>
+            <Text style={styles.heroStep}>Earnings</Text>
+            <Text style={styles.heroStep}>Processing</Text>
+            <Text style={styles.heroStep}>Deposit</Text>
+          </View>
+          <View style={styles.heroFooter}>
+            <View>
+              <Text style={styles.heroMetaTitle}>{formatDate(upcomingPayout.date)}</Text>
+              <Text style={styles.heroMetaSub}>Expected date</Text>
+            </View>
+            <View style={styles.heroLink}>
+              <Text style={styles.heroLinkText}>View details</Text>
+              <Ionicons name="chevron-forward" size={16} color={palette.text} />
+            </View>
+          </View>
+        </TouchableOpacity>
 
-        {/* Upcoming Payout */}
+        {/* Payout Account */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Upcoming Payout</Text>
-          <View style={styles.card}>
-            <View style={styles.upcomingHeader}>
-              <View>
-                <Text style={styles.upcomingDate}>{formatDate(upcomingPayout.date)}</Text>
-                <Text style={styles.upcomingAmount}>
-                  {formatCurrencyFull(upcomingPayout.expectedAmount)}
+          <Text style={styles.sectionTitle}>Payout account</Text>
+          <View style={[styles.card, styles.cardPadded]}>
+            <View style={styles.accountHeader}>
+              <View style={styles.bankIcon}>
+                <Ionicons name="business-outline" size={22} color={palette.text} />
+              </View>
+              <View style={styles.accountInfo}>
+                <Text style={styles.accountHolderName} numberOfLines={1}>
+                  {account.holderName || 'Account holder'}
+                </Text>
+                <Text style={styles.accountBankName} numberOfLines={1}>
+                  {account.bankName || 'Bank'} · {maskAccountNumber(account.accountNumber)}
                 </Text>
               </View>
-              <View style={[
-                styles.statusBadge,
-                { backgroundColor: PAYOUT_STATUS_CONFIG[upcomingPayout.status].bgColor }
-              ]}>
-                <Ionicons
-                  name={PAYOUT_STATUS_CONFIG[upcomingPayout.status].icon as any}
-                  size={14}
-                  color={PAYOUT_STATUS_CONFIG[upcomingPayout.status].color}
-                />
-                <Text style={[
-                  styles.statusBadgeText,
-                  { color: PAYOUT_STATUS_CONFIG[upcomingPayout.status].color }
-                ]}>
-                  {PAYOUT_STATUS_CONFIG[upcomingPayout.status].label}
-                </Text>
-              </View>
-            </View>
-
-            {/* Timeline */}
-            <View style={styles.timeline}>
-              <TimelineStep
-                label="Earnings"
-                isCompleted={upcomingPayout.currentStep > 0}
-                isActive={upcomingPayout.currentStep === 0}
-              />
-              <TimelineStep
-                label="Processing"
-                isCompleted={upcomingPayout.currentStep > 1}
-                isActive={upcomingPayout.currentStep === 1}
-              />
-              <TimelineStep
-                label="Deposit"
-                isCompleted={upcomingPayout.currentStep > 2}
-                isActive={upcomingPayout.currentStep === 2}
-                isLast
+              <StatusTag
+                label={account.isVerified ? 'Verified' : 'Pending'}
+                tone={account.isVerified ? 'success' : 'warning'}
               />
             </View>
 
-            <Pressable
-              onPress={() => setShowUpcomingModal(true)}
-              style={styles.viewDetailsLink}
-            >
-              <Text style={styles.viewDetailsText}>View details</Text>
-              <Ionicons name="chevron-forward" size={16} color="#0D7377" />
-            </Pressable>
+            <InfoGrid
+              style={styles.accountGrid}
+              items={[
+                { label: 'IFSC', value: account.ifscCode || '—' },
+                { label: 'Account type', value: account.accountType === 'savings' ? 'Savings' : 'Current' },
+              ]}
+            />
+
+            <PillButton
+              label="Edit account"
+              icon="edit-2"
+              variant="grey"
+              size="md"
+              onPress={() => {
+                setEditingAccount(account);
+                setAccountFormErrors({});
+                setShowEditAccountModal(true);
+              }}
+            />
           </View>
         </View>
 
         {/* Payout Preferences */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payout Preferences</Text>
-          <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Payout preferences</Text>
+          <View style={[styles.card, styles.cardPadded]}>
             {/* Auto Payout Toggle */}
             <View style={styles.preferenceRow}>
               <View style={styles.preferenceInfo}>
-                <Text style={styles.preferenceLabel}>Auto Payouts</Text>
+                <Text style={styles.preferenceLabel}>Auto payouts</Text>
                 <Text style={styles.preferenceHint}>Automatically transfer available balance</Text>
               </View>
               <Switch
                 value={editingPreferences.autoPayoutEnabled}
                 onValueChange={(value) => handlePreferencesChange({ autoPayoutEnabled: value })}
-                trackColor={{ false: '#D1D5DB', true: '#7FC5BF' }}
-                thumbColor={editingPreferences.autoPayoutEnabled ? '#0D7377' : '#F3F4F6'}
+                {...SWITCH_PROPS}
               />
             </View>
 
             {/* Frequency Picker */}
             {editingPreferences.autoPayoutEnabled && (
-              <View style={styles.frequencySection}>
-                <Text style={styles.preferenceLabel}>Frequency</Text>
-                <View style={styles.frequencyOptions}>
+              <View style={styles.prefBlock}>
+                <Text style={styles.fieldLabel}>Frequency</Text>
+                <View style={styles.chipRow}>
                   {FREQUENCY_OPTIONS.map(option => (
-                    <Pressable
+                    <Chip
                       key={option.value}
+                      label={option.label}
+                      selected={editingPreferences.frequency === option.value}
                       onPress={() => handlePreferencesChange({ frequency: option.value })}
-                      style={[
-                        styles.frequencyOption,
-                        editingPreferences.frequency === option.value && styles.frequencyOptionSelected,
-                      ]}
-                    >
-                      <Text style={[
-                        styles.frequencyOptionText,
-                        editingPreferences.frequency === option.value && styles.frequencyOptionTextSelected,
-                      ]}>
-                        {option.label}
-                      </Text>
-                    </Pressable>
+                      style={styles.greyChip}
+                    />
                   ))}
                 </View>
               </View>
             )}
 
             {/* Minimum Threshold */}
-            <View style={styles.thresholdSection}>
-              <Text style={styles.preferenceLabel}>Minimum Threshold</Text>
-              <View style={styles.thresholdInput}>
-                <Text style={styles.currencyPrefix}>₹</Text>
-                <TextInput
-                  style={styles.thresholdTextInput}
-                  value={editingPreferences.minimumThreshold.toString()}
-                  onChangeText={(text) => {
-                    const value = parseInt(text.replace(/[^0-9]/g, '')) || 0;
-                    handlePreferencesChange({ minimumThreshold: value });
-                  }}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor="#94A3B8"
-                />
-              </View>
-              {editingPreferences.minimumThreshold < 0 && (
-                <Text style={styles.errorText}>Threshold must be 0 or greater</Text>
-              )}
+            <View style={styles.prefBlock}>
+              <FormTextInput
+                label="Minimum threshold"
+                value={editingPreferences.minimumThreshold.toString()}
+                onChangeText={(text: string) => {
+                  const value = parseInt(text.replace(/[^0-9]/g, '')) || 0;
+                  handlePreferencesChange({ minimumThreshold: value });
+                }}
+                keyboardType="numeric"
+                placeholder="0"
+                leftIcon={<Text style={styles.currencyPrefix}>₹</Text>}
+                error={editingPreferences.minimumThreshold < 0 ? 'Threshold must be 0 or greater' : undefined}
+              />
             </View>
 
             {/* Save Button */}
             {preferencesChanged && (
-              <PrimaryButton
-                title="Save Preferences"
+              <PillButton
+                label="Save preferences"
+                variant="ink"
+                size="md"
                 onPress={savePreferences}
                 loading={savingPreferences}
-                size="medium"
                 style={styles.saveButton}
               />
             )}
           </View>
         </View>
 
-        {/* Payout Account */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payout Account</Text>
-          <View style={styles.card}>
-            <View style={styles.accountHeader}>
-              <View style={styles.bankIconContainer}>
-                <Ionicons name="business-outline" size={24} color="#0D7377" />
-              </View>
-              <View style={styles.accountInfo}>
-                <Text style={styles.accountHolderName}>{account.holderName}</Text>
-                <Text style={styles.accountBankName}>{account.bankName}</Text>
-                <Text style={styles.accountNumber}>
-                  A/C: {maskAccountNumber(account.accountNumber)}
-                </Text>
-              </View>
-              <View style={[
-                styles.verificationBadge,
-                { backgroundColor: account.isVerified ? '#ECFDF5' : '#FFFBEB' }
-              ]}>
-                <Ionicons
-                  name={account.isVerified ? 'checkmark-circle' : 'time'}
-                  size={14}
-                  color={account.isVerified ? '#10B981' : '#F59E0B'}
-                />
-                <Text style={[
-                  styles.verificationText,
-                  { color: account.isVerified ? '#10B981' : '#F59E0B' }
-                ]}>
-                  {account.isVerified ? 'Verified' : 'Pending'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.accountDetails}>
-              <View style={styles.accountDetailRow}>
-                <Text style={styles.accountDetailLabel}>IFSC</Text>
-                <Text style={styles.accountDetailValue}>{account.ifscCode}</Text>
-              </View>
-              <View style={styles.accountDetailRow}>
-                <Text style={styles.accountDetailLabel}>Account Type</Text>
-                <Text style={styles.accountDetailValue}>
-                  {account.accountType === 'savings' ? 'Savings' : 'Current'}
-                </Text>
-              </View>
-            </View>
-
-            <Pressable
-              onPress={() => {
-                setEditingAccount(account);
-                setAccountFormErrors({});
-                setShowEditAccountModal(true);
-              }}
-              style={styles.editAccountButton}
-            >
-              <Ionicons name="pencil-outline" size={18} color="#0D7377" />
-              <Text style={styles.editAccountText}>Edit Account</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Request Payout */}
-        <View style={styles.section}>
-          <PrimaryButton
-            title="Request Payout"
-            onPress={() => setToast({
-              visible: true,
-              message: 'Payout request submitted. Funds will be transferred to your bank account within 3–5 business days.',
-              type: 'success',
-            })}
-            size="large"
-          />
-        </View>
-
         {/* Payout History */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payout History</Text>
+          <Text style={styles.sectionTitle}>Payout history</Text>
 
           {/* Filters */}
-          <View style={styles.filtersContainer}>
-            {/* Status Chips */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filterChipsRow}
-            >
-              {STATUS_FILTER_OPTIONS.map(option => (
-                <FilterChip
-                  key={option.key}
-                  label={option.label}
-                  isSelected={filters.status === option.key}
-                  onPress={() => handleFilterChange({ status: option.key as StatusFilterKey })}
-                />
-              ))}
-              <View style={styles.filterDivider} />
-              {DATE_RANGE_OPTIONS.map(option => (
-                <FilterChip
-                  key={option.key}
-                  label={option.label}
-                  isSelected={filters.dateRange === option.key}
-                  onPress={() => handleFilterChange({ dateRange: option.key })}
-                />
-              ))}
-            </ScrollView>
-
-            {/* Search */}
-            <View style={styles.searchContainer}>
-              <Ionicons name="search-outline" size={18} color="#94A3B8" />
-              <TextInput
-                style={styles.searchInput}
-                value={filters.searchText}
-                onChangeText={(text) => handleFilterChange({ searchText: text })}
-                placeholder="Search by ID or bank..."
-                placeholderTextColor="#94A3B8"
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterChipsRow}
+            contentContainerStyle={styles.filterChipsContent}
+          >
+            {STATUS_FILTER_OPTIONS.map(option => (
+              <Chip
+                key={option.key}
+                label={option.label}
+                selected={filters.status === option.key}
+                onPress={() => handleFilterChange({ status: option.key as StatusFilterKey })}
               />
-              {filters.searchText.length > 0 && (
-                <Pressable onPress={() => handleFilterChange({ searchText: '' })}>
-                  <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                </Pressable>
-              )}
-            </View>
-          </View>
+            ))}
+            <View style={styles.filterDivider} />
+            {DATE_RANGE_OPTIONS.map(option => (
+              <Chip
+                key={option.key}
+                label={option.label}
+                selected={filters.dateRange === option.key}
+                onPress={() => handleFilterChange({ dateRange: option.key })}
+              />
+            ))}
+          </ScrollView>
+
+          {/* Search */}
+          <SearchPill
+            value={filters.searchText}
+            onChangeText={(text: string) => handleFilterChange({ searchText: text })}
+            placeholder="Search by ID or bank"
+            style={styles.searchPill}
+            right={
+              filters.searchText.length > 0 ? (
+                <TouchableOpacity onPress={() => handleFilterChange({ searchText: '' })} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={palette.textMuted} />
+                </TouchableOpacity>
+              ) : null
+            }
+          />
 
           {/* List */}
-          <View style={[styles.card, styles.historyListCard]}>
+          <View style={[styles.card, styles.historyCard]}>
             {filteredPayouts.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="document-outline" size={48} color="#D1D5DB" />
-                <Text style={styles.emptyStateTitle}>No payouts found</Text>
-                <Text style={styles.emptyStateSubtitle}>
-                  Try adjusting your filters
-                </Text>
-                <Pressable onPress={clearFilters} style={styles.clearFiltersButton}>
-                  <Text style={styles.clearFiltersText}>Clear filters</Text>
-                </Pressable>
-              </View>
+              <EmptyState
+                tone="blue"
+                title="No payouts found"
+                subtitle="Try adjusting your filters"
+                action="Clear filters"
+                onAction={clearFilters}
+              />
             ) : (
               filteredPayouts.map((payout, index) => (
                 <PayoutRow
@@ -1019,9 +887,6 @@ export default function PayoutsScreen() {
             )}
           </View>
         </View>
-
-        {/* Bottom Spacing */}
-        <View style={{ height: insets.bottom + spacing[4] }} />
       </ScrollView>
 
       {/* Help Modal */}
@@ -1030,43 +895,23 @@ export default function PayoutsScreen() {
         onClose={() => setShowHelpModal(false)}
         title="About Payouts"
       >
-        <View style={styles.helpContent}>
-          <View style={styles.helpItem}>
-            <Ionicons name="wallet-outline" size={24} color="#0D7377" />
-            <View style={styles.helpItemText}>
-              <Text style={styles.helpItemTitle}>Available Balance</Text>
-              <Text style={styles.helpItemDesc}>
-                Earnings ready to be transferred to your bank account.
-              </Text>
+        <View style={styles.modalContent}>
+          {[
+            { icon: 'wallet-outline', title: 'Available Balance', desc: 'Earnings ready to be transferred to your bank account.' },
+            { icon: 'time-outline', title: 'Pending Amount', desc: 'Earnings being processed. Usually takes 1-2 business days.' },
+            { icon: 'calendar-outline', title: 'Payout Schedule', desc: 'Configure automatic payouts weekly, bi-weekly, or monthly.' },
+            { icon: 'shield-checkmark-outline', title: 'Secure Transfers', desc: 'All payouts are encrypted and processed securely.' },
+          ].map(item => (
+            <View key={item.title} style={styles.helpItem}>
+              <View style={styles.helpIcon}>
+                <Ionicons name={item.icon} size={20} color={palette.text} />
+              </View>
+              <View style={styles.helpItemText}>
+                <Text style={styles.helpItemTitle}>{item.title}</Text>
+                <Text style={styles.helpItemDesc}>{item.desc}</Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.helpItem}>
-            <Ionicons name="time-outline" size={24} color="#F59E0B" />
-            <View style={styles.helpItemText}>
-              <Text style={styles.helpItemTitle}>Pending Amount</Text>
-              <Text style={styles.helpItemDesc}>
-                Earnings being processed. Usually takes 1-2 business days.
-              </Text>
-            </View>
-          </View>
-          <View style={styles.helpItem}>
-            <Ionicons name="calendar-outline" size={24} color="#8B5CF6" />
-            <View style={styles.helpItemText}>
-              <Text style={styles.helpItemTitle}>Payout Schedule</Text>
-              <Text style={styles.helpItemDesc}>
-                Configure automatic payouts weekly, bi-weekly, or monthly.
-              </Text>
-            </View>
-          </View>
-          <View style={styles.helpItem}>
-            <Ionicons name="shield-checkmark-outline" size={24} color="#10B981" />
-            <View style={styles.helpItemText}>
-              <Text style={styles.helpItemTitle}>Secure Transfers</Text>
-              <Text style={styles.helpItemDesc}>
-                All payouts are encrypted and processed securely.
-              </Text>
-            </View>
-          </View>
+          ))}
         </View>
       </BottomSheetModal>
 
@@ -1077,36 +922,15 @@ export default function PayoutsScreen() {
         title="Upcoming Payout Details"
       >
         <View style={styles.modalContent}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Expected Date</Text>
-            <Text style={styles.detailValue}>{formatDate(upcomingPayout.date)}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Amount</Text>
-            <Text style={styles.detailValueLarge}>
-              {formatCurrencyFull(upcomingPayout.expectedAmount)}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Status</Text>
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: PAYOUT_STATUS_CONFIG[upcomingPayout.status].bgColor }
-            ]}>
-              <Text style={[
-                styles.statusBadgeText,
-                { color: PAYOUT_STATUS_CONFIG[upcomingPayout.status].color }
-              ]}>
-                {PAYOUT_STATUS_CONFIG[upcomingPayout.status].label}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Destination</Text>
-            <Text style={styles.detailValue}>
-              {account.bankName} •••• {account.accountNumber.slice(-4)}
-            </Text>
-          </View>
+          <Text style={styles.modalAmount}>{formatCurrencyFull(upcomingPayout.expectedAmount)}</Text>
+          <StatusTag label={upcomingStatus.label} tone={STATUS_TAG_TONE[upcomingPayout.status]} />
+          <InfoGrid
+            style={styles.modalGrid}
+            items={[
+              { label: 'Expected date', value: formatDate(upcomingPayout.date) },
+              { label: 'Destination', value: `${account.bankName} •••• ${account.accountNumber.slice(-4)}` },
+            ]}
+          />
           <View style={styles.breakdownCard}>
             <Text style={styles.breakdownTitle}>Breakdown</Text>
             <View style={styles.breakdownRow}>
@@ -1135,114 +959,53 @@ export default function PayoutsScreen() {
       >
         {selectedPayout && (
           <View style={styles.modalContent}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Amount</Text>
-              <Text style={styles.detailValueLarge}>
-                {formatCurrencyFull(selectedPayout.amount)}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Fee</Text>
-              <Text style={styles.detailValue}>-{formatCurrencyFull(selectedPayout.fee)}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Net Amount</Text>
-              <Text style={styles.detailValueBold}>
-                {formatCurrencyFull(selectedPayout.netAmount)}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Status</Text>
-              <View style={[
-                styles.statusBadge,
-                { backgroundColor: PAYOUT_STATUS_CONFIG[selectedPayout.status].bgColor }
-              ]}>
-                <Text style={[
-                  styles.statusBadgeText,
-                  { color: PAYOUT_STATUS_CONFIG[selectedPayout.status].color }
-                ]}>
-                  {PAYOUT_STATUS_CONFIG[selectedPayout.status].label}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Bank</Text>
-              <Text style={styles.detailValue}>
-                {selectedPayout.bankName} •••• {selectedPayout.accountLast4}
-              </Text>
-            </View>
-
-            {selectedPayout.referenceId && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Reference ID</Text>
-                <Text style={styles.detailValue}>{selectedPayout.referenceId}</Text>
-              </View>
-            )}
+            <Text style={styles.modalAmount}>{formatCurrencyFull(selectedPayout.amount)}</Text>
+            <StatusTag
+              label={PAYOUT_STATUS_CONFIG[selectedPayout.status].label}
+              tone={STATUS_TAG_TONE[selectedPayout.status]}
+            />
+            <InfoGrid
+              style={styles.modalGrid}
+              items={[
+                { label: 'Fee', value: `-${formatCurrencyFull(selectedPayout.fee)}` },
+                { label: 'Net amount', value: formatCurrencyFull(selectedPayout.netAmount) },
+                { label: 'Bank', value: `${selectedPayout.bankName} •••• ${selectedPayout.accountLast4}` },
+                ...(selectedPayout.referenceId
+                  ? [{ label: 'Reference ID', value: selectedPayout.referenceId }]
+                  : []),
+              ]}
+            />
 
             {selectedPayout.failureReason && (
               <View style={styles.failureReasonCard}>
-                <Ionicons name="warning" size={20} color="#EF4444" />
+                <Ionicons name="warning-outline" size={20} color={palette.danger} />
                 <Text style={styles.failureReasonText}>{selectedPayout.failureReason}</Text>
               </View>
             )}
 
             {/* Timeline */}
-            {selectedPayout.timeline && (
+            {selectedTimeline.length > 0 && (
               <View style={styles.timelineSection}>
-                <Text style={styles.timelineSectionTitle}>Timeline</Text>
-                {selectedPayout.timeline.initiated && (
-                  <View style={styles.timelineItem}>
-                    <View style={[styles.timelineItemDot, { backgroundColor: '#10B981' }]} />
-                    <View style={styles.timelineItemContent}>
-                      <Text style={styles.timelineItemLabel}>Initiated</Text>
-                      <Text style={styles.timelineItemDate}>
-                        {formatDateTime(selectedPayout.timeline.initiated)}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-                {selectedPayout.timeline.processing && (
-                  <View style={styles.timelineItem}>
-                    <View style={[styles.timelineItemDot, { backgroundColor: '#0D7377' }]} />
-                    <View style={styles.timelineItemContent}>
-                      <Text style={styles.timelineItemLabel}>Processing</Text>
-                      <Text style={styles.timelineItemDate}>
-                        {formatDateTime(selectedPayout.timeline.processing)}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-                {selectedPayout.timeline.completed && (
-                  <View style={styles.timelineItem}>
-                    <View style={[styles.timelineItemDot, { backgroundColor: '#10B981' }]} />
-                    <View style={styles.timelineItemContent}>
-                      <Text style={styles.timelineItemLabel}>Completed</Text>
-                      <Text style={styles.timelineItemDate}>
-                        {formatDateTime(selectedPayout.timeline.completed)}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-                {selectedPayout.timeline.failed && (
-                  <View style={styles.timelineItem}>
-                    <View style={[styles.timelineItemDot, { backgroundColor: '#EF4444' }]} />
-                    <View style={styles.timelineItemContent}>
-                      <Text style={styles.timelineItemLabel}>Failed</Text>
-                      <Text style={styles.timelineItemDate}>
-                        {formatDateTime(selectedPayout.timeline.failed)}
-                      </Text>
-                    </View>
-                  </View>
-                )}
+                <Text style={styles.breakdownTitle}>Timeline</Text>
+                {selectedTimeline.map((entry, index) => (
+                  <TimelineItem
+                    key={entry.key}
+                    title={entry.label}
+                    subtitle={formatDateTime(entry.at)}
+                    active={index === selectedTimeline.length - 1}
+                    isLast={index === selectedTimeline.length - 1}
+                  />
+                ))}
               </View>
             )}
 
             {selectedPayout.status === 'paid' && (
-              <PrimaryButton
-                title="Download Receipt"
+              <PillButton
+                label="Download receipt"
+                icon="download"
+                variant="grey"
+                size="md"
                 onPress={handleDownloadReceipt}
-                variant="outline"
-                size="medium"
                 style={styles.downloadButton}
               />
             )}
@@ -1261,7 +1024,7 @@ export default function PayoutsScreen() {
           <FormTextInput
             label="Account Holder Name"
             value={editingAccount.holderName}
-            onChangeText={(text) => setEditingAccount(prev => ({ ...prev, holderName: text }))}
+            onChangeText={(text: string) => setEditingAccount(prev => ({ ...prev, holderName: text }))}
             placeholder="Enter account holder name"
             required
             error={accountFormErrors.holderName}
@@ -1271,7 +1034,7 @@ export default function PayoutsScreen() {
           <FormTextInput
             label="Bank Name"
             value={editingAccount.bankName}
-            onChangeText={(text) => setEditingAccount(prev => ({ ...prev, bankName: text }))}
+            onChangeText={(text: string) => setEditingAccount(prev => ({ ...prev, bankName: text }))}
             placeholder="Enter bank name"
             required
             error={accountFormErrors.bankName}
@@ -1281,9 +1044,9 @@ export default function PayoutsScreen() {
           <FormTextInput
             label="Account Number"
             value={editingAccount.accountNumber}
-            onChangeText={(text) => setEditingAccount(prev => ({
+            onChangeText={(text: string) => setEditingAccount(prev => ({
               ...prev,
-              accountNumber: text.replace(/[^0-9]/g, '')
+              accountNumber: text.replace(/[^0-9]/g, ''),
             }))}
             placeholder="Enter account number"
             required
@@ -1294,9 +1057,9 @@ export default function PayoutsScreen() {
           <FormTextInput
             label="IFSC Code"
             value={editingAccount.ifscCode}
-            onChangeText={(text) => setEditingAccount(prev => ({
+            onChangeText={(text: string) => setEditingAccount(prev => ({
               ...prev,
-              ifscCode: text.toUpperCase()
+              ifscCode: text.toUpperCase(),
             }))}
             placeholder="e.g., HDFC0001234"
             required
@@ -1304,44 +1067,26 @@ export default function PayoutsScreen() {
             autoCapitalize="characters"
           />
 
-          <View style={styles.accountTypeSection}>
-            <Text style={styles.accountTypeLabel}>Account Type</Text>
-            <View style={styles.accountTypeOptions}>
-              <Pressable
-                onPress={() => setEditingAccount(prev => ({ ...prev, accountType: 'savings' }))}
-                style={[
-                  styles.accountTypeOption,
-                  editingAccount.accountType === 'savings' && styles.accountTypeOptionSelected,
-                ]}
-              >
-                <Text style={[
-                  styles.accountTypeOptionText,
-                  editingAccount.accountType === 'savings' && styles.accountTypeOptionTextSelected,
-                ]}>
-                  Savings
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setEditingAccount(prev => ({ ...prev, accountType: 'current' }))}
-                style={[
-                  styles.accountTypeOption,
-                  editingAccount.accountType === 'current' && styles.accountTypeOptionSelected,
-                ]}
-              >
-                <Text style={[
-                  styles.accountTypeOptionText,
-                  editingAccount.accountType === 'current' && styles.accountTypeOptionTextSelected,
-                ]}>
-                  Current
-                </Text>
-              </Pressable>
-            </View>
+          <Text style={styles.fieldLabel}>Account Type</Text>
+          <View style={styles.chipRow}>
+            <Chip
+              label="Savings"
+              selected={editingAccount.accountType === 'savings'}
+              onPress={() => setEditingAccount(prev => ({ ...prev, accountType: 'savings' }))}
+              style={styles.greyChip}
+            />
+            <Chip
+              label="Current"
+              selected={editingAccount.accountType === 'current'}
+              onPress={() => setEditingAccount(prev => ({ ...prev, accountType: 'current' }))}
+              style={styles.greyChip}
+            />
           </View>
 
-          <PrimaryButton
-            title="Save Account"
+          <PillButton
+            label="Save account"
+            variant="ink"
             onPress={saveAccount}
-            size="large"
             style={styles.saveAccountButton}
           />
         </View>
@@ -1357,185 +1102,214 @@ export default function PayoutsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: palette.bg,
   },
-  // Decorative Circles (same as SignIn screen)
-  
-  
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    backgroundColor: 'transparent',
-    zIndex: 1,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#EBF4FF',
-    borderRadius: 20,
-  },
-  headerCenter: {
-    flex: 1,
-    marginLeft: spacing[3],
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   headerTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as any,
-    color: '#1E293B',
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
   },
-  headerSubtitle: {
-    fontSize: fontSize.xs,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  headerRight: {
-    width: 40,
-  },
-  infoButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerSpacer: {
+    width: 46,
   },
   scrollView: {
     flex: 1,
-    backgroundColor: 'transparent',
   },
   scrollContent: {
-    paddingTop: spacing[2],
-    backgroundColor: 'transparent',
+    paddingHorizontal: 16,
   },
 
-  // Stats Row
-  statsRow: {
-    marginBottom: spacing[4],
+  // Balance
+  balance: {
+    paddingHorizontal: 4,
+    paddingTop: 12,
+    paddingBottom: 18,
   },
-  statsRowContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[2],
-    paddingBottom: spacing[3],
+  balanceLabel: {
+    ...fonts.medium,
+    fontSize: 15,
+    color: palette.text,
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    gap: 12,
+  },
+  balanceValue: {
+    ...fonts.semibold,
+    flex: 1,
+    fontSize: 40,
+    letterSpacing: -1,
+    color: palette.text,
   },
 
-  // Section
+  // Tiles
+  tiles: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  tile: {
+    flex: 1,
+    padding: 16,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surface,
+  },
+  tileIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileLabel: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 12,
+  },
+  tileValue: {
+    ...fonts.semibold,
+    fontSize: 22,
+    letterSpacing: -0.5,
+    color: palette.text,
+    marginTop: 2,
+  },
+
+  // Hero
+  hero: {
+    borderRadius: radii.xl,
+    backgroundColor: palette.peachSoft,
+    padding: 20,
+    minHeight: 200,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  heroArt: {
+    position: 'absolute',
+    right: -30,
+    bottom: -26,
+  },
+  heroLabel: {
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.text,
+    marginTop: 16,
+  },
+  heroAmount: {
+    ...fonts.semibold,
+    fontSize: 30,
+    letterSpacing: -0.8,
+    color: palette.text,
+    marginTop: 2,
+  },
+  heroTrack: {
+    width: '62%',
+    marginTop: 16,
+  },
+  heroSteps: {
+    width: '66%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  heroStep: {
+    ...fonts.medium,
+    fontSize: 11,
+    color: palette.textMuted,
+  },
+  heroFooter: {
+    width: '62%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  heroMetaTitle: {
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
+  },
+  heroMetaSub: {
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
+    marginTop: 2,
+  },
+  heroLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  heroLinkText: {
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.text,
+  },
+
+  // Sections
   section: {
-    marginBottom: spacing[5],
-    paddingHorizontal: spacing[4],
+    marginTop: 20,
   },
   sectionTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-    color: '#1E293B',
-    marginBottom: spacing[3],
+    ...fonts.semibold,
+    fontSize: 19,
+    letterSpacing: -0.2,
+    color: palette.text,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
-
-  // Card
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.xl,
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
   },
-  historyListCard: {
-    minHeight: 550,
-    paddingVertical: spacing[4],
-    paddingHorizontal: spacing[3],
-    backgroundColor: 'white',
-    gap: 24,
+  cardPadded: {
+    padding: 18,
   },
 
-  // Upcoming Payout
-  upcomingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: spacing[4],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
-  },
-  upcomingDate: {
-    fontSize: fontSize.sm,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  upcomingAmount: {
-    fontSize: fontSize['2xl'],
-    fontWeight: fontWeight.bold as any,
-    color: '#1E293B',
-  },
-  statusBadge: {
+  // Account
+  accountHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[2],
-    paddingVertical: 4,
-    borderRadius: borderRadius.md,
-    gap: 4,
+    gap: 12,
   },
-  statusBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-  },
-
-  // Timeline
-  timeline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[4],
-  },
-  timelineStep: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  timelineStepContent: {
-    alignItems: 'center',
-  },
-  timelineDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timelineLabel: {
-    fontSize: 11,
-    marginTop: 4,
-    fontWeight: fontWeight.medium as any,
-  },
-  timelineLine: {
-    flex: 1,
-    height: 2,
-    marginHorizontal: spacing[2],
-  },
-
-  viewDetailsLink: {
-    flexDirection: 'row',
+  bankIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: palette.blueSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
-    gap: 4,
   },
-  viewDetailsText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: '#0D7377',
+  accountInfo: {
+    flex: 1,
+  },
+  accountHolderName: {
+    ...fonts.semibold,
+    fontSize: 16,
+    color: palette.text,
+  },
+  accountBankName: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 2,
+  },
+  accountGrid: {
+    marginTop: 16,
+    marginBottom: 6,
   },
 
   // Preferences
@@ -1543,551 +1317,252 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing[4],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
   },
   preferenceInfo: {
     flex: 1,
-    marginRight: spacing[3],
+    marginRight: 12,
   },
   preferenceLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: '#1E293B',
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
   },
   preferenceHint: {
-    fontSize: fontSize.xs,
-    color: '#64748B',
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
     marginTop: 2,
   },
-  frequencySection: {
-    padding: spacing[4],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
+  prefBlock: {
+    marginTop: 16,
   },
-  frequencyOptions: {
+  fieldLabel: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginBottom: 8,
+  },
+  chipRow: {
     flexDirection: 'row',
-    marginTop: spacing[3],
-    gap: spacing[2],
-  },
-  frequencyOption: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  frequencyOptionSelected: {
-    backgroundColor: '#0D7377',
-  },
-  frequencyOptionText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: '#64748B',
-  },
-  frequencyOptionTextSelected: {
-    color: '#FFFFFF',
-  },
-  thresholdSection: {
-    padding: spacing[4],
-  },
-  thresholdInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing[4],
-    marginTop: spacing[2],
-    backgroundColor: '#FFFFFF',
+    flexWrap: 'wrap',
+    rowGap: 8,
   },
   currencyPrefix: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.medium as any,
-    color: '#64748B',
-    marginRight: spacing[2],
+    ...fonts.semibold,
+    fontSize: 16,
+    color: palette.text,
   },
-  thresholdTextInput: {
-    flex: 1,
-    fontSize: fontSize.lg,
-    color: '#1E293B',
-    paddingVertical: spacing[3],
-  },
-  errorText: {
-    fontSize: fontSize.xs,
-    color: '#EF4444',
-    marginTop: spacing[1],
+  greyChip: {
+    backgroundColor: palette.fill,
   },
   saveButton: {
-    marginHorizontal: spacing[4],
-    marginBottom: spacing[4],
+    marginTop: 8,
   },
 
-  // Account
-  accountHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing[4],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
-  },
-  bankIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#E8F5F4',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing[3],
-  },
-  accountInfo: {
-    flex: 1,
-  },
-  accountHolderName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-    color: '#1E293B',
-  },
-  accountBankName: {
-    fontSize: fontSize.sm,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  accountNumber: {
-    fontSize: fontSize.xs,
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  verificationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[2],
-    paddingVertical: 4,
-    borderRadius: borderRadius.md,
-    gap: 4,
-  },
-  verificationText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-  },
-  accountDetails: {
-    padding: spacing[4],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
-  },
-  accountDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing[2],
-  },
-  accountDetailLabel: {
-    fontSize: fontSize.sm,
-    color: '#64748B',
-  },
-  accountDetailValue: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: '#1E293B',
-  },
-  editAccountButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing[4],
-    gap: spacing[2],
-  },
-  editAccountText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: '#0D7377',
-  },
-
-  // Filters
-  filtersContainer: {
-    marginBottom: spacing[3],
-  },
+  // History
   filterChipsRow: {
-    marginBottom: spacing[3],
+    marginBottom: 10,
+    marginHorizontal: -16,
   },
-  filterChip: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.full,
-    backgroundColor: '#F1F5F9',
-    marginRight: spacing[2],
-  },
-  filterChipSelected: {
-    backgroundColor: '#0D7377',
-  },
-  filterChipText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: '#64748B',
-  },
-  filterChipTextSelected: {
-    color: '#FFFFFF',
+  filterChipsContent: {
+    paddingHorizontal: 16,
+    alignItems: 'center',
   },
   filterDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: spacing[2],
+    backgroundColor: palette.line,
+    marginRight: 10,
   },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing[3],
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  searchPill: {
+    backgroundColor: palette.surface,
+    marginBottom: 10,
   },
-  searchInput: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[2],
-    fontSize: fontSize.sm,
-    color: '#1E293B',
+  historyCard: {
+    paddingHorizontal: 4,
   },
 
-  // Empty State
-  emptyState: {
-    alignItems: 'center',
-    padding: spacing[8],
-  },
-  emptyStateTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-    color: '#1E293B',
-    marginTop: spacing[4],
-  },
-  emptyStateSubtitle: {
-    fontSize: fontSize.sm,
-    color: '#64748B',
-    marginTop: spacing[1],
-    textAlign: 'center',
-  },
-  clearFiltersButton: {
-    marginTop: spacing[4],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.md,
-    backgroundColor: '#E8F5F4',
-  },
-  clearFiltersText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: '#0D7377',
-  },
-
-  // Skeleton
-  skeletonStatCard: {
-    width: 140,
-    height: 120,
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    marginRight: spacing[3],
-  },
-  skeletonBox: {
-    backgroundColor: '#E2E8F0',
-    borderRadius: borderRadius.md,
-  },
-  skeletonIcon: {
-    width: 36,
-    height: 36,
-    marginBottom: spacing[3],
-  },
-  skeletonAmount: {
-    width: 80,
-    height: 24,
-    marginBottom: spacing[2],
-  },
-  skeletonLabel: {
-    width: 60,
-    height: 14,
-  },
-  skeletonPayoutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing[4],
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[2],
-  },
-  skeletonRowIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    marginRight: spacing[3],
-  },
-  skeletonRowContent: {
-    flex: 1,
-  },
-  skeletonRowTitle: {
-    width: 120,
-    height: 16,
-    marginBottom: spacing[2],
-  },
-  skeletonRowSubtitle: {
-    width: 80,
-    height: 12,
-  },
-
-  // Modal Content
+  // Modals
   modalContent: {
-    paddingBottom: spacing[4],
+    paddingBottom: 8,
   },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
+  modalAmount: {
+    ...fonts.semibold,
+    fontSize: 32,
+    letterSpacing: -0.8,
+    color: palette.text,
+    marginBottom: 10,
   },
-  detailLabel: {
-    fontSize: fontSize.sm,
-    color: '#64748B',
-  },
-  detailValue: {
-    fontSize: fontSize.sm,
-    color: '#1E293B',
-  },
-  detailValueLarge: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as any,
-    color: '#1E293B',
-  },
-  detailValueBold: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold as any,
-    color: '#10B981',
-  },
-
-  // Breakdown Card
-  breakdownCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    marginTop: spacing[4],
-  },
-  breakdownTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    color: '#1E293B',
-    marginBottom: spacing[3],
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing[2],
-  },
-  breakdownLabel: {
-    fontSize: fontSize.sm,
-    color: '#64748B',
-  },
-  breakdownValue: {
-    fontSize: fontSize.sm,
-    color: '#1E293B',
-  },
-  breakdownValueNeg: {
-    fontSize: fontSize.sm,
-    color: '#EF4444',
-  },
-  breakdownTotal: {
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    paddingTop: spacing[3],
-    marginTop: spacing[2],
-  },
-  breakdownTotalLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    color: '#1E293B',
-  },
-  breakdownTotalValue: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold as any,
-    color: '#10B981',
-  },
-
-  // Failure Reason
-  failureReasonCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FEF2F2',
-    borderRadius: borderRadius.lg,
-    padding: spacing[3],
-    marginTop: spacing[4],
-    gap: spacing[2],
-  },
-  failureReasonText: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: '#EF4444',
-  },
-
-  // Timeline Section
-  timelineSection: {
-    marginTop: spacing[4],
-    paddingTop: spacing[4],
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  timelineSectionTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    color: '#1E293B',
-    marginBottom: spacing[3],
-  },
-  timelineItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing[3],
-  },
-  timelineItemDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginTop: 4,
-    marginRight: spacing[3],
-  },
-  timelineItemContent: {
-    flex: 1,
-  },
-  timelineItemLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: '#1E293B',
-  },
-  timelineItemDate: {
-    fontSize: fontSize.xs,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  downloadButton: {
-    marginTop: spacing[4],
-  },
-
-  // Help Content
-  helpContent: {
-    gap: spacing[4],
+  modalGrid: {
+    marginTop: 18,
   },
   helpItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing[3],
+    gap: 12,
+    marginBottom: 16,
+  },
+  helpIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: palette.peachSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   helpItemText: {
     flex: 1,
   },
   helpItemTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    color: '#1E293B',
-    marginBottom: 2,
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
   },
   helpItemDesc: {
-    fontSize: fontSize.sm,
-    color: '#64748B',
-    lineHeight: 20,
+    ...fonts.medium,
+    fontSize: 13,
+    lineHeight: 18,
+    color: palette.textMuted,
+    marginTop: 2,
   },
-
-  // Account Type
-  accountTypeSection: {
-    marginBottom: spacing[4],
+  breakdownCard: {
+    backgroundColor: palette.surfaceDim,
+    borderRadius: radii.lg,
+    padding: 16,
+    marginTop: 8,
   },
-  accountTypeLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: '#374151',
-    marginBottom: spacing[2],
+  breakdownTitle: {
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
+    marginBottom: 10,
   },
-  accountTypeOptions: {
+  breakdownRow: {
     flexDirection: 'row',
-    gap: spacing[3],
+    justifyContent: 'space-between',
+    paddingVertical: 6,
   },
-  accountTypeOption: {
+  breakdownLabel: {
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.textMuted,
+  },
+  breakdownValue: {
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
+  },
+  breakdownValueNeg: {
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.danger,
+  },
+  breakdownTotal: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
+    marginTop: 6,
+    paddingTop: 12,
+  },
+  breakdownTotalLabel: {
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
+  },
+  breakdownTotalValue: {
+    ...fonts.bold,
+    fontSize: 16,
+    color: palette.text,
+  },
+  failureReasonCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: palette.dangerSoft,
+    borderRadius: radii.md,
+    padding: 14,
+    marginTop: 8,
+  },
+  failureReasonText: {
+    ...fonts.medium,
     flex: 1,
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
+    fontSize: 13,
+    color: palette.danger,
   },
-  accountTypeOptionSelected: {
-    backgroundColor: '#E8F5F4',
-    borderColor: '#0D7377',
+  timelineSection: {
+    marginTop: 16,
   },
-  accountTypeOptionText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: '#64748B',
-  },
-  accountTypeOptionTextSelected: {
-    color: '#0D7377',
+  downloadButton: {
+    marginTop: 16,
   },
   saveAccountButton: {
-    marginTop: spacing[4],
+    marginTop: 20,
   },
 
   // Toast
   toast: {
     position: 'absolute',
-    top: 60,
-    left: spacing[4],
-    right: spacing[4],
+    left: 16,
+    right: 16,
+    zIndex: 100,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing[4],
-    borderRadius: borderRadius.lg,
-    gap: spacing[3],
-    zIndex: 1000,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: radii.lg,
+    backgroundColor: palette.ink,
   },
   toastText: {
+    ...fonts.medium,
     flex: 1,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    fontSize: 14,
+    color: palette.textInverse,
   },
-  circleTopRight: {
-    position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 130,
-    height: 130,
-    borderRadius: 70,
-    backgroundColor: '#EBF4FF',
+
+  // Skeletons
+  skeletonBox: {
+    backgroundColor: palette.bgSoft,
+    borderRadius: radii.sm,
   },
-  circleTopRightInner: {
-    position: 'absolute',
-    top: 50,
-    right: 70,
-    width: 40,
+  skeletonLabel: {
+    width: 120,
+    height: 16,
+  },
+  skeletonAmount: {
+    width: 180,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1E6FE8',
+    marginTop: 8,
   },
-  circleBottomLeft: {
-    position: 'absolute',
-    bottom: -60,
-    left: -60,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: '#EBF4FF',
+  skeletonHero: {
+    height: 200,
+    borderRadius: radii.xl,
+  },
+  skeletonSectionTitle: {
+    width: 140,
+    height: 20,
+    marginBottom: 12,
+  },
+  skeletonPayoutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  skeletonRowIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: 12,
+  },
+  skeletonRowContent: {
+    flex: 1,
+  },
+  skeletonRowTitle: {
+    width: '60%',
+    height: 16,
+    marginBottom: 8,
+  },
+  skeletonRowSubtitle: {
+    width: '40%',
+    height: 12,
   },
 });

@@ -1,13 +1,7 @@
 import React, { memo, useMemo, useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  StyleSheet,
-  Platform,
-} from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { getTheme } from '../../theme/colors';
-import { spacing } from '../../theme/spacing';
 import TabItem, { TabIconName } from './TabItem';
 import {
   saveLastSelectedTab,
@@ -59,8 +53,8 @@ const TAB_CONFIG_LOT_SETUP: TabConfig[] = [
   { key: 'More', label: 'More', icon: 'menu' },
 ];
 
-// Tab bar height constant
-const TAB_BAR_HEIGHT = 60;
+// Floating pill height
+const TAB_BAR_HEIGHT = 76;
 
 // Extended props to include owner type tab flags
 interface TabBarProps extends BottomTabBarProps {
@@ -76,8 +70,6 @@ function TabBar({
   showComplianceTab = false,
   showLotSetupTab = false,
 }: TabBarProps) {
-  // Force light mode
-  const theme = useMemo(() => getTheme(false), []);
   const insets = useSafeAreaInsets();
 
   // Select the correct tab config based on owner type
@@ -146,73 +138,68 @@ function TabBar({
     [navigation]
   );
 
-  // Calculate bottom padding with safe area
-  const bottomPadding = Math.max(insets.bottom, spacing[2]);
+  // Pill floats above the home indicator; content scrolls underneath it.
+  const bottomPadding = Math.max(insets.bottom - 6, 12);
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.surface,
-          borderTopColor: theme.borderLight,
-          paddingBottom: bottomPadding,
-          height: TAB_BAR_HEIGHT + bottomPadding,
-        },
-      ]}
-    >
-      {/* Inner container with rounded corners and shadow */}
-      <View style={[styles.inner, { backgroundColor: theme.surface }]}>
-        {state.routes.map((route, index) => {
-          const isFocused = state.index === index;
-          const currentTabConfig = tabConfig.find((t) => t.key === route.name);
+    <View pointerEvents="box-none" style={[styles.outer, { paddingBottom: bottomPadding }]}>
+      <View style={styles.pillShadow}>
+        <View style={styles.pill}>
+          {state.routes.map((route, index) => {
+            const isFocused = state.index === index;
+            const currentTabConfig = tabConfig.find((t) => t.key === route.name);
 
-          if (!currentTabConfig) return null;
+            if (!currentTabConfig) return null;
 
-          // Get badge info
-          const badgeCount =
-            currentTabConfig.key === 'Bookings' ? badgeState.bookingsCount : undefined;
-          const showDot = currentTabConfig.key === 'More' ? badgeState.hasMoreDot : false;
+            // Get badge info
+            const badgeCount =
+              currentTabConfig.key === 'Bookings' ? badgeState.bookingsCount : undefined;
+            const showDot = currentTabConfig.key === 'More' ? badgeState.hasMoreDot : false;
 
-          return (
-            <TabItem
-              key={route.key}
-              icon={currentTabConfig.icon}
-              label={currentTabConfig.label}
-              isActive={isFocused}
-              onPress={() => handleTabPress(route.name, isFocused)}
-              badgeCount={badgeCount}
-              showDot={showDot}
-              testID={`tab-${currentTabConfig.key.toLowerCase()}`}
-            />
-          );
-        })}
+            return (
+              <TabItem
+                key={route.key}
+                icon={currentTabConfig.icon}
+                label={currentTabConfig.label}
+                isActive={isFocused}
+                onPress={() => handleTabPress(route.name, isFocused)}
+                badgeCount={badgeCount}
+                showDot={showDot}
+                testID={`tab-${currentTabConfig.key.toLowerCase()}`}
+              />
+            );
+          })}
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+  outer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
   },
-  inner: {
-    flex: 1,
+  pillShadow: {
+    borderRadius: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.14,
+    shadowRadius: 26,
+    elevation: 12,
+  },
+  pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: spacing[2],
+    height: TAB_BAR_HEIGHT,
+    paddingHorizontal: 6,
+    borderRadius: 40,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
 });
 

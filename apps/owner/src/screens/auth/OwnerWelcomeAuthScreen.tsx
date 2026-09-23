@@ -5,17 +5,28 @@ import {
   StyleSheet,
   ScrollView,
   FlatList,
-  Pressable,
+  TouchableOpacity,
   TextInput,
   ActivityIndicator,
   LayoutAnimation,
   Platform,
   UIManager,
-  Dimensions,
   KeyboardAvoidingView,
+  ImageBackground,
+  StatusBar,
+  Dimensions,
+  type TextStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import * as UI from '../../components/ui';
+import * as Kit from '../../theme/kit';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const { PillButton } = UI as unknown as Record<string, React.ComponentType<any>>;
+const { palette, radii, shadow } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
 
 // ============================================================================
 // TYPES
@@ -56,100 +67,33 @@ const ownerTypes: OwnerTypeOption[] = [
     id: 'individual',
     title: 'Individual Owner',
     description: 'Rent out your personal driveway or private spot.',
-    icon: '🏠',
+    icon: 'home-outline',
   },
   {
     id: 'residential',
     title: 'Residential Community',
     description: 'Manage guest/resident parking for a society or apartment.',
-    icon: '🏘️',
+    icon: 'people-outline',
   },
   {
     id: 'commercial',
     title: 'Commercial Property',
     description: 'Operate paid parking for malls, offices, venues.',
-    icon: '🏢',
+    icon: 'business-outline',
   },
   {
     id: 'industrial',
     title: 'Industrial Facility',
     description: 'Control secure parking for factories and logistics yards.',
-    icon: '🏭',
+    icon: 'construct-outline',
   },
   {
     id: 'empty_land',
     title: 'Empty Land Owner',
     description: 'List open plots converted into parking areas.',
-    icon: '🌳',
+    icon: 'leaf-outline',
   },
 ];
-
-// ============================================================================
-// THEME
-// ============================================================================
-
-const theme = {
-  colors: {
-    background: '#F8FAFC',
-    surface: '#FFFFFF',
-    primary: '#0D7377',
-    primaryLight: '#E8F5F4',
-    primaryDark: '#0A5C5F',
-    textPrimary: '#0F172A',
-    textSecondary: '#64748B',
-    textTertiary: '#94A3B8',
-    border: '#E2E8F0',
-    borderFocused: '#0D7377',
-    disabled: '#CBD5E1',
-    disabledText: '#94A3B8',
-    danger: '#EF4444',
-    dangerLight: '#FEF2F2',
-    success: '#10B981',
-    successLight: '#ECFDF5',
-    warning: '#F59E0B',
-    warningLight: '#FFFBEB',
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    xxl: 24,
-    xxxl: 32,
-  },
-  radius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 24,
-    full: 9999,
-  },
-  typography: {
-    h1: { fontSize: 28, fontWeight: '700' as const, lineHeight: 36 },
-    h2: { fontSize: 20, fontWeight: '600' as const, lineHeight: 28 },
-    h3: { fontSize: 16, fontWeight: '600' as const, lineHeight: 22 },
-    body: { fontSize: 15, fontWeight: '400' as const, lineHeight: 22 },
-    bodySmall: { fontSize: 14, fontWeight: '400' as const, lineHeight: 20 },
-    caption: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
-    button: { fontSize: 16, fontWeight: '600' as const, lineHeight: 24 },
-    link: { fontSize: 14, fontWeight: '500' as const, lineHeight: 20 },
-  },
-  shadow: {
-    sm: Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
-      android: { elevation: 1 },
-    }),
-    md: Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
-      android: { elevation: 3 },
-    }),
-    lg: Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12 },
-      android: { elevation: 6 },
-    }),
-  },
-};
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -192,16 +136,16 @@ interface InlineBannerProps {
 }
 
 function InlineBanner({ message, type, onDismiss }: InlineBannerProps) {
-  const bgColor = type === 'error' ? theme.colors.dangerLight : type === 'warning' ? theme.colors.warningLight : theme.colors.successLight;
-  const textColor = type === 'error' ? theme.colors.danger : type === 'warning' ? theme.colors.warning : theme.colors.success;
+  const bgColor = type === 'error' ? palette.dangerSoft : type === 'warning' ? palette.warningSoft : palette.successSoft;
+  const textColor = type === 'error' ? palette.danger : type === 'warning' ? palette.warning : palette.success;
 
   return (
     <View style={[styles.inlineBanner, { backgroundColor: bgColor }]}>
       <Text style={[styles.inlineBannerText, { color: textColor }]}>{message}</Text>
       {onDismiss && (
-        <Pressable onPress={onDismiss} style={styles.inlineBannerDismiss} accessibilityRole="button" accessibilityLabel="Dismiss">
-          <Text style={[styles.inlineBannerDismissText, { color: textColor }]}>✕</Text>
-        </Pressable>
+        <TouchableOpacity onPress={onDismiss} style={styles.inlineBannerDismiss} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Dismiss">
+          <Ionicons name="close" size={16} color={textColor} />
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -216,27 +160,14 @@ interface PrimaryButtonProps {
 }
 
 function PrimaryButton({ title, onPress, disabled = false, loading = false }: PrimaryButtonProps) {
-  const isDisabled = disabled || loading;
-
   return (
-    <Pressable
+    <PillButton
+      label={title}
+      variant="ink"
       onPress={onPress}
-      disabled={isDisabled}
-      style={({ pressed }) => [
-        styles.primaryButton,
-        isDisabled && styles.primaryButtonDisabled,
-        pressed && !isDisabled && styles.primaryButtonPressed,
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      accessibilityState={{ disabled: isDisabled }}
-    >
-      {loading ? (
-        <ActivityIndicator color={theme.colors.surface} size="small" />
-      ) : (
-        <Text style={[styles.primaryButtonText, isDisabled && styles.primaryButtonTextDisabled]}>{title}</Text>
-      )}
-    </Pressable>
+      disabled={disabled}
+      loading={loading}
+    />
   );
 }
 
@@ -278,16 +209,16 @@ function TextField({
         style={[
           styles.textFieldInputContainer,
           isFocused && styles.textFieldInputContainerFocused,
-          error && styles.textFieldInputContainerError,
+          !!error && styles.textFieldInputContainerError,
         ]}
       >
         {leftElement && <View style={styles.textFieldLeftElement}>{leftElement}</View>}
         <TextInput
-          style={[styles.textFieldInput, leftElement ? styles.textFieldInputWithLeft : undefined]}
+          style={styles.textFieldInput}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={theme.colors.textTertiary}
+          placeholderTextColor={palette.textSubtle}
           secureTextEntry={isSecure}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
@@ -299,14 +230,15 @@ function TextField({
           accessibilityLabel={label}
         />
         {showPasswordToggle && (
-          <Pressable
+          <TouchableOpacity
             onPress={() => setIsSecure(!isSecure)}
             style={styles.passwordToggle}
+            activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={isSecure ? 'Show password' : 'Hide password'}
           >
-            <Text style={styles.passwordToggleText}>{isSecure ? '👁️' : '🙈'}</Text>
-          </Pressable>
+            <Ionicons name={isSecure ? 'eye-outline' : 'eye-off-outline'} size={20} color={palette.textMuted} />
+          </TouchableOpacity>
         )}
       </View>
       {error && <Text style={styles.textFieldError}>{error}</Text>}
@@ -327,19 +259,20 @@ function SegmentedTabs({ tabs, selectedKey, onSelect }: SegmentedTabsProps) {
       {tabs.map((tab) => {
         const isSelected = tab.key === selectedKey;
         return (
-          <Pressable
+          <TouchableOpacity
             key={tab.key}
             onPress={() => {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
               onSelect(tab.key);
             }}
+            activeOpacity={0.8}
             style={[styles.segmentedTab, isSelected && styles.segmentedTabSelected]}
             accessibilityRole="tab"
             accessibilityLabel={tab.label}
             accessibilityState={{ selected: isSelected }}
           >
             <Text style={[styles.segmentedTabText, isSelected && styles.segmentedTabTextSelected]}>{tab.label}</Text>
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -359,19 +292,20 @@ function ToggleChips({ options, selectedKey, onSelect }: ToggleChipsProps) {
       {options.map((option) => {
         const isSelected = option.key === selectedKey;
         return (
-          <Pressable
+          <TouchableOpacity
             key={option.key}
             onPress={() => {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
               onSelect(option.key);
             }}
+            activeOpacity={0.8}
             style={[styles.toggleChip, isSelected && styles.toggleChipSelected]}
             accessibilityRole="radio"
             accessibilityLabel={option.label}
             accessibilityState={{ selected: isSelected }}
           >
             <Text style={[styles.toggleChipText, isSelected && styles.toggleChipTextSelected]}>{option.label}</Text>
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -392,29 +326,26 @@ function OwnerTypeCard({ item, isSelected, onSelect }: OwnerTypeCardProps) {
   }, [item.id, onSelect]);
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={handlePress}
-      style={({ pressed }) => [
-        styles.ownerCard,
-        isSelected && styles.ownerCardSelected,
-        pressed && styles.ownerCardPressed,
-      ]}
+      activeOpacity={0.85}
+      style={[styles.ownerCard, isSelected && styles.ownerCardSelected]}
       accessibilityRole="radio"
       accessibilityLabel={`${item.title}. ${item.description}`}
       accessibilityState={{ selected: isSelected }}
       accessibilityHint="Double tap to select this owner type"
     >
       <View style={[styles.ownerCardIcon, isSelected && styles.ownerCardIconSelected]}>
-        <Text style={styles.ownerCardIconText}>{item.icon}</Text>
+        <Ionicons name={item.icon} size={22} color={isSelected ? palette.textInverse : palette.text} />
       </View>
       <View style={styles.ownerCardContent}>
-        <Text style={[styles.ownerCardTitle, isSelected && styles.ownerCardTitleSelected]}>{item.title}</Text>
+        <Text style={styles.ownerCardTitle}>{item.title}</Text>
         <Text style={styles.ownerCardDescription} numberOfLines={2}>{item.description}</Text>
       </View>
       <View style={[styles.ownerCardCheck, isSelected && styles.ownerCardCheckSelected]}>
-        {isSelected && <Text style={styles.ownerCardCheckIcon}>✓</Text>}
+        {isSelected && <Ionicons name="checkmark" size={14} color={palette.textInverse} />}
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -436,6 +367,7 @@ function SkeletonCard() {
 // ============================================================================
 
 export default function OwnerWelcomeAuthScreen() {
+  const insets = useSafeAreaInsets();
   // State
   const [isLoading, setIsLoading] = useState(false);
   const [storageError, setStorageError] = useState<string | null>(null);
@@ -653,24 +585,22 @@ export default function OwnerWelcomeAuthScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          <View style={styles.header}>
-            <View style={[styles.logo, styles.skeletonLogo]} />
-            <View style={styles.skeletonHeaderTitle} />
-            <View style={styles.skeletonHeaderSubtitle} />
-          </View>
-          <View style={styles.section}>
+          <View style={styles.skeletonHeaderTitle} />
+          <View style={styles.skeletonHeaderSubtitle} />
+          <View style={styles.skeletonList}>
             {[1, 2, 3].map((i) => (
               <SkeletonCard key={i} />
             ))}
           </View>
-          <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loadingIndicator} />
+          <ActivityIndicator size="large" color={palette.ink} style={styles.loadingIndicator} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -679,33 +609,45 @@ export default function OwnerWelcomeAuthScreen() {
         <ScrollView
           ref={scrollViewRef}
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Photo header: black scrim, wordmark, big white headline */}
+          <ImageBackground
+            source={require('../../assets/images/onboarding-1.jpg')}
+            style={styles.hero}
+            resizeMode="cover"
+          >
+            <View style={styles.scrim} />
+            <View style={styles.shadeBottom} />
+            <View style={[styles.heroTop, { paddingTop: insets.top + 12 }]}>
+              <Text style={styles.brand}>
+                parkfnb.<Text style={styles.brandMark}>®</Text>
+              </Text>
+            </View>
+            <View style={styles.heroCopy}>
+              <Text style={styles.headerTitle}>Welcome</Text>
+              <Text style={styles.headerSubtitle}>
+                Select your owner type and sign in to continue.
+              </Text>
+            </View>
+          </ImageBackground>
+
           {/* Storage Error Banner */}
           {storageError && (
-            <InlineBanner
-              message={storageError}
-              type="warning"
-              onDismiss={() => setStorageError(null)}
-            />
-          )}
-
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.logo}>
-              <Text style={styles.logoText}>O</Text>
+            <View style={styles.bannerWrap}>
+              <InlineBanner
+                message={storageError}
+                type="warning"
+                onDismiss={() => setStorageError(null)}
+              />
             </View>
-            <Text style={styles.headerTitle}>Welcome</Text>
-            <Text style={styles.headerSubtitle}>
-              Select your owner type and sign in to continue.
-            </Text>
-          </View>
+          )}
 
           {/* Owner Type Selection */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Owner Type</Text>
+            <Text style={styles.sectionTitle}>Owner type</Text>
             <FlatList
               data={ownerTypes}
               renderItem={renderOwnerCard}
@@ -714,27 +656,26 @@ export default function OwnerWelcomeAuthScreen() {
               contentContainerStyle={styles.ownerList}
             />
             {selectedOwnerType && (
-              <Pressable
+              <TouchableOpacity
                 onPress={handleClearSelection}
                 style={styles.clearButton}
+                activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel="Clear selection"
               >
                 <Text style={styles.clearButtonText}>Clear selection</Text>
-              </Pressable>
+              </TouchableOpacity>
             )}
 
             {/* Next Button */}
             {selectedOwnerType && (
-              <Pressable
+              <PillButton
+                label="Next"
+                iconRight="arrow-right"
+                variant="ink"
                 onPress={handleNext}
                 style={styles.nextButton}
-                accessibilityRole="button"
-                accessibilityLabel="Next"
-              >
-                <Text style={styles.nextButtonText}>Next</Text>
-                <Text style={styles.nextButtonArrow}>→</Text>
-              </Pressable>
+              />
             )}
           </View>
 
@@ -759,7 +700,7 @@ export default function OwnerWelcomeAuthScreen() {
 
               <Text style={styles.authSubtitle}>
                 {authTab === 'signIn'
-                  ? 'Welcome back—enter your details.'
+                  ? 'Welcome back, enter your details.'
                   : 'Create your owner account to get started.'}
               </Text>
 
@@ -810,9 +751,9 @@ export default function OwnerWelcomeAuthScreen() {
                   keyboardType="phone-pad"
                   onBlur={() => markFieldTouched('phone')}
                   leftElement={
-                    <Pressable style={styles.countryCodeButton} accessibilityRole="button" accessibilityLabel="Select country code">
-                      <Text style={styles.countryCodeText}>+91 ▾</Text>
-                    </Pressable>
+                    <TouchableOpacity style={styles.countryCodeButton} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Select country code">
+                      <Text style={styles.countryCodeText}>+91</Text>
+                    </TouchableOpacity>
                   }
                 />
               )}
@@ -847,31 +788,33 @@ export default function OwnerWelcomeAuthScreen() {
 
               {/* Forgot Password (Sign In only) */}
               {authTab === 'signIn' && (
-                <Pressable
+                <TouchableOpacity
                   onPress={handleForgotPassword}
                   style={styles.forgotPasswordButton}
+                  activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel="Forgot password"
                 >
                   <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-                </Pressable>
+                </TouchableOpacity>
               )}
 
               {/* Terms Checkbox (Sign Up only) */}
               {authTab === 'signUp' && (
                 <View style={styles.termsContainer}>
-                  <Pressable
+                  <TouchableOpacity
                     onPress={() => {
                       setTermsAccepted(!termsAccepted);
                       markFieldTouched('terms');
                     }}
+                    activeOpacity={0.8}
                     style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}
                     accessibilityRole="checkbox"
                     accessibilityLabel="Accept Terms and Privacy Policy"
                     accessibilityState={{ checked: termsAccepted }}
                   >
-                    {termsAccepted && <Text style={styles.checkboxCheck}>✓</Text>}
-                  </Pressable>
+                    {termsAccepted && <Ionicons name="checkmark" size={14} color={palette.textInverse} />}
+                  </TouchableOpacity>
                   <Text style={styles.termsText}>
                     I agree to the{' '}
                     <Text style={styles.termsLink}>Terms & Privacy</Text>
@@ -885,7 +828,7 @@ export default function OwnerWelcomeAuthScreen() {
 
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -893,450 +836,232 @@ export default function OwnerWelcomeAuthScreen() {
 // STYLES
 // ============================================================================
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   // Layout
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
+  container: { flex: 1, backgroundColor: palette.bg },
+  keyboardAvoid: { flex: 1 },
+  scrollView: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+  content: { flex: 1, paddingHorizontal: 20, paddingTop: 24 },
+
+  // Photo header
+  hero: { height: Math.round(SCREEN_HEIGHT * 0.4), backgroundColor: '#111' },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.42)' },
+  shadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '45%', backgroundColor: 'rgba(0,0,0,0.25)' },
+  heroTop: { paddingHorizontal: 24 },
+  brand: { ...fonts.bold, fontSize: 26, letterSpacing: -0.6, color: palette.textInverse },
+  brandMark: { ...fonts.medium, fontSize: 12 },
+  heroCopy: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: 24, paddingBottom: 32 },
+  headerTitle: {
+    ...fonts.medium,
+    fontSize: 52,
+    lineHeight: 56,
+    letterSpacing: -1.6,
+    color: palette.textInverse,
   },
-  keyboardAvoid: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: theme.spacing.xl,
-    paddingTop: theme.spacing.xxl,
-    paddingBottom: theme.spacing.xxxl,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: theme.spacing.xl,
+  headerSubtitle: {
+    ...fonts.medium,
+    fontSize: 17,
+    lineHeight: 24,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 10,
   },
 
   // Inline Banner
+  bannerWrap: { paddingHorizontal: 20, marginTop: 20 },
   inlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
-    marginBottom: theme.spacing.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: radii.md,
   },
-  inlineBannerText: {
-    ...theme.typography.caption,
-    flex: 1,
-  },
-  inlineBannerDismiss: {
-    padding: theme.spacing.xs,
-    marginLeft: theme.spacing.sm,
-  },
-  inlineBannerDismissText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
-  // Header
-  header: {
-    alignItems: 'center',
-    marginBottom: theme.spacing.xxl,
-  },
-  logo: {
-    width: 72,
-    height: 72,
-    borderRadius: theme.radius.xl,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing.xxl,
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: theme.colors.surface,
-  },
-  headerTitle: {
-    ...theme.typography.h1,
-    color: theme.colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: theme.spacing.sm,
-  },
-  headerSubtitle: {
-    ...theme.typography.body,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    maxWidth: SCREEN_WIDTH * 0.85,
-  },
+  inlineBannerText: { ...fonts.medium, fontSize: 13, lineHeight: 18, flex: 1 },
+  inlineBannerDismiss: { padding: 4, marginLeft: 8 },
 
   // Sections
-  section: {
-    marginBottom: theme.spacing.xxl,
-  },
+  section: { marginTop: 28, paddingHorizontal: 20 },
   sectionTitle: {
-    ...theme.typography.h3,
-    color: theme.colors.textPrimary,
-    marginBottom: theme.spacing.lg,
+    ...fonts.medium,
+    fontSize: 19,
+    letterSpacing: -0.2,
+    color: palette.text,
+    marginBottom: 12,
   },
 
   // Owner Cards
-  ownerList: {
-    gap: theme.spacing.md,
-  },
+  ownerList: { gap: 10 },
   ownerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
-    borderWidth: 2,
-    borderColor: theme.colors.border,
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
-    ...theme.shadow.md,
+    backgroundColor: palette.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderColor: palette.surface,
+    padding: 14,
+    ...shadow.press,
   },
-  ownerCardSelected: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primaryLight,
-  },
-  ownerCardPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
-  },
+  ownerCardSelected: { borderColor: palette.ink },
   ownerCardIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.background,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: palette.fill,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: theme.spacing.lg,
+    marginRight: 14,
   },
-  ownerCardIconSelected: {
-    backgroundColor: theme.colors.surface,
-  },
-  ownerCardIconText: {
-    fontSize: 24,
-  },
-  ownerCardContent: {
-    flex: 1,
-    marginRight: theme.spacing.md,
-  },
-  ownerCardTitle: {
-    ...theme.typography.h3,
-    color: theme.colors.textPrimary,
-    marginBottom: theme.spacing.xs,
-  },
-  ownerCardTitleSelected: {
-    color: theme.colors.primary,
-  },
-  ownerCardDescription: {
-    ...theme.typography.bodySmall,
-    color: theme.colors.textSecondary,
-  },
+  ownerCardIconSelected: { backgroundColor: palette.ink },
+  ownerCardContent: { flex: 1, marginRight: 12 },
+  ownerCardTitle: { ...fonts.semibold, fontSize: 16, color: palette.text, marginBottom: 2 },
+  ownerCardDescription: { ...fonts.medium, fontSize: 13, lineHeight: 18, color: palette.textMuted },
   ownerCardCheck: {
     width: 24,
     height: 24,
-    borderRadius: theme.radius.full,
-    borderWidth: 2,
-    borderColor: theme.colors.border,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: palette.textSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ownerCardCheckSelected: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primary,
-  },
-  ownerCardCheckIcon: {
-    color: theme.colors.surface,
-    fontSize: 14,
-    fontWeight: '700',
-  },
+  ownerCardCheckSelected: { borderColor: palette.ink, backgroundColor: palette.ink },
 
   // Clear Button
-  clearButton: {
-    alignSelf: 'center',
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.sm,
-  },
-  clearButtonText: {
-    ...theme.typography.link,
-    color: theme.colors.primary,
-  },
+  clearButton: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 12, marginTop: 8 },
+  clearButtonText: { ...fonts.semibold, fontSize: 14, color: palette.textMuted },
 
   // Next Button
-  nextButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xxl,
-    marginTop: theme.spacing.lg,
-    gap: theme.spacing.sm,
-    ...theme.shadow.sm,
-  },
-  nextButtonText: {
-    ...theme.typography.button,
-    color: theme.colors.surface,
-  },
-  nextButtonArrow: {
-    fontSize: 18,
-    color: theme.colors.surface,
-  },
+  nextButton: { marginTop: 12 },
 
   // Auth Card
-  authCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.xl,
-    ...theme.shadow.md,
-  },
+  authCard: { backgroundColor: palette.surface, borderRadius: radii.xl, padding: 20 },
 
   // Segmented Tabs
   segmentedTabs: {
     flexDirection: 'row',
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.xs,
-    marginBottom: theme.spacing.xl,
+    backgroundColor: palette.fill,
+    borderRadius: radii.pill,
+    padding: 5,
+    marginBottom: 16,
   },
   segmentedTab: {
     flex: 1,
-    paddingVertical: theme.spacing.md,
+    height: 42,
     alignItems: 'center',
-    borderRadius: theme.radius.sm,
+    justifyContent: 'center',
+    borderRadius: radii.pill,
   },
-  segmentedTabSelected: {
-    backgroundColor: theme.colors.surface,
-    ...theme.shadow.sm,
-  },
-  segmentedTabText: {
-    ...theme.typography.button,
-    color: theme.colors.textSecondary,
-  },
-  segmentedTabTextSelected: {
-    color: theme.colors.primary,
-  },
+  segmentedTabSelected: { backgroundColor: palette.surface, ...shadow.press },
+  segmentedTabText: { ...fonts.semibold, fontSize: 14, color: palette.textMuted },
+  segmentedTabTextSelected: { color: palette.text },
 
   // Auth Subtitle
   authSubtitle: {
-    ...theme.typography.bodySmall,
-    color: theme.colors.textSecondary,
+    ...fonts.medium,
+    fontSize: 14,
+    lineHeight: 20,
+    color: palette.textMuted,
     textAlign: 'center',
-    marginBottom: theme.spacing.lg,
+    marginBottom: 14,
   },
 
   // Toggle Chips
-  toggleChips: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.xl,
-  },
+  toggleChips: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 18 },
   toggleChip: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xl,
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
+    height: 40,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
   },
-  toggleChipSelected: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primaryLight,
-  },
-  toggleChipText: {
-    ...theme.typography.bodySmall,
-    color: theme.colors.textSecondary,
-  },
-  toggleChipTextSelected: {
-    color: theme.colors.primary,
-    fontWeight: '600',
-  },
+  toggleChipSelected: { backgroundColor: palette.ink },
+  toggleChipText: { ...fonts.semibold, fontSize: 14, color: palette.text },
+  toggleChipTextSelected: { color: palette.textInverse },
 
   // Form
-  formContainer: {
-    gap: theme.spacing.lg,
-  },
+  formContainer: { gap: 14 },
 
   // Text Field
-  textFieldContainer: {
-    marginBottom: theme.spacing.sm,
-  },
-  textFieldLabel: {
-    ...theme.typography.bodySmall,
-    color: theme.colors.textPrimary,
-    fontWeight: '500',
-    marginBottom: theme.spacing.sm,
-  },
+  textFieldContainer: {},
+  textFieldLabel: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginBottom: 8, marginLeft: 4 },
   textFieldInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    minHeight: 52,
+    backgroundColor: palette.fill,
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    borderColor: palette.fill,
+    height: 56,
+    paddingHorizontal: 6,
   },
-  textFieldInputContainerFocused: {
-    borderColor: theme.colors.borderFocused,
-    borderWidth: 2,
-  },
-  textFieldInputContainerError: {
-    borderColor: theme.colors.danger,
-  },
+  textFieldInputContainerFocused: { borderColor: palette.ink, backgroundColor: palette.surface },
+  textFieldInputContainerError: { borderColor: palette.danger },
   textFieldInput: {
+    ...fonts.medium,
     flex: 1,
-    ...theme.typography.body,
-    color: theme.colors.textPrimary,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    fontSize: 16,
+    color: palette.text,
+    paddingHorizontal: 14,
+    paddingVertical: 0,
   },
-  textFieldInputWithLeft: {
-    paddingLeft: theme.spacing.sm,
-  },
-  textFieldLeftElement: {
-    paddingLeft: theme.spacing.md,
-  },
-  textFieldError: {
-    ...theme.typography.caption,
-    color: theme.colors.danger,
-    marginTop: theme.spacing.xs,
-  },
-  passwordToggle: {
-    padding: theme.spacing.md,
-  },
-  passwordToggleText: {
-    fontSize: 18,
-  },
+  textFieldLeftElement: {},
+  textFieldError: { ...fonts.medium, fontSize: 12, color: palette.danger, marginTop: 6, marginLeft: 6 },
+  passwordToggle: { padding: 10 },
 
   // Country Code
   countryCodeButton: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.sm,
-    borderRightWidth: 1,
-    borderRightColor: theme.colors.border,
+    height: 42,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: palette.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  countryCodeText: {
-    ...theme.typography.body,
-    color: theme.colors.textPrimary,
-  },
+  countryCodeText: { ...fonts.semibold, fontSize: 15, color: palette.textInverse },
 
   // Forgot Password
-  forgotPasswordButton: {
-    alignSelf: 'flex-end',
-    paddingVertical: theme.spacing.xs,
-  },
-  forgotPasswordText: {
-    ...theme.typography.link,
-    color: theme.colors.primary,
-  },
+  forgotPasswordButton: { alignSelf: 'flex-end', paddingVertical: 4 },
+  forgotPasswordText: { ...fonts.semibold, fontSize: 14, color: palette.text },
 
   // Terms
-  termsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: theme.spacing.sm,
-  },
+  termsContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: theme.radius.sm,
-    borderWidth: 2,
-    borderColor: theme.colors.border,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: palette.textSubtle,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: theme.spacing.md,
+    marginRight: 12,
   },
-  checkboxChecked: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  checkboxCheck: {
-    color: theme.colors.surface,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  termsText: {
-    ...theme.typography.bodySmall,
-    color: theme.colors.textSecondary,
-    flex: 1,
-  },
-  termsLink: {
-    color: theme.colors.primary,
-    fontWeight: '500',
-  },
-  termsError: {
-    ...theme.typography.caption,
-    color: theme.colors.danger,
-    marginTop: theme.spacing.xs,
-    marginLeft: 38,
-  },
-
-  // Primary Button
-  primaryButton: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 56,
-  },
-  primaryButtonDisabled: {
-    backgroundColor: theme.colors.disabled,
-  },
-  primaryButtonPressed: {
-    backgroundColor: theme.colors.primaryDark,
-  },
-  primaryButtonText: {
-    ...theme.typography.button,
-    color: theme.colors.surface,
-  },
-  primaryButtonTextDisabled: {
-    color: theme.colors.disabledText,
-  },
+  checkboxChecked: { backgroundColor: palette.ink, borderColor: palette.ink },
+  termsText: { ...fonts.medium, fontSize: 14, color: palette.textMuted, flex: 1 },
+  termsLink: { ...fonts.semibold, color: palette.text },
+  termsError: { ...fonts.medium, fontSize: 12, color: palette.danger, marginTop: 4, marginLeft: 36 },
 
   // Skeleton Loading
-  skeletonCard: {
-    borderColor: theme.colors.border,
-  },
-  skeletonIcon: {
-    backgroundColor: theme.colors.border,
-  },
+  skeletonCard: { borderColor: palette.surface },
+  skeletonIcon: { backgroundColor: palette.bgSoft },
   skeletonTitle: {
     width: 140,
     height: 18,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.border,
-    marginBottom: theme.spacing.sm,
+    borderRadius: radii.xs,
+    backgroundColor: palette.bgSoft,
+    marginBottom: 8,
   },
-  skeletonDescription: {
-    width: '90%',
-    height: 14,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.border,
-  },
-  skeletonLogo: {
-    backgroundColor: theme.colors.border,
-  },
+  skeletonDescription: { width: '90%', height: 14, borderRadius: radii.xs, backgroundColor: palette.bgSoft },
   skeletonHeaderTitle: {
-    width: 160,
-    height: 28,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.border,
-    marginBottom: theme.spacing.sm,
+    width: 180,
+    height: 40,
+    borderRadius: radii.sm,
+    backgroundColor: palette.bgSoft,
+    marginTop: 40,
+    marginBottom: 10,
   },
-  skeletonHeaderSubtitle: {
-    width: SCREEN_WIDTH * 0.7,
-    height: 16,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.border,
-  },
-  loadingIndicator: {
-    marginTop: theme.spacing.xxl,
-  },
+  skeletonHeaderSubtitle: { width: '75%', height: 16, borderRadius: radii.xs, backgroundColor: palette.bgSoft },
+  skeletonList: { marginTop: 28, gap: 10 },
+  loadingIndicator: { marginTop: 24 },
 });

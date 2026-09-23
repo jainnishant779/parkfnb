@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Platform,
+  TouchableOpacity,
   Switch,
 } from 'react-native';
 import Animated, {
@@ -14,16 +14,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts, shadow } from '../../theme/kit';
 import type { FullListing, ListingStatus, VehicleType } from '../../types/models';
 
 // Status configuration
 const STATUS_CONFIG: Record<ListingStatus, { label: string; color: string; bgColor: string }> = {
-  ACTIVE: { label: 'Active', color: '#059669', bgColor: '#ECFDF5' },
-  PAUSED: { label: 'Paused', color: '#D97706', bgColor: '#FFFBEB' },
-  DRAFT: { label: 'Draft', color: '#6B7280', bgColor: '#F3F4F6' },
-  PENDING: { label: 'Pending', color: '#0D7377', bgColor: '#E8F5F4' },
+  ACTIVE: { label: 'Active', color: palette.textInverse, bgColor: palette.ink },
+  PAUSED: { label: 'Paused', color: palette.warning, bgColor: palette.warningSoft },
+  DRAFT: { label: 'Draft', color: palette.textMuted, bgColor: palette.fill },
+  PENDING: { label: 'Pending', color: palette.text, bgColor: palette.blueSoft },
 };
 
 // Vehicle type icons
@@ -114,11 +113,11 @@ function ListingCard({
         {/* Top Row: Thumbnail + Info */}
         <View style={styles.topRow}>
           {/* Thumbnail Placeholder */}
-          <View style={[styles.thumbnail, { backgroundColor: theme.borderLight }]}>
+          <View style={[styles.thumbnail, { backgroundColor: palette.peachSoft }]}>
             {listing.thumbnail ? (
-              <Ionicons name="image" size={32} color={theme.textMuted} />
+              <Ionicons name="image" size={30} color={palette.peachDeep} />
             ) : (
-              <Ionicons name="car" size={32} color={theme.textMuted} />
+              <Ionicons name="car" size={32} color={palette.peachDeep} />
             )}
           </View>
 
@@ -133,13 +132,14 @@ function ListingCard({
                 {listing.title}
               </Text>
               {/* Menu Button */}
-              <Pressable
+              <TouchableOpacity
                 onPress={() => onMenuPress(listing)}
                 style={styles.menuButton}
+                activeOpacity={0.7}
                 hitSlop={8}
               >
-                <Ionicons name="ellipsis-vertical" size={20} color={theme.textMuted} />
-              </Pressable>
+                <Ionicons name="ellipsis-horizontal" size={18} color={theme.text} />
+              </TouchableOpacity>
             </View>
 
             {/* Location */}
@@ -168,9 +168,6 @@ function ListingCard({
           </View>
         </View>
 
-        {/* Divider */}
-        <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
-
         {/* Middle Row: Stats */}
         <View style={styles.statsRow}>
           {/* Price */}
@@ -187,7 +184,7 @@ function ListingCard({
           {/* Earnings */}
           <View style={styles.stat}>
             <Text style={[styles.statLabel, { color: theme.textMuted }]}>Earnings</Text>
-            <Text style={[styles.statValue, { color: theme.success }]}>{earningsText}</Text>
+            <Text style={[styles.statValue, { color: theme.text }]}>{earningsText}</Text>
           </View>
 
           {/* Bookings */}
@@ -201,7 +198,7 @@ function ListingCard({
             <View style={styles.stat}>
               <Text style={[styles.statLabel, { color: theme.textMuted }]}>Rating</Text>
               <View style={styles.ratingRow}>
-                <Ionicons name="star" size={14} color="#F59E0B" />
+                <Ionicons name="star" size={14} color={palette.peachDeep} />
                 <Text style={[styles.statValue, { color: theme.text, marginLeft: 2 }]}>
                   {listing.rating.toFixed(1)}
                 </Text>
@@ -217,9 +214,9 @@ function ListingCard({
             {listing.vehicleTypes.map((type) => (
               <View
                 key={type}
-                style={[styles.vehicleChip, { backgroundColor: theme.borderLight }]}
+                style={[styles.vehicleChip, { backgroundColor: palette.fill }]}
               >
-                <Ionicons name={VEHICLE_ICONS[type]} size={14} color={theme.textSecondary} />
+                <Ionicons name={VEHICLE_ICONS[type]} size={15} color={theme.text} />
               </View>
             ))}
             <Text style={[styles.capacityText, { color: theme.textMuted }]}>
@@ -236,9 +233,9 @@ function ListingCard({
               <Switch
                 value={listing.status === 'ACTIVE'}
                 onValueChange={() => onToggleStatus(listing)}
-                trackColor={{ false: theme.border, true: theme.primaryLight }}
-                thumbColor={listing.status === 'ACTIVE' ? theme.primary : theme.textMuted}
-                ios_backgroundColor={theme.border}
+                trackColor={{ false: palette.line, true: palette.ink }}
+                thumbColor={palette.surface}
+                ios_backgroundColor={palette.line}
                 style={styles.switch}
               />
             </View>
@@ -251,21 +248,11 @@ function ListingCard({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: borderRadius.xl,
-    marginHorizontal: spacing[4],
-    marginBottom: spacing[3],
-    padding: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    borderRadius: radii.xl,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    ...shadow.soft,
   },
   topRow: {
     flexDirection: 'row',
@@ -274,10 +261,11 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: 72,
     height: 72,
-    borderRadius: borderRadius.lg,
+    borderRadius: radii.md,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing[3],
+    marginRight: 12,
+    overflow: 'hidden',
   },
   mainInfo: {
     flex: 1,
@@ -288,72 +276,88 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 17,
+    letterSpacing: -0.2,
     flex: 1,
-    marginRight: spacing[2],
+    marginRight: 8,
   },
   menuButton: {
-    padding: spacing[1],
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing[1],
+    marginTop: 4,
   },
   location: {
-    fontSize: fontSize.sm,
-    marginLeft: spacing[1],
+    ...fonts.medium,
+    fontSize: 13,
+    marginLeft: 4,
     flex: 1,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing[2],
+    marginTop: 8,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
   },
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    marginRight: spacing[1],
+    marginRight: 5,
   },
   statusText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 11,
   },
   timeText: {
-    fontSize: fontSize.xs,
-    marginLeft: spacing[2],
+    ...fonts.medium,
+    fontSize: 12,
+    marginLeft: 8,
   },
   divider: {
     height: 1,
-    marginVertical: spacing[3],
+    marginVertical: 12,
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surfaceDim,
   },
   stat: {
     alignItems: 'center',
     minWidth: 60,
   },
   statLabel: {
-    fontSize: fontSize.xs,
-    marginBottom: spacing[1],
+    ...fonts.medium,
+    fontSize: 11.5,
+    marginBottom: 3,
   },
   statValue: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.bold,
+    fontSize: 15,
+    letterSpacing: -0.2,
   },
   statSubvalue: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 11.5,
     marginTop: 2,
   },
   ratingRow: {
@@ -364,34 +368,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing[3],
-    paddingTop: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#F1F5F9',
+    marginTop: 12,
   },
   vehicleTypes: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   vehicleChip: {
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.md,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing[1],
+    marginRight: 4,
   },
   capacityText: {
-    fontSize: fontSize.xs,
-    marginLeft: spacing[1],
+    ...fonts.medium,
+    fontSize: 12.5,
+    marginLeft: 4,
   },
   toggleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   toggleLabel: {
-    fontSize: fontSize.xs,
-    marginRight: spacing[2],
+    ...fonts.semibold,
+    fontSize: 12.5,
+    marginRight: 6,
   },
   switch: {
     transform: [{ scale: 0.8 }],

@@ -1,8 +1,7 @@
-import React, { memo, useMemo, useEffect } from 'react';
+import React, { memo, useEffect } from 'react';
 import {
   View,
   StyleSheet,
-  Platform,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -11,12 +10,10 @@ import Animated, {
   withTiming,
   interpolate,
 } from 'react-native-reanimated';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
+import { palette, radii } from '../../../theme/kit';
 
 // Animated skeleton pulse
 function SkeletonPulse({ style }: { style?: any }) {
-  const theme = useMemo(() => getTheme(false), []);
   const pulse = useSharedValue(0);
 
   useEffect(() => {
@@ -34,7 +31,7 @@ function SkeletonPulse({ style }: { style?: any }) {
   return (
     <Animated.View
       style={[
-        { backgroundColor: theme.border },
+        { backgroundColor: palette.bgSoft },
         style,
         animatedStyle,
       ]}
@@ -44,10 +41,9 @@ function SkeletonPulse({ style }: { style?: any }) {
 
 // Summary card skeleton
 export const SummaryCardSkeleton = memo(function SummaryCardSkeleton() {
-  const theme = useMemo(() => getTheme(false), []);
 
   return (
-    <View style={[styles.summaryCard, { backgroundColor: theme.surface }]}>
+    <View style={styles.summaryCard}>
       <View style={styles.summaryHeader}>
         <SkeletonPulse style={styles.summaryTitle} />
         <SkeletonPulse style={styles.summaryBadge} />
@@ -64,10 +60,9 @@ export const SummaryCardSkeleton = memo(function SummaryCardSkeleton() {
 
 // Chart skeleton
 export const ChartSkeleton = memo(function ChartSkeleton() {
-  const theme = useMemo(() => getTheme(false), []);
 
   return (
-    <View style={[styles.chartCard, { backgroundColor: theme.surface }]}>
+    <View style={styles.chartCard}>
       <View style={styles.chartHeader}>
         <SkeletonPulse style={styles.chartTitle} />
         <SkeletonPulse style={styles.chartTotal} />
@@ -91,12 +86,10 @@ export const ChartSkeleton = memo(function ChartSkeleton() {
 
 // Transaction item skeleton
 export const TransactionSkeleton = memo(function TransactionSkeleton() {
-  const theme = useMemo(() => getTheme(false), []);
 
   return (
-    <View style={[styles.transactionItem, { backgroundColor: theme.surface }]}>
+    <View style={styles.transactionItem}>
       <View style={styles.transactionLeft}>
-        <SkeletonPulse style={styles.statusDot} />
         <SkeletonPulse style={styles.typeIcon} />
       </View>
       <View style={styles.transactionMiddle}>
@@ -117,10 +110,9 @@ export const TransactionSkeleton = memo(function TransactionSkeleton() {
 
 // Section header skeleton
 export const SectionHeaderSkeleton = memo(function SectionHeaderSkeleton() {
-  const theme = useMemo(() => getTheme(false), []);
 
   return (
-    <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
+    <View style={styles.sectionHeader}>
       <SkeletonPulse style={styles.sectionTitle} />
     </View>
   );
@@ -156,79 +148,59 @@ const styles = StyleSheet.create({
   },
   // Summary card
   summaryCard: {
-    marginHorizontal: spacing[4],
-    marginBottom: spacing[4],
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: radii.xl,
+    padding: 20,
+    backgroundColor: palette.surface,
   },
   summaryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing[4],
+    marginBottom: 16,
   },
   summaryTitle: {
     width: 120,
     height: 20,
-    borderRadius: borderRadius.sm,
+    borderRadius: radii.sm,
   },
   summaryBadge: {
     width: 80,
     height: 24,
-    borderRadius: borderRadius.full,
+    borderRadius: radii.pill,
   },
   summaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing[2],
+    gap: 8,
   },
   summaryMetric: {
     width: '48%',
     height: 80,
-    borderRadius: borderRadius.lg,
+    borderRadius: radii.lg,
   },
   // Chart
   chartCard: {
-    marginHorizontal: spacing[4],
-    marginBottom: spacing[4],
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: radii.xl,
+    padding: 20,
+    backgroundColor: palette.surface,
   },
   chartHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing[4],
+    marginBottom: 16,
   },
   chartTitle: {
     width: 80,
     height: 18,
-    borderRadius: borderRadius.sm,
+    borderRadius: radii.sm,
   },
   chartTotal: {
     width: 60,
     height: 22,
-    borderRadius: borderRadius.sm,
+    borderRadius: radii.sm,
   },
   chartBars: {
     flexDirection: 'row',
@@ -242,66 +214,71 @@ const styles = StyleSheet.create({
   },
   chartBar: {
     width: 16,
-    borderRadius: borderRadius.sm,
+    borderRadius: radii.sm,
   },
   chartLabel: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginTop: spacing[1],
+    marginTop: 4,
   },
   // Transaction
   transactionItem: {
     flexDirection: 'row',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surface,
   },
   transactionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: spacing[3],
+    marginRight: 12,
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: spacing[2],
+    marginRight: 8,
   },
   typeIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.md,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
   },
   transactionMiddle: {
     flex: 1,
-    marginRight: spacing[2],
+    marginRight: 8,
   },
   listingName: {
     width: '80%',
     height: 16,
-    borderRadius: borderRadius.sm,
+    borderRadius: radii.sm,
     marginBottom: 4,
   },
   bookingRef: {
     width: '50%',
     height: 12,
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing[1],
+    borderRadius: radii.sm,
+    marginBottom: 4,
   },
   transactionBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
+    gap: 8,
   },
   payoutBadge: {
     width: 50,
     height: 16,
-    borderRadius: borderRadius.full,
+    borderRadius: radii.pill,
   },
   timeText: {
     width: 40,
     height: 12,
-    borderRadius: borderRadius.sm,
+    borderRadius: radii.sm,
   },
   transactionRight: {
     alignItems: 'flex-end',
@@ -309,23 +286,23 @@ const styles = StyleSheet.create({
   amount: {
     width: 60,
     height: 18,
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing[1],
+    borderRadius: radii.sm,
+    marginBottom: 4,
   },
   statusBadge: {
     width: 60,
     height: 16,
-    borderRadius: borderRadius.full,
+    borderRadius: radii.pill,
   },
   // Section header
   sectionHeader: {
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[4],
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
     width: 80,
     height: 14,
-    borderRadius: borderRadius.sm,
+    borderRadius: radii.sm,
   },
 });
 

@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Pressable,
   Switch,
-  Platform,
+  TouchableOpacity,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -14,9 +14,8 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize, fontWeight } from '../../../theme/typography';
+import { palette, radii, fonts } from '../../../theme/kit';
+import { IsoBlock } from '../../../components/ui';
 import type { Promo } from '../../../types/promo';
 import { derivePromoStatus } from '../../../services/promoStorage';
 import {
@@ -36,6 +35,8 @@ interface PromoCardProps {
   onDelete: () => void;
   onCodeCopied: () => void;
   onViewListings: () => void;
+  /** Feature-card tint; the list alternates peach / blue. */
+  tone?: 'peach' | 'blue';
   testID?: string;
 }
 
@@ -50,9 +51,9 @@ function PromoCard({
   onDelete,
   onCodeCopied,
   onViewListings,
+  tone = 'peach',
   testID,
 }: PromoCardProps) {
-  const theme = useMemo(() => getTheme(false), []);
   const [showMenu, setShowMenu] = useState(false);
   const scale = useSharedValue(1);
 
@@ -92,184 +93,126 @@ function PromoCard({
       onPressOut={handlePressOut}
       style={[
         styles.container,
-        { backgroundColor: theme.surface },
+        { backgroundColor: tone === 'blue' ? palette.blueSoft : palette.peachSoft },
+        isExpired && styles.containerMuted,
         animatedStyle,
       ]}
       accessibilityLabel={`${promo.name} promotion`}
       accessibilityRole="button"
       testID={testID}
     >
-      {/* Header Row */}
-      <View style={styles.headerRow}>
-        {/* Type Badge */}
-        <View
-          style={[
-            styles.typeBadge,
-            { backgroundColor: promo.type === 'PERCENT' ? theme.primaryLight : theme.successLight },
-          ]}
-        >
-          <Text
-            style={[
-              styles.typeBadgeText,
-              { color: promo.type === 'PERCENT' ? theme.primary : theme.success },
-            ]}
-          >
-            {promo.type === 'PERCENT' ? '%' : '₹'}
-          </Text>
-        </View>
-
-        {/* Title & Status */}
-        <View style={styles.titleContainer}>
-          <Text
-            style={[styles.title, { color: theme.text }]}
-            numberOfLines={2}
-          >
-            {promo.name}
-          </Text>
-          <PromoStatusBadge status={status} size="small" />
-        </View>
-
-        {/* Toggle */}
-        <Switch
-          value={promo.enabled}
-          onValueChange={onToggleEnabled}
-          disabled={!canToggle}
-          trackColor={{
-            false: theme.borderLight,
-            true: theme.primaryLight,
-          }}
-          thumbColor={promo.enabled ? theme.primary : theme.textMuted}
-          accessibilityLabel={`${promo.enabled ? 'Disable' : 'Enable'} promotion`}
-          accessibilityState={{ checked: promo.enabled, disabled: !canToggle }}
-          testID={testID ? `${testID}-toggle` : undefined}
-        />
-
-        {/* Menu Button */}
-        <Pressable
-          onPress={toggleMenu}
-          style={styles.menuButtonInline}
-          accessibilityLabel="More options"
-          accessibilityRole="button"
-          testID={testID ? `${testID}-menu` : undefined}
-        >
-          <Ionicons
-            name="ellipsis-vertical"
-            size={18}
-            color={theme.textMuted}
-          />
-        </Pressable>
+      {/* Illustration */}
+      <View style={styles.art} pointerEvents="none">
+        <IsoBlock size={130} tone={isExpired ? 'grey' : tone} />
       </View>
 
-      {/* Code Row */}
-      <View style={styles.codeRow}>
+      {/* Top Row: status + toggle + menu */}
+      <View style={styles.topRow}>
+        <PromoStatusBadge status={status} size="small" />
+        <View style={styles.topActions}>
+          <Switch
+            value={promo.enabled}
+            onValueChange={onToggleEnabled}
+            disabled={!canToggle}
+            trackColor={{ false: 'rgba(255,255,255,0.8)', true: palette.ink }}
+            thumbColor={palette.surface}
+            ios_backgroundColor="rgba(255,255,255,0.8)"
+            accessibilityLabel={`${promo.enabled ? 'Disable' : 'Enable'} promotion`}
+            accessibilityState={{ checked: promo.enabled, disabled: !canToggle }}
+            testID={testID ? `${testID}-toggle` : undefined}
+          />
+          <TouchableOpacity
+            onPress={toggleMenu}
+            activeOpacity={0.7}
+            style={styles.menuButton}
+            accessibilityLabel="More options"
+            accessibilityRole="button"
+            testID={testID ? `${testID}-menu` : undefined}
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color={palette.text} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Body */}
+      <View style={styles.body}>
+        <Text style={styles.title} numberOfLines={2}>
+          {promo.name}
+        </Text>
+        <Text style={styles.discountText}>
+          {formatDiscount(promo.type, promo.value, promo.currency)}
+        </Text>
+
         <CodePill
           code={promo.code}
           onCopy={onCodeCopied}
           size="small"
           testID={testID ? `${testID}-code` : undefined}
         />
-        <Text style={[styles.discountText, { color: theme.text }]}>
-          {formatDiscount(promo.type, promo.value, promo.currency)}
-        </Text>
-      </View>
 
-      {/* Details Row */}
-      <View style={styles.detailsRow}>
-        {/* Validity */}
-        <View style={styles.detailItem}>
-          <Ionicons
-            name="calendar-outline"
-            size={14}
-            color={theme.textMuted}
-          />
-          <Text
-            style={[styles.detailText, { color: theme.textSecondary }]}
-            numberOfLines={1}
-          >
-            {formatValidityRange(promo.startAt, promo.endAt)}
-          </Text>
+        {/* Details */}
+        <View style={styles.detailsRow}>
+          <View style={styles.detailCol}>
+            <Text style={styles.detailTitle} numberOfLines={1}>
+              {formatValidityRange(promo.startAt, promo.endAt)}
+            </Text>
+            <Text style={styles.detailSub}>Validity</Text>
+          </View>
+          <View style={styles.detailCol}>
+            <Text style={styles.detailTitle} numberOfLines={1}>
+              {getUsageDisplay(promo.usage)}
+            </Text>
+            <Text style={styles.detailSub}>Usage</Text>
+          </View>
         </View>
 
-        {/* Usage */}
-        <View style={styles.detailItem}>
-          <Ionicons
-            name="people-outline"
-            size={14}
-            color={theme.textMuted}
-          />
-          <Text
-            style={[styles.detailText, { color: theme.textSecondary }]}
-            numberOfLines={1}
-          >
-            {getUsageDisplay(promo.usage)}
-          </Text>
-        </View>
+        {/* Listings */}
+        <TouchableOpacity
+          onPress={onViewListings}
+          activeOpacity={0.7}
+          style={styles.listingsRow}
+          accessibilityLabel={`View applicable listings: ${listingsCount}`}
+        >
+          <Text style={styles.listingsText}>Applies to {listingsCount}</Text>
+          <Ionicons name="chevron-forward" size={14} color={palette.text} />
+        </TouchableOpacity>
       </View>
-
-      {/* Listings Row */}
-      <Pressable
-        onPress={onViewListings}
-        style={styles.listingsRow}
-        accessibilityLabel={`View applicable listings: ${listingsCount}`}
-      >
-        <Ionicons
-          name="location-outline"
-          size={14}
-          color={theme.textMuted}
-        />
-        <Text style={[styles.listingsText, { color: theme.primary }]}>
-          Applies to: {listingsCount}
-        </Text>
-        <Ionicons
-          name="chevron-forward"
-          size={14}
-          color={theme.primary}
-        />
-      </Pressable>
 
       {/* Dropdown Menu */}
       {showMenu && (
         <Pressable
-          style={[styles.menuOverlay]}
+          style={styles.menuOverlay}
           onPress={() => setShowMenu(false)}
         >
-          <View
-            style={[
-              styles.menuDropdown,
-              { backgroundColor: theme.surface },
-            ]}
-          >
-            <Pressable
+          <View style={styles.menuDropdown}>
+            <TouchableOpacity
               onPress={() => handleMenuAction(onEdit)}
+              activeOpacity={0.7}
               style={styles.menuItem}
               accessibilityLabel="Edit promotion"
             >
-              <Ionicons name="create-outline" size={18} color={theme.text} />
-              <Text style={[styles.menuItemText, { color: theme.text }]}>
-                Edit
-              </Text>
-            </Pressable>
-            <Pressable
+              <Ionicons name="create-outline" size={18} color={palette.text} />
+              <Text style={styles.menuItemText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               onPress={() => handleMenuAction(onDuplicate)}
+              activeOpacity={0.7}
               style={styles.menuItem}
               accessibilityLabel="Duplicate promotion"
             >
-              <Ionicons name="copy-outline" size={18} color={theme.text} />
-              <Text style={[styles.menuItemText, { color: theme.text }]}>
-                Duplicate
-              </Text>
-            </Pressable>
-            <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
-            <Pressable
+              <Ionicons name="copy-outline" size={18} color={palette.text} />
+              <Text style={styles.menuItemText}>Duplicate</Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity
               onPress={() => handleMenuAction(onDelete)}
+              activeOpacity={0.7}
               style={styles.menuItem}
               accessibilityLabel="Delete promotion"
             >
-              <Ionicons name="trash-outline" size={18} color={theme.danger} />
-              <Text style={[styles.menuItemText, { color: theme.danger }]}>
-                Delete
-              </Text>
-            </Pressable>
+              <Ionicons name="trash-outline" size={18} color={palette.danger} />
+              <Text style={[styles.menuItemText, styles.menuItemDanger]}>Delete</Text>
+            </TouchableOpacity>
           </View>
         </Pressable>
       )}
@@ -279,86 +222,89 @@ function PromoCard({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    marginHorizontal: spacing[4],
-    marginBottom: spacing[3],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    borderRadius: radii.xl,
+    padding: 18,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    minHeight: 200,
+    overflow: 'hidden',
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    marginBottom: spacing[3],
+  containerMuted: {
+    backgroundColor: palette.fill,
   },
-  typeBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+  art: {
+    position: 'absolute',
+    right: -30,
+    bottom: -26,
   },
-  typeBadgeText: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as any,
-  },
-  titleContainer: {
-    flex: 1,
-    gap: spacing[1],
-  },
-  title: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-  menuButtonInline: {
-    padding: spacing[2],
-    marginLeft: spacing[1],
-  },
-  codeRow: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing[3],
+  },
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  menuButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  body: {
+    width: '68%',
+    marginTop: 12,
+  },
+  title: {
+    ...fonts.semibold,
+    fontSize: 22,
+    lineHeight: 27,
+    letterSpacing: -0.4,
+    color: palette.text,
   },
   discountText: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as any,
+    ...fonts.semibold,
+    fontSize: 30,
+    letterSpacing: -0.8,
+    color: palette.text,
+    marginTop: 2,
+    marginBottom: 10,
   },
   detailsRow: {
     flexDirection: 'row',
-    gap: spacing[4],
-    marginBottom: spacing[2],
+    gap: 14,
+    marginTop: 14,
   },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
+  detailCol: {
+    flexShrink: 1,
   },
-  detailText: {
-    fontSize: fontSize.xs,
+  detailTitle: {
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.text,
+  },
+  detailSub: {
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
+    marginTop: 2,
   },
   listingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
-    paddingTop: spacing[2],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.08)',
+    alignSelf: 'flex-start',
+    gap: 2,
+    marginTop: 12,
   },
   listingsText: {
-    flex: 1,
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.text,
+    textDecorationLine: 'underline',
   },
   menuOverlay: {
     position: 'absolute',
@@ -370,37 +316,38 @@ const styles = StyleSheet.create({
   },
   menuDropdown: {
     position: 'absolute',
-    top: spacing[8],
-    right: spacing[3],
-    minWidth: 140,
-    borderRadius: borderRadius.lg,
-    padding: spacing[1],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    top: 58,
+    right: 14,
+    minWidth: 160,
+    borderRadius: radii.lg,
+    padding: 6,
+    backgroundColor: palette.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: radii.sm,
   },
   menuItemText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
+  },
+  menuItemDanger: {
+    color: palette.danger,
   },
   menuDivider: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: spacing[2],
+    backgroundColor: palette.line,
+    marginHorizontal: 8,
   },
 });
 

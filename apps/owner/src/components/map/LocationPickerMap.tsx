@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
+  TouchableOpacity,
   PermissionsAndroid,
   Platform,
   ActivityIndicator,
@@ -14,6 +14,7 @@ import { AppAlert } from '../common/AppAlert';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import WebView, { WebViewMessageEvent } from 'react-native-webview';
 import Geolocation from 'react-native-geolocation-service';
+import { palette, radii, fonts } from '../../theme/kit';
 
 export interface LatLng {
   lat: number | null;
@@ -247,13 +248,13 @@ export default function LocationPickerMap({
         />
         {!mapReady && !mapError ? (
           <View style={[StyleSheet.absoluteFillObject, styles.loadingOverlay]}>
-            <ActivityIndicator size="small" color="#0D7377" />
+            <ActivityIndicator size="small" color={palette.ink} />
             <Text style={styles.loadingText}>Loading map…</Text>
           </View>
         ) : null}
         {mapError ? (
           <View style={[StyleSheet.absoluteFillObject, styles.loadingOverlay]}>
-            <Ionicons name="alert-circle-outline" size={28} color="#EF4444" />
+            <Ionicons name="alert-circle-outline" size={28} color={palette.danger} />
             <Text style={styles.errorText}>{mapError}</Text>
             <Text style={styles.errorHintText}>Use the button below to drop a pin at your location.</Text>
           </View>
@@ -262,20 +263,21 @@ export default function LocationPickerMap({
 
       <View style={[styles.actions, hideCurrentLocationButton && styles.actionsRightAligned]}>
         {!hideCurrentLocationButton ? (
-          <Pressable
+          <TouchableOpacity
             style={styles.useCurrentBtn}
             onPress={handleUseCurrentLocation}
             disabled={locating}
+            activeOpacity={0.8}
           >
             {locating ? (
-              <ActivityIndicator size="small" color="#0D7377" />
+              <ActivityIndicator size="small" color={palette.textInverse} />
             ) : (
-              <Ionicons name="locate" size={16} color="#0D7377" />
+              <Ionicons name="locate" size={16} color={palette.textInverse} />
             )}
             <Text style={styles.useCurrentText}>
               {locating ? 'Locating…' : 'Use current location'}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         ) : null}
 
         <Text style={styles.coords}>
@@ -292,43 +294,52 @@ const styles = StyleSheet.create({
   mapWrap: {
     width: '100%',
     overflow: 'hidden',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F3F4F6',
+    borderRadius: radii.lg,
+    backgroundColor: palette.fill,
   },
   loadingOverlay: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: palette.fill,
   },
-  loadingText: { marginTop: 6, color: '#6B7280', fontSize: 12 },
-  errorText: { marginTop: 6, color: '#B91C1C', fontSize: 13, fontWeight: '500' },
-  errorHintText: { marginTop: 4, color: '#6B7280', fontSize: 12, textAlign: 'center', paddingHorizontal: 16 },
+  loadingText: { ...fonts.medium, marginTop: 6, color: palette.textMuted, fontSize: 12.5 },
+  errorText: { ...fonts.semibold, marginTop: 6, color: palette.danger, fontSize: 13.5 },
+  errorHintText: {
+    ...fonts.medium,
+    marginTop: 4,
+    color: palette.textMuted,
+    fontSize: 12.5,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 10,
   },
   actionsRightAligned: { justifyContent: 'flex-end' },
   useCurrentBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    backgroundColor: '#E8F5F4',
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: palette.ink,
   },
   useCurrentText: {
-    color: '#0D7377',
+    ...fonts.semibold,
+    color: palette.textInverse,
     fontSize: 13,
-    fontWeight: '500',
     marginLeft: 6,
   },
   coords: {
+    ...fonts.medium,
     fontSize: 12,
-    color: '#6B7280',
+    color: palette.textMuted,
     fontVariant: ['tabular-nums'],
+    flexShrink: 1,
+    marginLeft: 8,
+    textAlign: 'right',
   },
 });

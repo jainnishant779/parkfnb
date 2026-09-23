@@ -3,12 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
+  ScrollView,
   TouchableOpacity,
-  Modal,
-  FlatList,
-  Platform,
-  Dimensions,
+  StatusBar,
+  type TextStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,6 +15,13 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/types';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import * as UI from '../../components/ui';
+import * as Kit from '../../theme/kit';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const { PillButton } = UI as unknown as Record<string, React.ComponentType<any>>;
+const { palette, radii, shadow } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
 
 // ============================================================================
 // TYPES
@@ -50,39 +55,6 @@ const ownerTypes: OwnerTypeOption[] = [
 ];
 
 // ============================================================================
-// THEME
-// ============================================================================
-
-const theme = {
-  colors: {
-    background: '#FFFFFF',
-    surface: '#FFFFFF',
-    primary: '#0D7377',
-    primaryLight: '#E8F5F4',
-    textPrimary: '#0F172A',
-    textSecondary: '#64748B',
-    textTertiary: '#94A3B8',
-    border: '#E2E8F0',
-    borderSelected: '#0D7377',
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    xxl: 24,
-    xxxl: 32,
-  },
-  borderRadius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 24,
-  },
-};
-
-// ============================================================================
 // MAIN SCREEN COMPONENT
 // ============================================================================
 
@@ -92,7 +64,6 @@ export default function WelcomeOwnerTypeScreen() {
   const navigation = useNavigation<AuthNavigationProp>();
 
   const [selectedType, setSelectedType] = useState<OwnerType | null>(null);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // Load saved selection on mount
@@ -123,115 +94,91 @@ export default function WelcomeOwnerTypeScreen() {
 
   const handleSelectType = (type: OwnerType) => {
     setSelectedType(type);
-    setIsDropdownOpen(false);
     saveSelection(type);
   };
 
-  const getSelectedOption = () => {
-    return ownerTypes.find((t) => t.id === selectedType);
-  };
-
-  const renderDropdownItem = ({ item }: { item: OwnerTypeOption }) => {
-    const isSelected = selectedType === item.id;
-    return (
-      <TouchableOpacity
-        style={[styles.dropdownItem, isSelected && styles.dropdownItemSelected]}
-        onPress={() => handleSelectType(item.id)}
-        activeOpacity={0.7}
-      >
-        <MaterialCommunityIcons
-          name={item.iconName}
-          size={24}
-          color={isSelected ? theme.colors.primary : theme.colors.textSecondary}
-          style={styles.dropdownItemIcon}
-        />
-        <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextSelected]}>
-          {item.title}
-        </Text>
-        {isSelected && (
-          <Ionicons name="checkmark" size={20} color={theme.colors.primary} />
-        )}
-      </TouchableOpacity>
-    );
+  const handleClearSelection = () => {
+    setSelectedType(null);
+    AsyncStorage.removeItem(STORAGE_KEY);
   };
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          <View style={styles.header}>
-            <View style={[styles.logoContainer, styles.skeletonLogo]} />
-            <View style={styles.skeletonTitle} />
-            <View style={styles.skeletonSubtitle} />
-          </View>
+          <View style={styles.skeletonTitle} />
+          <View style={styles.skeletonSubtitle} />
         </View>
       </SafeAreaView>
     );
   }
 
-  const selectedOption = getSelectedOption();
-
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Decorative Circles */}
-      <View style={styles.circleTopRight} />
-      <View style={styles.circleTopRightInner} />
-      <View style={styles.circleBottomLeft} />
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.brand}>
+          parkfnb.<Text style={styles.brandMark}>®</Text>
+        </Text>
 
-      <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <MaterialCommunityIcons name="parking" size={36} color={theme.colors.surface} />
-          </View>
-          <Text style={styles.title}>Welcome</Text>
-          <Text style={styles.subtitle}>
-            Choose what kind of space you manage to personalize your setup.
-          </Text>
+        <Text style={styles.title}>{'What do you\nmanage?'}</Text>
+        <Text style={styles.subtitle}>
+          Choose what kind of space you manage to personalize your setup.
+        </Text>
+
+        <View style={styles.list}>
+          {ownerTypes.map((item) => {
+            const isSelected = selectedType === item.id;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.card, isSelected && styles.cardSelected]}
+                onPress={() => handleSelectType(item.id)}
+                activeOpacity={0.8}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={item.title}
+              >
+                <View style={[styles.cardIcon, isSelected && styles.cardIconSelected]}>
+                  <MaterialCommunityIcons
+                    name={item.iconName}
+                    size={22}
+                    color={isSelected ? palette.textInverse : palette.text}
+                  />
+                </View>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <View style={[styles.radio, isSelected && styles.radioSelected]}>
+                  {isSelected && <Ionicons name="checkmark" size={14} color={palette.textInverse} />}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* Dropdown Selector */}
-        <View style={styles.dropdownContainer}>
-          <Text style={styles.dropdownLabel}>Owner Type</Text>
+        {selectedType ? (
           <TouchableOpacity
-            style={[styles.dropdownButton, isDropdownOpen && styles.dropdownButtonActive]}
-            onPress={() => setIsDropdownOpen(true)}
+            style={styles.clearSelection}
+            onPress={handleClearSelection}
             activeOpacity={0.7}
+            hitSlop={8}
           >
-            {selectedOption ? (
-              <View style={styles.selectedValue}>
-                <MaterialCommunityIcons
-                  name={selectedOption.iconName}
-                  size={22}
-                  color={theme.colors.textPrimary}
-                  style={styles.selectedIcon}
-                />
-                <Text style={styles.selectedText}>{selectedOption.title}</Text>
-              </View>
-            ) : (
-              <Text style={styles.placeholderText}>Select owner type</Text>
-            )}
-            <Ionicons
-              name="chevron-down"
-              size={20}
-              color={theme.colors.textSecondary}
-            />
+            <Text style={styles.clearSelectionText}>Clear selection</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        ) : null}
+      </ScrollView>
 
       {/* Bottom Buttons */}
-      <View style={styles.bottomButtonContainer}>
-        <TouchableOpacity
+      <View style={styles.bottom}>
+        <PillButton
+          label="Continue"
+          iconRight="arrow-right"
+          variant="ink"
           onPress={() => navigation.navigate('SignIn')}
-          style={[styles.continueButton, !selectedType && styles.continueButtonDisabled]}
-          activeOpacity={0.7}
           disabled={!selectedType}
-        >
-          <Text style={[styles.continueButtonText, !selectedType && styles.continueButtonTextDisabled]}>
-            Continue
-          </Text>
-        </TouchableOpacity>
+        />
         <TouchableOpacity
           onPress={() => navigation.navigate('SignIn')}
           style={styles.skipButton}
@@ -240,42 +187,6 @@ export default function WelcomeOwnerTypeScreen() {
           <Text style={styles.skipButtonText}>Skip for now</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Dropdown Modal */}
-      {isDropdownOpen ? (
-
-        <Pressable style={styles.modalOverlay} onPress={() => setIsDropdownOpen(false)}>
-          <View style={styles.dropdownModal}>
-            <View style={styles.dropdownHeader}>
-              <Text style={styles.dropdownTitle}>Select Owner Type</Text>
-              <TouchableOpacity onPress={() => setIsDropdownOpen(false)}>
-                <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={ownerTypes}
-              renderItem={renderDropdownItem}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-              ListFooterComponent={
-                <TouchableOpacity
-                  style={styles.clearSelectionItem}
-                  onPress={() => {
-                    setSelectedType(null);
-                    setIsDropdownOpen(false);
-                    AsyncStorage.removeItem(STORAGE_KEY);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="close-circle-outline" size={20} color="#EF4444" style={styles.clearIcon} />
-                  <Text style={styles.clearSelectionText}>Clear selection</Text>
-                </TouchableOpacity>
-              }
-            />
-          </View>
-        </Pressable>
-      
-      ) : null}
     </SafeAreaView>
   );
 }
@@ -284,266 +195,82 @@ export default function WelcomeOwnerTypeScreen() {
 // STYLES
 // ============================================================================
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
+  container: { flex: 1, backgroundColor: palette.bg },
+  content: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24 },
 
-  // Decorative Circles (same as SignIn screen)
-  circleTopRight: {
-    position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 130,
-    height: 130,
-    borderRadius: 70,
-    backgroundColor: '#EBF4FF',
-  },
-  circleTopRightInner: {
-    position: 'absolute',
-    top: 50,
-    right: 70,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1E6FE8',
-  },
-  circleBottomLeft: {
-    position: 'absolute',
-    bottom: -60,
-    left: -60,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: '#EBF4FF',
-  },
-
-  content: {
-    flex: 1,
-    paddingHorizontal: theme.spacing.xl,
-    paddingTop: theme.spacing.xxl,
-  },
-
-  // Header
-  header: {
-    alignItems: 'center',
-    marginTop: 60,
-    marginBottom: theme.spacing.xxxl,
-  },
-  logoContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: theme.borderRadius.xl,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing.xxl,
-  },
+  brand: { ...fonts.bold, fontSize: 22, letterSpacing: -0.4, color: palette.text },
+  brandMark: { ...fonts.medium, fontSize: 11 },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: theme.spacing.sm,
+    ...fonts.medium,
+    fontSize: 40,
+    lineHeight: 44,
+    letterSpacing: -1.2,
+    color: palette.text,
+    marginTop: 28,
   },
   subtitle: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    maxWidth: SCREEN_WIDTH * 0.85,
+    ...fonts.medium,
+    fontSize: 15,
+    lineHeight: 21,
+    color: palette.textMuted,
+    marginTop: 10,
   },
 
-  // Dropdown
-  dropdownContainer: {
-    marginTop: theme.spacing.lg,
-  },
-  dropdownLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.sm,
-  },
-  dropdownButton: {
+  list: { marginTop: 24, gap: 10 },
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: theme.colors.border,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.lg,
-    minHeight: 56,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: palette.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderColor: palette.surface,
+    padding: 14,
+    ...shadow.press,
   },
-  dropdownButtonActive: {
-    borderColor: theme.colors.primary,
-  },
-  selectedValue: {
-    flexDirection: 'row',
+  cardSelected: { borderColor: palette.ink },
+  cardIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: palette.fill,
     alignItems: 'center',
-    flex: 1,
-  },
-  selectedIcon: {
-    marginRight: theme.spacing.md,
-  },
-  selectedText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.textPrimary,
-  },
-  placeholderText: {
-    fontSize: 16,
-    color: theme.colors.textTertiary,
-  },
-
-  // Modal
-  modalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 9999,
-    elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    alignItems: 'center',
-    padding: theme.spacing.xl,
+    marginRight: 14,
   },
-  dropdownModal: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
-    width: '100%',
-    maxHeight: 400,
-    overflow: 'hidden',
-  },
-  dropdownHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.xl,
-    paddingVertical: theme.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  dropdownTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.textPrimary,
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.xl,
-    paddingVertical: theme.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  dropdownItemSelected: {
-    backgroundColor: theme.colors.primaryLight,
-  },
-  dropdownItemIcon: {
-    marginRight: theme.spacing.lg,
-  },
-  dropdownItemText: {
-    flex: 1,
-    fontSize: 16,
-    color: theme.colors.textPrimary,
-  },
-  dropdownItemTextSelected: {
-    color: theme.colors.primary,
-    fontWeight: '600',
-  },
-
-  // Bottom Button
-  bottomButtonContainer: {
-    paddingHorizontal: theme.spacing.xl,
-    paddingBottom: 60,
-    paddingTop: 24,
-    backgroundColor: theme.colors.background,
-  },
-  continueButton: {
-    backgroundColor: theme.colors.primary,
+  cardIconSelected: { backgroundColor: palette.ink },
+  cardTitle: { ...fonts.semibold, flex: 1, fontSize: 16, color: palette.text },
+  radio: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    borderWidth: 1.5,
+    borderColor: palette.textSubtle,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 56,
-    marginBottom: 90,
   },
-  continueButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  continueButtonDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
-  continueButtonTextDisabled: {
-    color: '#E5E7EB',
-  },
-  skipButton: {
-    paddingVertical: 16,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginTop: 12,
-  },
-  skipButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.textSecondary,
-  },
-  clearSelectionItem: {
-    flexDirection: 'row',
-    paddingHorizontal: theme.spacing.xl,
-    paddingVertical: theme.spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  clearIcon: {
-    marginRight: theme.spacing.sm,
-  },
-  clearSelectionText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#EF4444',
-  },
+  radioSelected: { backgroundColor: palette.ink, borderColor: palette.ink },
+
+  clearSelection: { alignSelf: 'center', marginTop: 16, paddingVertical: 6 },
+  clearSelectionText: { ...fonts.semibold, fontSize: 14, color: palette.danger },
+
+  bottom: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, backgroundColor: palette.bg },
+  skipButton: { paddingVertical: 14, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  skipButtonText: { ...fonts.semibold, fontSize: 15, color: palette.textMuted },
 
   // Skeleton
-  skeletonLogo: {
-    backgroundColor: theme.colors.border,
-  },
   skeletonTitle: {
-    width: 160,
-    height: 28,
-    borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.border,
-    marginBottom: theme.spacing.sm,
+    width: 200,
+    height: 40,
+    borderRadius: radii.sm,
+    backgroundColor: palette.bgSoft,
+    marginTop: 60,
+    marginBottom: 12,
   },
   skeletonSubtitle: {
-    width: SCREEN_WIDTH * 0.7,
+    width: '80%',
     height: 16,
-    borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.border,
+    borderRadius: radii.sm,
+    backgroundColor: palette.bgSoft,
   },
 });
