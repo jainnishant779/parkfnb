@@ -98,6 +98,7 @@ const parkingSpaceSchema = new mongoose.Schema({
     type: String,
     default: null,
     trim: true,
+    index: true,
   },
   has_smart_barrier: {
     type: Boolean,
