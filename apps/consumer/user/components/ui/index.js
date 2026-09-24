@@ -363,7 +363,8 @@ export const ListRow = ({ icon, title, subtitle, onPress, right, danger, isLast 
 );
 
 // Vertical timeline entry (the "Your package is being delivered" list).
-export const TimelineItem = ({ title, subtitle, time, date, active, isLast, children }) => (
+// `action`: optional element (e.g. a directions button) under the subtitle.
+export const TimelineItem = ({ title, subtitle, time, date, active, isLast, action, children }) => (
   <View style={styles.tlRow}>
     <View style={styles.tlRail}>
       <View style={[styles.tlDotOuter, active && styles.tlDotOuterActive]}>
@@ -376,6 +377,7 @@ export const TimelineItem = ({ title, subtitle, time, date, active, isLast, chil
         <View style={{ flex: 1, paddingRight: 12 }}>
           <Text style={[styles.tlTitle, !active && { color: palette.text }]}>{title}</Text>
           {subtitle ? <Text style={styles.tlSub}>{subtitle}</Text> : null}
+          {action ? <View style={styles.tlAction}>{action}</View> : null}
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           {date ? <Text style={styles.tlTime}>{date}</Text> : null}
@@ -649,6 +651,7 @@ const styles = StyleSheet.create({
   tlHead: { flexDirection: 'row' },
   tlTitle: { ...fonts.semibold, fontSize: 15.5, color: palette.text, lineHeight: 21 },
   tlSub: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginTop: 3 },
+  tlAction: { marginTop: 10, alignSelf: 'flex-start' },
   tlTime: { ...fonts.medium, fontSize: 12, color: palette.textMuted, lineHeight: 18 },
 
   contact: {

@@ -683,7 +683,7 @@ const BookingManagementPage = ({ navigation }) => {
         <PillButton
           key="cancel"
           size={size}
-          variant="danger"
+          variant="ink"
           icon="x"
           label="Cancel"
           onPress={() => { setSelectedBooking(item); setShowCancelModal(true); }}
@@ -721,6 +721,13 @@ const BookingManagementPage = ({ navigation }) => {
           />
         ),
       );
+    }
+    // Odd count: the last pill takes the full row so no gap is left on the right.
+    if (btns.length % 2 === 1) {
+      const last = btns[btns.length - 1];
+      btns[btns.length - 1] = React.cloneElement(last, {
+        style: [last.props.style, styles.actionFull],
+      });
     }
     return btns;
   };
@@ -867,19 +874,18 @@ const BookingManagementPage = ({ navigation }) => {
                 time={ev.at ? formatTime(ev.at) : null}
                 active={i === 0}
                 isLast={i === timeline.length - 1}
+                action={
+                  i === 0 ? (
+                    <PillButton
+                      icon="navigation"
+                      label="Directions"
+                      size="sm"
+                      variant="ink"
+                      onPress={() => handleDirections(b)}
+                    />
+                  ) : null
+                }
               >
-                {i === 0 ? (
-                  <View style={styles.placeCard}>
-                    <View style={styles.placeIcon}>
-                      <MaterialIcon name="parking" size={22} color={palette.text} />
-                    </View>
-                    <View style={styles.flex}>
-                      <Text style={styles.placeName} numberOfLines={1}>{getSpaceName(b)}</Text>
-                      <Text style={styles.placeAddr} numberOfLines={1}>{getSpaceAddress(b)}</Text>
-                    </View>
-                    <IconCircle icon="navigation" size={40} variant="grey" onPress={() => handleDirections(b)} />
-                  </View>
-                ) : null}
               </TimelineItem>
             ))}
 
@@ -934,7 +940,7 @@ const BookingManagementPage = ({ navigation }) => {
             </View>
 
             <View style={styles.policyRow}>
-              <Icon name="shield" size={16} color={palette.textMuted} />
+              <Icon name="shield" size={16} color={palette.textMuted} style={styles.policyIcon} />
               <Text style={styles.policyText}>Free cancellation up to 2 hours before your booking starts.</Text>
             </View>
           </View>
@@ -1246,6 +1252,7 @@ const styles = StyleSheet.create({
   // Two equal columns so the pills line up in pairs.
   cardActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 14 },
   actionBtn: { width: '48.5%', marginBottom: 8 },
+  actionFull: { width: '100%' },
   ratedPill: {
     width: '48.5%',
     alignItems: 'center',
@@ -1298,8 +1305,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sheetLead: { ...fonts.medium, fontSize: 13.5, lineHeight: 19, color: palette.textMuted, marginBottom: 18 },
+  // Pulled out to the timeline's left edge (rail 34 + body padding 12) so it
+  // spans the sheet; the white fill hides the dashed rail behind it.
   placeCard: {
-    marginTop: 12,
+    marginTop: 14,
+    marginLeft: -46,
+    backgroundColor: palette.surface,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 8,
@@ -1330,8 +1341,10 @@ const styles = StyleSheet.create({
   payTotalValue: { ...fonts.bold, fontSize: 18, color: palette.text },
   payStatusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   payMethod: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginLeft: 10 },
-  policyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingHorizontal: 4 },
-  policyText: { ...fonts.medium, flex: 1, fontSize: 13, color: palette.textMuted, marginLeft: 8 },
+  // Top-aligned: the note can wrap to two lines, and a centred icon then sat low.
+  policyRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 16, paddingHorizontal: 4 },
+  policyIcon: { marginTop: 1 },
+  policyText: { ...fonts.medium, flex: 1, fontSize: 13, lineHeight: 18, color: palette.textMuted, marginLeft: 8 },
 
   detailFooter: {
     flexDirection: 'row',

@@ -827,13 +827,13 @@ const styles = StyleSheet.create({
   // Cancellation note
   cancellationCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: palette.peachWash,
     borderRadius: radii.pill,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  cancellationText: { ...fonts.medium, flex: 1, fontSize: 12.5, color: palette.text, marginLeft: 8 },
+  cancellationText: { ...fonts.medium, flex: 1, fontSize: 12.5, lineHeight: 17, color: palette.text, marginLeft: 8 },
 
   // Bottom bar
   bottomBar: {

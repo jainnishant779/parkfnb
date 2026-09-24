@@ -19,7 +19,6 @@ import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import MapView, { Marker, Polyline, UrlTile, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as parkingService from '../../services/parkingService';
-import { useAuth } from '../../context/AuthContext';
 import { palette, radii, fonts, shadow } from '../../theme';
 import { resolveImageUri } from '../../utils/imageUri';
 import SheetModal from '../../components/ui/SheetModal';
@@ -36,15 +35,6 @@ import {
 } from '../../components/ui';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-// Time-of-day greeting for the home headline. No trailing comma — the
-// caller appends the user's name only when one is known, so a comma baked
-// in here would dangle for a user with no name on file.
-const greetingForHour = (hour) => {
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-};
 
 // Rough travel-time estimate from distance. Under ~1 km people walk
 // (~5 km/h); beyond that they drive (~20 km/h in city traffic). The
@@ -232,10 +222,6 @@ const initialRegion = {
 
 const HomePage = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const auth = useAuth();
-  // Greeting is computed once per mount — re-deriving it on every render
-  // would churn the header for a string that changes a few times a day.
-  const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
   // Favourites are UI-only for now — the backend has no favourites
   // endpoint, so the heart state lives with the screen (same approach as
   // ParkingDetailsPage) rather than pretending to persist.
@@ -730,7 +716,6 @@ const HomePage = ({ navigation }) => {
 
   // ─── Render helpers ────────────────────────────────────────────────────────
 
-  const firstName = ((auth?.user?.legalName || '').trim().split(/\s+/)[0]) || '';
   // The route is drawn to the lot the user picked, else the closest one.
   const routeSpot = filteredSpots.find((sp) => sp.id === selectedSpot) || filteredSpots[0] || null;
   // Rounded so small GPS jitter doesn't refetch the route.
@@ -1024,7 +1009,7 @@ const HomePage = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header: brand + location chip, then greeting and headline */}
+        {/* Header: brand + location chip */}
         <View style={styles.brandRow}>
           <Text style={styles.brand}>
             parkfnb.<Text style={styles.brandMark}>®</Text>
@@ -1036,12 +1021,6 @@ const HomePage = ({ navigation }) => {
             <Text style={styles.locName} numberOfLines={1}>{locationName}</Text>
             <Icon name="chevron-down" size={16} color={palette.text} />
           </TouchableOpacity>
-        </View>
-        <View style={styles.hero}>
-          <Text style={styles.hello} numberOfLines={1}>
-            {greeting}{firstName ? `, ${firstName}` : ''}
-          </Text>
-          <Text style={styles.headline}>Find your{'\n'}parking spot</Text>
         </View>
 
         {/* Content panel */}
@@ -1323,16 +1302,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   locName: { ...fonts.semibold, fontSize: 14, color: palette.text, marginRight: 4, flexShrink: 1 },
-  hero: { paddingHorizontal: 20, marginTop: 22 },
-  hello: { ...fonts.medium, fontSize: 15, color: palette.textMuted },
-  headline: {
-    ...fonts.semibold,
-    fontSize: 34,
-    lineHeight: 38,
-    letterSpacing: -0.9,
-    color: palette.text,
-    marginTop: 6,
-  },
   searchRight: { flexDirection: 'row', alignItems: 'center', marginRight: -12 },
   clearBtn: { paddingHorizontal: 8 },
   filterBtn: {
@@ -1356,7 +1325,7 @@ const styles = StyleSheet.create({
   },
 
   panel: {
-    marginTop: 22,
+    marginTop: 18,
     backgroundColor: palette.surface,
     borderTopLeftRadius: radii.xxl,
     borderTopRightRadius: radii.xxl,
