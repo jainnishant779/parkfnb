@@ -1024,33 +1024,25 @@ const HomePage = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header: greeting + headline, filter button */}
-        <View style={styles.header}>
-          <View style={styles.flex}>
-            <Text style={styles.hello} numberOfLines={1}>
-              {greeting}{firstName ? `, ${firstName}` : ''}
-            </Text>
-            <Text style={styles.headline}>Find your{'\n'}parking spot</Text>
-          </View>
-          <IconCircle
-            icon="sliders"
-            size={50}
-            badge={activeFilterCount > 0}
-            onPress={() => setFilterModalVisible(true)}
-          />
-        </View>
-
-        {/* Location pill */}
-        <TouchableOpacity onPress={handleLocationPillPress} activeOpacity={0.8} style={styles.locPill}>
-          <View style={styles.locDot}>
-            <Icon name="map-pin" size={15} color={palette.textInverse} />
-          </View>
-          <View style={styles.flex}>
-            <Text style={styles.locLabel}>Your location</Text>
+        {/* Header: brand + location chip, then greeting and headline */}
+        <View style={styles.brandRow}>
+          <Text style={styles.brand}>
+            parkfnb.<Text style={styles.brandMark}>®</Text>
+          </Text>
+          <TouchableOpacity onPress={handleLocationPillPress} activeOpacity={0.8} style={styles.locChip}>
+            <View style={styles.locDot}>
+              <Icon name="map-pin" size={13} color={palette.textInverse} />
+            </View>
             <Text style={styles.locName} numberOfLines={1}>{locationName}</Text>
-          </View>
-          <Icon name="chevron-down" size={18} color={palette.textMuted} />
-        </TouchableOpacity>
+            <Icon name="chevron-down" size={16} color={palette.text} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.hero}>
+          <Text style={styles.hello} numberOfLines={1}>
+            {greeting}{firstName ? `, ${firstName}` : ''}
+          </Text>
+          <Text style={styles.headline}>Find your{'\n'}parking spot</Text>
+        </View>
 
         {/* Content panel */}
         <View style={[styles.panel, { paddingBottom: insets.bottom + 120 }]}>
@@ -1063,11 +1055,21 @@ const HomePage = ({ navigation }) => {
             onSubmitEditing={handleLocationSearch}
             returnKeyType="search"
             right={
-              searchQuery.length > 0 ? (
-                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={10}>
-                  <Icon name="x" size={18} color={palette.textMuted} />
+              <View style={styles.searchRight}>
+                {searchQuery.length > 0 ? (
+                  <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={10} style={styles.clearBtn}>
+                    <Icon name="x" size={18} color={palette.textMuted} />
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  onPress={() => setFilterModalVisible(true)}
+                  activeOpacity={0.8}
+                  style={styles.filterBtn}
+                >
+                  <Icon name="sliders" size={17} color={palette.textInverse} />
+                  {activeFilterCount > 0 ? <View style={styles.filterDot} /> : null}
                 </TouchableOpacity>
-              ) : null
+              </View>
             }
           />
 
@@ -1293,41 +1295,68 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.bg },
   flex: { flex: 1 },
 
-  header: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20 },
-  hello: { ...fonts.medium, fontSize: 15, color: palette.textMuted },
-  headline: {
-    ...fonts.semibold,
-    fontSize: 32,
-    lineHeight: 36,
-    letterSpacing: -0.8,
-    color: palette.text,
-    marginTop: 6,
-  },
-  locPill: {
-    marginHorizontal: 16,
-    marginTop: 18,
-    height: 64,
-    borderRadius: radii.pill,
-    backgroundColor: palette.surface,
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 10,
-    paddingRight: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+  },
+  brand: { ...fonts.bold, fontSize: 26, letterSpacing: -0.6, color: palette.text },
+  brandMark: { ...fonts.medium, fontSize: 12 },
+  locChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    maxWidth: '58%',
+    paddingLeft: 6,
+    paddingRight: 12,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surface,
   },
   locDot: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: palette.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 8,
   },
-  locLabel: { ...fonts.medium, fontSize: 12, color: palette.textMuted },
-  locName: { ...fonts.semibold, fontSize: 16, color: palette.text, marginTop: 1 },
+  locName: { ...fonts.semibold, fontSize: 14, color: palette.text, marginRight: 4, flexShrink: 1 },
+  hero: { paddingHorizontal: 20, marginTop: 22 },
+  hello: { ...fonts.medium, fontSize: 15, color: palette.textMuted },
+  headline: {
+    ...fonts.semibold,
+    fontSize: 34,
+    lineHeight: 38,
+    letterSpacing: -0.9,
+    color: palette.text,
+    marginTop: 6,
+  },
+  searchRight: { flexDirection: 'row', alignItems: 'center', marginRight: -12 },
+  clearBtn: { paddingHorizontal: 8 },
+  filterBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterDot: {
+    position: 'absolute',
+    top: 7,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: palette.peach,
+    borderWidth: 1.5,
+    borderColor: palette.ink,
+  },
 
   panel: {
-    marginTop: 20,
+    marginTop: 22,
     backgroundColor: palette.surface,
     borderTopLeftRadius: radii.xxl,
     borderTopRightRadius: radii.xxl,
