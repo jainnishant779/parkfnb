@@ -145,6 +145,8 @@ function TabBar({
     <View pointerEvents="box-none" style={[styles.outer, { paddingBottom: bottomPadding }]}>
       <View style={styles.pillShadow}>
         <View style={styles.pill}>
+          {/* Frosted glass: soft white fill + brighter top sheen + white rim. */}
+          <View style={styles.pillSheen} pointerEvents="none" />
           {state.routes.map((route, index) => {
             const isFocused = state.index === index;
             const currentTabConfig = tabConfig.find((t) => t.key === route.name);
@@ -189,7 +191,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.14,
     shadowRadius: 26,
-    elevation: 12,
+    elevation: 6,
+    // Android shapes the elevation shadow from the background.
+    backgroundColor: 'rgba(255,255,255,0.02)',
   },
   pill: {
     flexDirection: 'row',
@@ -197,9 +201,18 @@ const styles = StyleSheet.create({
     height: TAB_BAR_HEIGHT,
     paddingHorizontal: 6,
     borderRadius: 40,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    backgroundColor: 'rgba(249,249,249,0.99)',
+  },
+  pillSheen: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.55)',
   },
 });
 

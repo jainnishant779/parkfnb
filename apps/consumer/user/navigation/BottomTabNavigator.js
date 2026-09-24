@@ -34,6 +34,9 @@ function FloatingTabBar({ state, descriptors, navigation }) {
     >
       <View style={styles.pillShadow}>
         <View style={styles.pill}>
+          {/* Real blur on iOS. Android's BlurView samples the whole window,
+              including this bar's own active circle (grey smear), so Android
+              gets a translucent frosted fill instead (see pillTint). */}
           {Platform.OS === 'ios' ? (
             <BlurView
               style={StyleSheet.absoluteFill}
@@ -43,6 +46,8 @@ function FloatingTabBar({ state, descriptors, navigation }) {
             />
           ) : null}
           <View style={styles.pillTint} />
+          {/* Glass sheen: brighter top half, like light across frosted glass. */}
+          <View style={styles.pillSheen} pointerEvents="none" />
 
           {state.routes.map((route, index) => {
             const tab = TABS.find((t) => t.key === route.name);
@@ -77,7 +82,11 @@ function FloatingTabBar({ state, descriptors, navigation }) {
                 activeOpacity={0.7}
                 style={styles.tab}
               >
-                <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+                <View style={styles.iconWrap}>
+                  {/* The ink circle is always mounted and only its opacity
+                      changes: on Android a rounded view whose background
+                      colour changes after mount loses its radius (square). */}
+                  <View style={[styles.activeCircle, { opacity: focused ? 1 : 0 }]} />
                   <Icon
                     name={tab.icon}
                     size={22}
@@ -136,7 +145,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.14,
     shadowRadius: 26,
-    elevation: 12,
+    elevation: 6,
+    // Android shapes the elevation shadow from the background; a near-clear
+    // fill keeps it rounded without hiding the glass.
+    backgroundColor: Platform.OS === 'android' ? 'rgba(255,255,255,0.02)' : undefined,
   },
   pill: {
     flexDirection: 'row',
@@ -145,12 +157,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 40,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    backgroundColor: Platform.OS === 'ios' ? 'transparent' : '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    backgroundColor: 'transparent',
   },
   pillTint: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(248,248,248,0.72)' : 'rgba(249,249,249,0.99)',
+  },
+  pillSheen: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: '50%',
     backgroundColor: 'rgba(255,255,255,0.55)',
   },
   tab: {
@@ -158,17 +178,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Always has a background: Android drops borderRadius when a background
-  // colour is first added after mount (inactive -> active).
   iconWrap: {
     width: 60,
     height: 60,
-    borderRadius: 30,
-    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrapActive: {
+  activeCircle: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 30,
     backgroundColor: palette.ink,
   },
 });
