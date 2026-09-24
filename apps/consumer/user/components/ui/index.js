@@ -687,6 +687,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 42,
     borderRadius: radii.pill,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },

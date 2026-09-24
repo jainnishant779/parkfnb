@@ -128,7 +128,7 @@ function RootNavigator() {
   if (needsConsumerOnboarding) {
     return (
       <>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
         <Stack.Navigator screenOptions={screenOptions}>
           <Stack.Screen name="UserOnboarding" component={UserOnboarding} />
         </Stack.Navigator>
@@ -138,7 +138,7 @@ function RootNavigator() {
 
   return (
     <>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
       <Stack.Navigator screenOptions={screenOptions}>
         {/* Main app with bottom tabs */}
         <Stack.Screen name="MainApp" component={BottomTabNavigator} />

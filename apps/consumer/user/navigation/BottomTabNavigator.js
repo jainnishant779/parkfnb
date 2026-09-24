@@ -158,10 +158,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Always has a background: Android drops borderRadius when a background
+  // colour is first added after mount (inactive -> active).
   iconWrap: {
     width: 60,
     height: 60,
     borderRadius: 30,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },

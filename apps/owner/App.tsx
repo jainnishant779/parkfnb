@@ -1,5 +1,6 @@
 import "./global.css";
 import { NavigationContainer } from '@react-navigation/native';
+import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { navigationRef } from './src/navigation/navigationRef';
 import { AuthProvider } from './src/context/AuthContext';
@@ -16,6 +17,8 @@ initializeMsg91();
 export default function App() {
   return (
     <SafeAreaProvider>
+      {/* App-wide default; screens on photos/cream set their own. */}
+      <StatusBar barStyle="dark-content" backgroundColor="#F3F3F3" />
       <AppAlertProvider>
         <AuthProvider>
           <NavigationContainer

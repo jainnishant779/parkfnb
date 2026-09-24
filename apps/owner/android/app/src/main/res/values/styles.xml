@@ -1,16 +1,21 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
+    <!-- Base application theme. Light-only to match the app design: page-grey
+         system bars with dark icons (AppCompat's default status bar is #757575). -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+        <item name="android:windowBackground">@color/app_canvas</item>
+        <item name="android:statusBarColor">@color/app_canvas</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/app_canvas</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
     </style>
 
     <!-- UCrop Inset Fix: Prevents Toolbar (Cross & Tick buttons) from hiding under status bar/notch -->
     <style name="UCropCustomTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:fitsSystemWindows">true</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:statusBarColor">#0D7377</item>
+        <item name="android:statusBarColor">#141414</item>
     </style>
 
 </resources>
