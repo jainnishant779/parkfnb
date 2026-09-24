@@ -45,7 +45,12 @@ const SheetModal = ({ visible, onClose, children, style, maxHeight = '88%', grab
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
-      ]).start(({ finished }) => finished && setMounted(false));
+      ]).start();
+      // Unmount on a timer, not the animation callback: if the close
+      // animation is interrupted, `finished` is false and the invisible
+      // Modal stayed mounted, swallowing every tap on the screen.
+      const t = setTimeout(() => setMounted(false), 240);
+      return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);

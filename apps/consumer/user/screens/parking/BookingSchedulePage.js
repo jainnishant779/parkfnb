@@ -6,7 +6,7 @@
  * and submits the booking. The pricing/quote/booking logic was moved here
  * verbatim from ParkingDetailsPage.
  */
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -37,6 +37,7 @@ import {
   ScreenHeader,
 } from '../../components/ui';
 import SheetModal from '../../components/ui/SheetModal';
+import CalendarSheet from '../../components/ui/CalendarSheet';
 import { SPACE_TYPE_ICONS, SPACE_TYPE_LABELS } from './ParkingDetailsPage';
 
 // Duration options for booking
@@ -135,6 +136,17 @@ const BookingSchedulePage = ({ navigation, route }) => {
   // State
   const [selectedDuration, setSelectedDuration] = useState('hourly');
   const [selectedDate, setSelectedDate] = useState(dates[0].date);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const dateScrollRef = useRef(null);
+
+  // From the calendar: set the date and bring its chip into view.
+  const pickFromCalendar = (d) => {
+    const idx = dates.findIndex((x) => x.date.toDateString() === d.toDateString());
+    if (idx >= 0) {
+      setSelectedDate(dates[idx].date);
+      setTimeout(() => dateScrollRef.current?.scrollTo({ x: Math.max(idx - 1, 0) * 74, animated: true }), 250);
+    }
+  };
   const [selectedStartTime, setSelectedStartTime] = useState(nextBookableHour);
   // Start at the next bookable hour + the default 1h, not a fixed 10:00 that
   // could sit before the start time and leave Book Now disabled.
@@ -553,7 +565,11 @@ const BookingSchedulePage = ({ navigation, route }) => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       <View style={{ paddingTop: insets.top }}>
-        <ScreenHeader title="Select date & time" onBack={() => navigation.goBack()} />
+        <ScreenHeader
+          title="Select date & time"
+          onBack={() => navigation.goBack()}
+          right={<IconCircle icon="calendar" size={42} onPress={() => setShowCalendar(true)} />}
+        />
       </View>
 
       <ScrollView
@@ -595,8 +611,8 @@ const BookingSchedulePage = ({ navigation, route }) => {
 
         {/* Date Selection */}
         <View style={styles.section}>
-          <SectionTitle title="Select date" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateRow}>
+          <SectionTitle title="Select date" action="Calendar" onAction={() => setShowCalendar(true)} />
+          <ScrollView ref={dateScrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateRow}>
             {dates.map((dateItem, index) => {
               const active = isActiveDate(dateItem.date);
               return (
@@ -891,6 +907,15 @@ const BookingSchedulePage = ({ navigation, route }) => {
       </SheetModal>
 
       {/* Time Picker Sheet */}
+      <CalendarSheet
+        visible={showCalendar}
+        value={selectedDate}
+        minDate={dates[0].date}
+        maxDate={dates[dates.length - 1].date}
+        onClose={() => setShowCalendar(false)}
+        onSelect={pickFromCalendar}
+      />
+
       <SheetModal visible={showTimeModal} onClose={() => setShowTimeModal(false)} maxHeight="72%">
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>
