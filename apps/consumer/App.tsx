@@ -31,6 +31,7 @@ import BookingSchedulePage from './user/screens/parking/BookingSchedulePage';
 import SubscriptionPage from './user/screens/premium/SubscriptionPage';
 import HelpSupportPage from './user/screens/support/HelpSupportPage';
 import AboutPage from './user/screens/about/AboutPage';
+import EditProfilePage from './user/screens/profile/EditProfilePage';
 
 // Auth
 import { AuthProvider, useAuth } from './user/context/AuthContext';
@@ -151,6 +152,7 @@ function RootNavigator() {
         <Stack.Screen name="Subscription" component={SubscriptionPage} />
         <Stack.Screen name="HelpSupport" component={HelpSupportPage} />
         <Stack.Screen name="About" component={AboutPage} />
+        <Stack.Screen name="EditProfile" component={EditProfilePage} />
       </Stack.Navigator>
     </>
   );

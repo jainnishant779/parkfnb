@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { AppAlert } from '../../components/AppAlert';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -34,8 +35,9 @@ import {
   EmptyState,
   IsoBlock,
 } from '../../components/ui';
-import { resolveImageUri } from '../../utils/imageUri';
 import SheetModal from '../../components/ui/SheetModal';
+import useProfilePhoto from './useProfilePhoto';
+import { calculateProfileCompletion } from './profileCompletion';
 
 // Payment methods — stays mock (no backend support)
 // eslint-disable-next-line no-unused-vars
@@ -123,11 +125,13 @@ const ProfilePage = ({ navigation }) => {
   const auth = useAuth();
   const user = auth.user;
 
-  // Profile state — seeded from real auth.user
-  const [fullName, setFullName] = useState(user?.legalName || '');
-  const [editedName, setEditedName] = useState(user?.legalName || '');
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  // Profile — read straight from auth.user, which EditProfile and the photo
+  // sheet update, so this screen reflects their changes on return.
+  const fullName = user?.legalName || '';
+  const photo = useProfilePhoto();
+  // Snapshot taken when leaving for EditProfile; compared on return to decide
+  // whether to show the "Profile updated" toast.
+  const editSnapshot = useRef(null);
 
   // Vehicles
   const [vehicles, setVehicles] = useState([]);
@@ -202,24 +206,13 @@ const ProfilePage = ({ navigation }) => {
       .catch(() => { /* keep zero stats */ });
   }, [user?.id]);
 
-  const handleChangePhoto = () => {
-    AppAlert.alert(
-      'Profile Photo',
-      'Photo upload is coming soon. We\'ll let you know when it\'s ready.'
-    );
-  };
-
   // Calculate profile completion using real data
-  const calculateCompletion = () => {
-    let completed = 0;
-    if (fullName) completed++;
-    if (user?.email) completed++;
-    if (user?.phone) completed++;
-    if (user?.profileImage || user?.profilePictureUrl) completed++;
-    if (vehicles.length > 0) completed++;
-    if (paymentMethods.length > 0) completed++;
-    return Math.round((completed / 6) * 100);
-  };
+  const calculateCompletion = () => calculateProfileCompletion({
+    user,
+    fullName,
+    vehicleCount: vehicles.length,
+    paymentCount: paymentMethods.length,
+  });
 
   // Show success toast
   const showSuccessMessage = () => {
@@ -237,22 +230,6 @@ const ProfilePage = ({ navigation }) => {
         useNativeDriver: true,
       }),
     ]).start(() => setShowSuccess(false));
-  };
-
-  // Save profile name to backend
-  const handleSaveProfile = async () => {
-    setIsSaving(true);
-    try {
-      const response = await userService.updateProfile({ legalName: editedName.trim() });
-      setFullName(editedName.trim());
-      auth.updateUser(response.user);
-      setIsEditing(false);
-      showSuccessMessage();
-    } catch {
-      AppAlert.alert('Error', 'Could not save profile. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
   };
 
   // Notification toggles — backend-persisted
@@ -397,17 +374,32 @@ const ProfilePage = ({ navigation }) => {
       ]
     );
   };
-  const avatarUri = user?.profileImage || user?.profilePictureUrl;
   const displayName = fullName || 'Welcome';
   const contactLine = user?.phone ? `+91 ${user.phone}` : user?.email || '';
   const memberSince = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
     : null;
 
+  const profileSnapshot = `${user?.legalName || ''}|${user?.profilePictureUrl || user?.profileImage || ''}`;
+
   const openEditProfile = () => {
-    setEditedName(fullName);
-    setIsEditing(true);
+    editSnapshot.current = profileSnapshot;
+    navigation.navigate('EditProfile', {
+      vehicleCount: vehicles.length,
+      paymentCount: paymentMethods.length,
+    });
   };
+
+  // Back from EditProfile: auth.user already carries the saved values; confirm
+  // with the toast if anything changed.
+  useFocusEffect(
+    useCallback(() => {
+      if (editSnapshot.current === null) return;
+      if (editSnapshot.current !== profileSnapshot) showSuccessMessage();
+      editSnapshot.current = null;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profileSnapshot])
+  );
 
   // Scroll the page to the notification preferences card (bell button)
   const scrollToNotifications = () => {
@@ -427,13 +419,18 @@ const ProfilePage = ({ navigation }) => {
   // Top row — avatar, name, contact, edit + bell
   const renderTopRow = () => (
     <View style={styles.topRow}>
-      <TouchableOpacity onPress={handleChangePhoto} activeOpacity={0.8}>
+      <TouchableOpacity onPress={photo.open} activeOpacity={0.8}>
         <Avatar
-          uri={avatarUri ? resolveImageUri(avatarUri) : undefined}
+          uri={photo.photoUri}
           name={fullName || user?.email || ''}
           size={64}
           ring
         />
+        {photo.uploading ? (
+          <View style={styles.avatarBusy}>
+            <ActivityIndicator size="small" color={palette.textInverse} />
+          </View>
+        ) : null}
       </TouchableOpacity>
       <View style={styles.topText}>
         <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
@@ -495,7 +492,7 @@ const ProfilePage = ({ navigation }) => {
     </View>
   );
 
-  // Personal information (read view; editing happens in a sheet)
+  // Personal information (read view; editing happens on the EditProfile screen)
   const renderProfileSection = () => (
     <View style={styles.section}>
       <SectionTitle title="Personal information" action="Edit" onAction={openEditProfile} />
@@ -694,62 +691,6 @@ const ProfilePage = ({ navigation }) => {
     </View>
   );
 
-  // Edit profile sheet
-  const renderProfileModal = () => (
-    <Sheet
-      visible={isEditing}
-      onClose={() => setIsEditing(false)}
-      title="Edit profile"
-      bottomPad={sheetBottomPad}
-      footer={
-        <View style={styles.sheetFooter}>
-          <PillButton
-            label="Cancel"
-            variant="grey"
-            size="md"
-            onPress={() => setIsEditing(false)}
-            style={styles.footerBtn}
-          />
-          <PillButton
-            label={isSaving ? 'Saving...' : 'Save changes'}
-            variant="ink"
-            size="md"
-            onPress={handleSaveProfile}
-            disabled={isSaving}
-            style={[styles.footerBtn, styles.footerGap]}
-          />
-        </View>
-      }
-    >
-      <Field
-        label="Full name"
-        icon="user"
-        value={editedName}
-        onChangeText={setEditedName}
-        placeholder="Full name"
-        style={styles.fieldGap}
-      />
-      <Field
-        label="Email"
-        icon="mail"
-        value={user?.email || ''}
-        editable={false}
-        placeholder="—"
-        inputStyle={styles.readOnly}
-        style={styles.fieldGap}
-      />
-      <Field
-        label="Phone number"
-        icon="phone"
-        value={user?.phone ? `+91 ${user.phone}` : ''}
-        editable={false}
-        placeholder="—"
-        inputStyle={styles.readOnly}
-        style={styles.fieldGap}
-      />
-    </Sheet>
-  );
-
   // Add / edit vehicle sheet
   const renderVehicleModal = () => (
     <Sheet
@@ -936,7 +877,7 @@ const ProfilePage = ({ navigation }) => {
         {renderLogout()}
       </ScrollView>
 
-      {renderProfileModal()}
+      {photo.sheet}
       {renderVehicleModal()}
       {renderPaymentModal()}
       {renderSuccessToast()}
@@ -959,6 +900,13 @@ const styles = StyleSheet.create({
   userName: { ...fonts.semibold, fontSize: 20, color: palette.text, letterSpacing: -0.3 },
   userContact: { ...fonts.medium, fontSize: 14, color: palette.textMuted, marginTop: 3 },
   topIconGap: { marginLeft: 8 },
+  avatarBusy: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 32,
+    backgroundColor: palette.glassDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // Plan card
   planCard: { marginHorizontal: spacing.xl, minHeight: 190, overflow: 'hidden' },
@@ -1061,7 +1009,6 @@ const styles = StyleSheet.create({
   fieldGap: { marginBottom: 16 },
   fieldRow: { flexDirection: 'row', marginBottom: 16 },
   fieldHalf: { flex: 1 },
-  readOnly: { color: palette.textMuted },
   chipLabel: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginBottom: 8, marginLeft: 4 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
   typeChip: { backgroundColor: palette.fill, marginBottom: 8 },
