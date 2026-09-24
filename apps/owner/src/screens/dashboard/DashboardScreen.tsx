@@ -32,7 +32,6 @@ import { resolveImageUri } from '../../utils/imageUri';
 import {
   formatCurrency,
   formatCurrencyCompact,
-  formatOwnerGreeting,
   formatPercentage,
   formatTimeRange,
 } from '../../utils/formatters';
@@ -141,11 +140,11 @@ function transformApiPropertyToListing(p: ApiProperty): DashboardListing {
 // Main Dashboard Screen
 export default function DashboardScreen() {
   const navigation = useNavigation();
-  const { kycStatus, user, owner } = useAuth();
+  const { kycStatus, owner } = useAuth();
   const insets = useSafeAreaInsets();
 
   // Persistent UI state (alerts dismissals, tab selection)
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [_data, setData] = useState<DashboardData | null>(null);
   const [bookingsTab, setBookingsTab] = useState<BookingsTab>('requests');
   const [localDismissedAlerts, setLocalDismissedAlerts] = useState<string[]>([]);
 
@@ -500,15 +499,7 @@ export default function DashboardScreen() {
     return alertsList.filter(a => !localDismissedAlerts.includes(a.id));
   }, [localDismissedAlerts, kycStatus, liveRequestCount, liveListings]);
 
-  // First name for greeting
-  const firstName = useMemo(() => {
-    if (user?.firstName) return user.firstName;
-    if (user?.legalName) return user.legalName.split(' ')[0];
-    if (data) return data.ownerProfile.name.split(' ')[0];
-    return 'Owner';
-  }, [user, data]);
-
-  // KYC status tag shown under the owner's name
+  // KYC status tag shown in the header
   const kycTag = useMemo((): { label: string; tone: 'success' | 'warning' | 'danger' } | null => {
     if (kycStatus === 'verified')  return { label: 'Verified', tone: 'success' };
     if (kycStatus === 'submitted') return { label: 'KYC in review', tone: 'warning' };
@@ -516,12 +507,6 @@ export default function DashboardScreen() {
     return null;
   }, [kycStatus]);
 
-  // Full name for the profile row
-  const displayName = useMemo(() => {
-    if (user?.legalName) return user.legalName;
-    const full = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim();
-    return full || firstName;
-  }, [user, firstName]);
 
   // Bookings for the currently selected tab (max 3 on dashboard)
   const currentBookings = useMemo(() => {
@@ -614,26 +599,22 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         testID="dashboard-header"
       >
-        {/* Profile row */}
+        {/* Header: brand, KYC status, notifications */}
         <View style={styles.topRow}>
-          <Avatar name={displayName} size={58} />
-          <View style={styles.topText}>
-            <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
-            <View style={styles.subRow}>
-              <Text style={styles.subText} numberOfLines={1}>
-                {formatOwnerGreeting(firstName)}
-              </Text>
-              {kycTag ? (
-                <StatusTag label={kycTag.label} tone={kycTag.tone} style={styles.kycTag} />
-              ) : null}
-            </View>
+          <Text style={styles.brand}>
+            parkfnb.<Text style={styles.brandMark}>®</Text>
+          </Text>
+          <View style={styles.topRight}>
+            {kycTag ? (
+              <StatusTag label={kycTag.label} tone={kycTag.tone} style={styles.kycTag} />
+            ) : null}
+            <IconCircle
+              icon="bell"
+              size={46}
+              badge={computedData.unreadCount > 0}
+              onPress={handleNotifications}
+            />
           </View>
-          <IconCircle
-            icon="bell"
-            size={50}
-            badge={computedData.unreadCount > 0}
-            onPress={handleNotifications}
-          />
         </View>
 
         {/* Balance */}
@@ -1058,12 +1039,16 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   flex: { flex: 1 },
 
-  topRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 },
-  topText: { flex: 1, marginLeft: 14, marginRight: 10 },
-  userName: { ...fonts.semibold, fontSize: 20, color: palette.text, letterSpacing: -0.3 },
-  subRow: { flexDirection: 'row', alignItems: 'center', marginTop: 3 },
-  subText: { ...fonts.medium, fontSize: 15, color: palette.textMuted, flexShrink: 1 },
-  kycTag: { marginLeft: 8 },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+  },
+  brand: { ...fonts.bold, fontSize: 26, letterSpacing: -0.6, color: palette.text },
+  brandMark: { ...fonts.medium, fontSize: 12 },
+  topRight: { flexDirection: 'row', alignItems: 'center' },
+  kycTag: { marginRight: 10 },
 
   balanceRow: {
     flexDirection: 'row',

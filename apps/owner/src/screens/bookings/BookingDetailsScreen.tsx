@@ -426,19 +426,7 @@ export default function BookingDetailsScreen({ route, navigation }: Props) {
               time={ev.at ? formatBookingTime(ev.at) : null}
               active={i === 0}
               isLast={i === timeline.length - 1}
-            >
-              {i === 0 ? (
-                <View style={styles.placeCard}>
-                  <View style={styles.placeIcon}>
-                    <Ionicons name="business-outline" size={20} color={palette.text} />
-                  </View>
-                  <View style={styles.flex}>
-                    <Text style={styles.placeName} numberOfLines={1}>{booking.listingName}</Text>
-                    <Text style={styles.placeAddr} numberOfLines={1}>{booking.addressLine}</Text>
-                  </View>
-                </View>
-              ) : null}
-            </TimelineItem>
+            />
           ))}
 
           {/* Guest */}
@@ -479,7 +467,7 @@ export default function BookingDetailsScreen({ route, navigation }: Props) {
           {/* Cancellation Policy (UPCOMING only) */}
           {refundPolicy && (
             <View style={styles.policyRow}>
-              <Ionicons name="shield-checkmark-outline" size={16} color={palette.textMuted} />
+              <Ionicons name="shield-checkmark-outline" size={16} color={palette.textMuted} style={styles.policyIcon} />
               <Text style={styles.policyText}>{refundPolicy.label}</Text>
             </View>
           )}
@@ -626,8 +614,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  policyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingHorizontal: 4 },
-  policyText: { ...fonts.medium, flex: 1, fontSize: 13, color: palette.textMuted, marginLeft: 8 },
+  // Top-aligned so the icon sits with the first line when the text wraps.
+  policyRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 16, paddingHorizontal: 4 },
+  policyIcon: { marginTop: 1 },
+  policyText: { ...fonts.medium, flex: 1, fontSize: 13, lineHeight: 18, color: palette.textMuted, marginLeft: 8 },
   // Footer
   footer: {
     flexDirection: 'row',

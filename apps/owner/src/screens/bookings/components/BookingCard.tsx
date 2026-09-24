@@ -204,7 +204,7 @@ function BookingCard({
               />
               <PillButton
                 size="sm"
-                variant="danger"
+                variant="ink"
                 icon="x"
                 label="Cancel"
                 onPress={() => onCancel?.(booking)}
@@ -274,8 +274,9 @@ const styles = StyleSheet.create({
   verifiedIcon: { marginLeft: 4 },
   notesRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   notesText: { ...fonts.medium, flex: 1, fontSize: 12.5, color: palette.textMuted, marginLeft: 6 },
-  actionRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 },
-  actionBtn: { marginRight: 8, marginBottom: 4 },
+  // Two equal columns so the pills line up in pairs.
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 10 },
+  actionBtn: { width: '48.5%', marginBottom: 8 },
 });
 
 export default memo(BookingCard);
