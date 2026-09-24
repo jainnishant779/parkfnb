@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Pressable,
   StyleSheet,
   ScrollView,
   Modal,
@@ -23,14 +22,13 @@ import * as parkingService from '../../services/parkingService';
 import { useAuth } from '../../context/AuthContext';
 import { palette, radii, fonts, shadow } from '../../theme';
 import { resolveImageUri } from '../../utils/imageUri';
+import SheetModal from '../../components/ui/SheetModal';
 import {
-  Avatar,
   IconCircle,
   PillButton,
   SearchPill,
   SectionTitle,
   StatusTag,
-  ProgressTrack,
   IsoBlock,
   InfoGrid,
   Chip,
@@ -732,7 +730,7 @@ const HomePage = ({ navigation }) => {
 
   // ─── Render helpers ────────────────────────────────────────────────────────
 
-  const displayName = (auth?.user?.legalName || '').trim() || greeting;
+  const firstName = ((auth?.user?.legalName || '').trim().split(/\s+/)[0]) || '';
   // The route is drawn to the lot the user picked, else the closest one.
   const routeSpot = filteredSpots.find((sp) => sp.id === selectedSpot) || filteredSpots[0] || null;
   // Rounded so small GPS jitter doesn't refetch the route.
@@ -782,8 +780,6 @@ const HomePage = ({ navigation }) => {
   const renderSpotCard = (spot, index) => {
     const tone = index % 2 === 0 ? 'peach' : 'blue';
     const isFavorite = favoriteSpotIds.includes(spot.id);
-    const occupied = spot.spots > 0 ? (spot.spots - spot.available) / spot.spots : 0;
-    const fullness = Math.min(3, Math.max(0, Math.round(occupied * 3)));
     const hasRating = spot.rating > 0;
 
     return (
@@ -819,12 +815,6 @@ const HomePage = ({ navigation }) => {
 
         <View style={styles.spotBody}>
           <Text style={styles.spotName} numberOfLines={1}>{spot.name}</Text>
-          <ProgressTrack
-            steps={4}
-            current={fullness}
-            trackColor={tone === 'peach' ? '#F7D3A6' : '#BCD0F4'}
-            style={styles.spotTrack}
-          />
           <View style={styles.spotMetaRow}>
             <View style={styles.spotMetaCol}>
               <Text style={styles.spotMetaTitle}>{spot.distance}</Text>
@@ -843,6 +833,147 @@ const HomePage = ({ navigation }) => {
       </TouchableOpacity>
     );
   };
+
+  // The map (route, bubble, lot dots, info card). Rendered in the card and,
+  // when expanded, again full screen in a Modal.
+  const renderMap = (full) => (
+    <>
+            <MapView
+              ref={full ? undefined : mapRef}
+              style={StyleSheet.absoluteFill}
+              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+              initialRegion={mapRegion}
+              mapType={Platform.OS === 'android' ? 'none' : 'mutedStandard'}
+              userInterfaceStyle="dark"
+              showsUserLocation={false}
+              showsMyLocationButton={false}
+              showsPointsOfInterests={false}
+              showsCompass={false}
+              showsBuildings={false}
+              showsTraffic={false}
+              maxZoomLevel={16}
+              onUserLocationChange={handleUserLocationChange}
+              moveOnMarkerPress={false}
+              renderToHardwareTextureAndroid
+            >
+              {/* Flat charcoal basemap with no labels, drawn over the
+                  platform map so iOS and Android look identical. */}
+              <UrlTile
+                urlTemplate="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                maximumZ={16}
+                shouldReplaceMapContent
+                zIndex={-1}
+              />
+
+              {routeCoords.length > 1 ? (
+                <>
+                  <Polyline coordinates={routeCoords} strokeColor="rgba(246,203,145,0.25)" strokeWidth={12} />
+                  <Polyline coordinates={routeCoords} strokeColor={palette.peach} strokeWidth={3.5} />
+                </>
+              ) : null}
+
+              {/* Distance bubble at the middle of the route */}
+              {routeCoords.length > 1 && routeInfo ? (
+                <Marker
+                  coordinate={routeCoords[Math.floor(routeCoords.length / 2)]}
+                  anchor={{ x: 0.5, y: 1 }}
+                  tracksViewChanges={Platform.OS === 'ios'}
+                >
+                  <View style={styles.pinWrap}>
+                    <View style={styles.bubble}>
+                      <Text style={styles.bubbleText}>{routeInfo.km} km</Text>
+                    </View>
+                    <View style={styles.bubbleTail} />
+                  </View>
+                </Marker>
+              ) : null}
+
+              {userLocation ? (
+                <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+                  <View style={styles.glowOuter}>
+                    <View style={styles.glowInner} />
+                  </View>
+                </Marker>
+              ) : null}
+
+              {filteredSpots.map((spot) => {
+                const active = routeSpot?.id === spot.id;
+                return (
+                  <Marker
+                    key={spot.id}
+                    coordinate={{ latitude: spot.latitude, longitude: spot.longitude }}
+                    onPress={() => setSelectedSpot(spot.id)}
+                    anchor={{ x: 0.5, y: 0.5 }}
+                    tracksViewChanges={Platform.OS === 'ios'}
+                  >
+                    <View style={[styles.glowOuter, !active && styles.glowOuterDim]}>
+                      <View style={[styles.glowInner, !active && styles.glowInnerDim]} />
+                    </View>
+                  </Marker>
+                );
+              })}
+            </MapView>
+
+            <IconCircle
+              icon="crosshair"
+              size={52}
+              onPress={handleLocationPillPress}
+              style={[styles.mapLocate, full && { bottom: insets.bottom + 16 }]}
+            />
+
+            {routeSpot ? (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[styles.routeCard, full && { bottom: insets.bottom + 16 }]}
+                onPress={() => handleSpotPress(routeSpot)}
+              >
+                {routeSpot.images?.[0] ? (
+                  <Image source={{ uri: resolveImageUri(routeSpot.images[0]) }} style={styles.routeThumb} />
+                ) : (
+                  <View style={[styles.routeThumb, styles.routeThumbEmpty]}>
+                    <IsoBlock size={58} tone="peach" />
+                  </View>
+                )}
+                <View style={styles.flex}>
+                  <Text style={styles.routeName} numberOfLines={1}>{routeSpot.name}</Text>
+                  <View style={styles.routeStats}>
+                    <View>
+                      <Text style={styles.routeLabel}>Distance</Text>
+                      <Text style={styles.routeValue}>{routeInfo ? `${routeInfo.km} km` : routeSpot.distance}</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.routeLabel}>Duration</Text>
+                      <Text style={styles.routeValue}>
+                        {routeInfo ? `${routeInfo.min} min` : routeSpot.travelTime || '--'}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text style={styles.routeLabel}>Price</Text>
+                      <Text style={styles.routeValue}>{routeSpot.price}/hr</Text>
+                    </View>
+                  </View>
+                </View>
+                <IconCircle
+                  icon="arrow-up-right"
+                  size={36}
+                  variant="grey"
+                  onPress={() => navigation.navigate('ParkingDetails', { parkingData: routeSpot })}
+                  style={styles.routeGo}
+                />
+              </TouchableOpacity>
+            ) : null}
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.expandBtn, full && { top: insets.top + 12 }]}
+              onPress={() => setMapExpanded(!full)}
+            >
+              <Icon name={full ? 'minimize-2' : 'maximize-2'} size={19} color={palette.textInverse} />
+            </TouchableOpacity>
+
+            <Text style={[styles.mapCredit, full && { top: insets.top + 14 }]}>Esri, HERE, Garmin, OpenStreetMap</Text>
+    </>
+  );
 
   const renderSpotsContent = () => {
     if (isLoadingSpots) {
@@ -893,17 +1024,13 @@ const HomePage = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Profile row */}
-        <View style={styles.topRow}>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
-            <Avatar name={auth?.user?.legalName || ''} size={58} />
-          </TouchableOpacity>
-          <View style={styles.topText}>
-            <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
-            <TouchableOpacity onPress={handleLocationPillPress} activeOpacity={0.7} style={styles.locRow}>
-              <Text style={styles.locText} numberOfLines={1}>{locationName}</Text>
-              <Icon name="chevron-down" size={16} color={palette.textMuted} />
-            </TouchableOpacity>
+        {/* Header: greeting + headline, filter button */}
+        <View style={styles.header}>
+          <View style={styles.flex}>
+            <Text style={styles.hello} numberOfLines={1}>
+              {greeting}{firstName ? `, ${firstName}` : ''}
+            </Text>
+            <Text style={styles.headline}>Find your{'\n'}parking spot</Text>
           </View>
           <IconCircle
             icon="sliders"
@@ -912,6 +1039,18 @@ const HomePage = ({ navigation }) => {
             onPress={() => setFilterModalVisible(true)}
           />
         </View>
+
+        {/* Location pill */}
+        <TouchableOpacity onPress={handleLocationPillPress} activeOpacity={0.8} style={styles.locPill}>
+          <View style={styles.locDot}>
+            <Icon name="map-pin" size={15} color={palette.textInverse} />
+          </View>
+          <View style={styles.flex}>
+            <Text style={styles.locLabel}>Your location</Text>
+            <Text style={styles.locName} numberOfLines={1}>{locationName}</Text>
+          </View>
+          <Icon name="chevron-down" size={18} color={palette.textMuted} />
+        </TouchableOpacity>
 
         {/* Content panel */}
         <View style={[styles.panel, { paddingBottom: insets.bottom + 120 }]}>
@@ -965,142 +1104,7 @@ const HomePage = ({ navigation }) => {
           </ScrollView>
 
           {viewMode === 'map' ? (
-            <View style={[styles.mapCard, mapExpanded && styles.mapCardExpanded]}>
-              <MapView
-                ref={mapRef}
-                style={StyleSheet.absoluteFill}
-                provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                initialRegion={mapRegion}
-                mapType={Platform.OS === 'android' ? 'none' : 'mutedStandard'}
-                userInterfaceStyle="dark"
-                showsUserLocation={false}
-                showsMyLocationButton={false}
-                showsPointsOfInterests={false}
-                showsCompass={false}
-                showsBuildings={false}
-                showsTraffic={false}
-                maxZoomLevel={16}
-                onUserLocationChange={handleUserLocationChange}
-                moveOnMarkerPress={false}
-                renderToHardwareTextureAndroid
-              >
-                {/* Flat charcoal basemap with no labels, drawn over the
-                    platform map so iOS and Android look identical. */}
-                <UrlTile
-                  urlTemplate="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-                  maximumZ={16}
-                  shouldReplaceMapContent
-                  zIndex={-1}
-                />
-
-                {routeCoords.length > 1 ? (
-                  <>
-                    <Polyline coordinates={routeCoords} strokeColor="rgba(246,203,145,0.25)" strokeWidth={12} />
-                    <Polyline coordinates={routeCoords} strokeColor={palette.peach} strokeWidth={3.5} />
-                  </>
-                ) : null}
-
-                {/* Distance bubble at the middle of the route */}
-                {routeCoords.length > 1 && routeInfo ? (
-                  <Marker
-                    coordinate={routeCoords[Math.floor(routeCoords.length / 2)]}
-                    anchor={{ x: 0.5, y: 1 }}
-                    tracksViewChanges={Platform.OS === 'ios'}
-                  >
-                    <View style={styles.pinWrap}>
-                      <View style={styles.bubble}>
-                        <Text style={styles.bubbleText}>{routeInfo.km} km</Text>
-                      </View>
-                      <View style={styles.bubbleTail} />
-                    </View>
-                  </Marker>
-                ) : null}
-
-                {userLocation ? (
-                  <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-                    <View style={styles.glowOuter}>
-                      <View style={styles.glowInner} />
-                    </View>
-                  </Marker>
-                ) : null}
-
-                {filteredSpots.map((spot) => {
-                  const active = routeSpot?.id === spot.id;
-                  return (
-                    <Marker
-                      key={spot.id}
-                      coordinate={{ latitude: spot.latitude, longitude: spot.longitude }}
-                      onPress={() => setSelectedSpot(spot.id)}
-                      anchor={{ x: 0.5, y: 0.5 }}
-                      tracksViewChanges={Platform.OS === 'ios'}
-                    >
-                      <View style={[styles.glowOuter, !active && styles.glowOuterDim]}>
-                        <View style={[styles.glowInner, !active && styles.glowInnerDim]} />
-                      </View>
-                    </Marker>
-                  );
-                })}
-              </MapView>
-
-              <IconCircle
-                icon="crosshair"
-                size={52}
-                onPress={handleLocationPillPress}
-                style={styles.mapLocate}
-              />
-
-              {routeSpot ? (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  style={styles.routeCard}
-                  onPress={() => handleSpotPress(routeSpot)}
-                >
-                  {routeSpot.images?.[0] ? (
-                    <Image source={{ uri: resolveImageUri(routeSpot.images[0]) }} style={styles.routeThumb} />
-                  ) : (
-                    <View style={[styles.routeThumb, styles.routeThumbEmpty]}>
-                      <IsoBlock size={58} tone="peach" />
-                    </View>
-                  )}
-                  <View style={styles.flex}>
-                    <Text style={styles.routeName} numberOfLines={1}>{routeSpot.name}</Text>
-                    <View style={styles.routeStats}>
-                      <View>
-                        <Text style={styles.routeLabel}>Distance</Text>
-                        <Text style={styles.routeValue}>{routeInfo ? `${routeInfo.km} km` : routeSpot.distance}</Text>
-                      </View>
-                      <View>
-                        <Text style={styles.routeLabel}>Duration</Text>
-                        <Text style={styles.routeValue}>
-                          {routeInfo ? `${routeInfo.min} min` : routeSpot.travelTime || '--'}
-                        </Text>
-                      </View>
-                      <View>
-                        <Text style={styles.routeLabel}>Price</Text>
-                        <Text style={styles.routeValue}>{routeSpot.price}/hr</Text>
-                      </View>
-                    </View>
-                  </View>
-                  <IconCircle
-                    icon="arrow-up-right"
-                    size={36}
-                    variant="grey"
-                    onPress={() => navigation.navigate('ParkingDetails', { parkingData: routeSpot })}
-                    style={styles.routeGo}
-                  />
-                </TouchableOpacity>
-              ) : null}
-
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.expandBtn}
-                onPress={() => setMapExpanded((v) => !v)}
-              >
-                <Icon name={mapExpanded ? 'minimize-2' : 'maximize-2'} size={19} color={palette.textInverse} />
-              </TouchableOpacity>
-
-              <Text style={styles.mapCredit}>Esri, HERE, Garmin, OpenStreetMap</Text>
-            </View>
+            <View style={styles.mapCard}>{renderMap(false)}</View>
           ) : null}
 
           <SectionTitle
@@ -1114,18 +1118,18 @@ const HomePage = ({ navigation }) => {
         </View>
       </ScrollView>
 
-      {/* Spot preview sheet */}
+      {/* Full-screen map */}
       <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
+        visible={mapExpanded}
+        animationType="fade"
         statusBarTranslucent
-        onRequestClose={closeModal}
+        onRequestClose={() => setMapExpanded(false)}
       >
-        <View style={styles.sheetOverlay}>
-          <Pressable style={styles.sheetBackdrop} onPress={closeModal} />
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.grabber} />
+        <View style={styles.mapFull}>{renderMap(true)}</View>
+      </Modal>
+
+      {/* Spot preview sheet */}
+      <SheetModal visible={modalVisible} onClose={closeModal}>
             {selectedParkingData && (
               <>
                 <View style={styles.previewMedia}>
@@ -1211,22 +1215,10 @@ const HomePage = ({ navigation }) => {
                 </View>
               </>
             )}
-          </View>
-        </View>
-      </Modal>
+      </SheetModal>
 
       {/* Filter sheet */}
-      <Modal
-        visible={filterModalVisible}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => setFilterModalVisible(false)}
-      >
-        <View style={styles.sheetOverlay}>
-          <Pressable style={styles.sheetBackdrop} onPress={() => setFilterModalVisible(false)} />
-          <View style={[styles.sheet, styles.filterSheet, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.grabber} />
+      <SheetModal visible={filterModalVisible} onClose={() => setFilterModalVisible(false)} maxHeight="82%">
             <View style={styles.filterHeader}>
               <Text style={styles.sheetTitle}>Filters</Text>
               <IconCircle icon="x" size={40} variant="grey" onPress={() => setFilterModalVisible(false)} />
@@ -1292,9 +1284,7 @@ const HomePage = ({ navigation }) => {
                 }}
               />
             </View>
-          </View>
-        </View>
-      </Modal>
+      </SheetModal>
     </View>
   );
 };
@@ -1303,25 +1293,38 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.bg },
   flex: { flex: 1 },
 
-  topRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 },
-  topText: { flex: 1, marginLeft: 14, marginRight: 10 },
-  userName: { ...fonts.semibold, fontSize: 20, color: palette.text, letterSpacing: -0.3 },
-  locRow: { flexDirection: 'row', alignItems: 'center', marginTop: 3, alignSelf: 'flex-start' },
-  locText: { ...fonts.medium, fontSize: 15, color: palette.textMuted, marginRight: 4, maxWidth: 200 },
-
-  countRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 20,
-    marginTop: 26,
+  header: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20 },
+  hello: { ...fonts.medium, fontSize: 15, color: palette.textMuted },
+  headline: {
+    ...fonts.semibold,
+    fontSize: 32,
+    lineHeight: 36,
+    letterSpacing: -0.8,
+    color: palette.text,
+    marginTop: 6,
   },
-  countLabel: { ...fonts.medium, fontSize: 15, color: palette.text },
-  countValueRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 4 },
-  countValue: { ...fonts.semibold, fontSize: 38, letterSpacing: -1, color: palette.text },
-  countUnit: { ...fonts.medium, fontSize: 18, color: palette.textMuted },
-
-  actionsRow: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 20 },
-  actionLeft: { flex: 1, marginRight: 10 },
+  locPill: {
+    marginHorizontal: 16,
+    marginTop: 18,
+    height: 64,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 10,
+    paddingRight: 20,
+  },
+  locDot: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: palette.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  locLabel: { ...fonts.medium, fontSize: 12, color: palette.textMuted },
+  locName: { ...fonts.semibold, fontSize: 16, color: palette.text, marginTop: 1 },
 
   panel: {
     marginTop: 20,
@@ -1353,7 +1356,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#1B1B1B',
   },
-  mapCardExpanded: { height: 560 },
+  mapFull: { flex: 1, backgroundColor: '#1B1B1B' },
   mapLocate: { position: 'absolute', right: 12, bottom: 12 },
   routeCard: {
     position: 'absolute',

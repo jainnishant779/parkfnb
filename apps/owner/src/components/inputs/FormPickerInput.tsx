@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { palette, radii, fonts } from '../../theme/kit';
+import KeyboardInset from '../common/KeyboardInset';
 
 // ============================================================================
 // TYPES
@@ -168,6 +169,7 @@ export default function FormPickerInput({
           statusBarTranslucent
           onRequestClose={handleToggle}
         >
+<KeyboardInset>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.sheetBackdrop}
@@ -258,7 +260,8 @@ export default function FormPickerInput({
               </ScrollView>
             </View>
           </KeyboardAvoidingView>
-        </Modal>
+        </KeyboardInset>
+</Modal>
       )}
 
       {/* Helper / Error Text (shown when closed) */}

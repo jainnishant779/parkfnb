@@ -21,6 +21,18 @@ import AuthLayout from '../../components/ui/AuthLayout';
 import { T, PillButton } from '../../components/ui';
 import { palette, fonts, radii } from '../../theme';
 
+// Mobile field: digits only, max 10. The input's maxLength={10} stops
+// typing at 10 (trimming in JS instead made Android move the cursor, so
+// extra digits landed in the middle). A leading +91 / 0 is dropped.
+const toTenDigits = (raw) => {
+  let v = String(raw || '').trim();
+  if (v.startsWith('+91')) v = v.slice(3);
+  let d = v.replace(/\D/g, '');
+  if (d.length > 10 && d.startsWith('91')) d = d.slice(2);
+  if (d.startsWith('0')) d = d.replace(/^0+/, '');
+  return d.slice(0, 10);
+};
+
 const SignIn = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -92,13 +104,13 @@ const SignIn = ({ navigation }) => {
           <TextInput
             value={phone}
             onChangeText={(t) => {
-              setPhone(t);
+              setPhone(toTenDigits(t));
               setErrorMessage('');
             }}
             placeholder="Mobile number"
             placeholderTextColor={palette.textSubtle}
             keyboardType="phone-pad"
-            maxLength={15}
+            maxLength={10}
             returnKeyType="done"
             onSubmitEditing={handleSendOtp}
             onFocus={handleInputFocus}

@@ -37,6 +37,7 @@ import {
   PillButton,
   ListRow,
 } from '../../components/ui';
+import KeyboardInset from '../../components/KeyboardInset';
 
 const DRAFT_KEY = STORAGE_KEYS.ONBOARDING_DRAFT;
 const AUTOSAVE_DELAY = 800; // ms
@@ -305,6 +306,7 @@ const UserOnboarding = ({ navigation }) => {
       statusBarTranslucent
       onRequestClose={() => setImageModalVisible(false)}
     >
+<KeyboardInset>
       <View style={styles.modalOverlay}>
         <Pressable style={styles.modalBackdrop} onPress={() => setImageModalVisible(false)} />
         <View style={styles.sheet}>
@@ -321,7 +323,8 @@ const UserOnboarding = ({ navigation }) => {
           />
         </View>
       </View>
-    </Modal>
+    </KeyboardInset>
+</Modal>
   );
 
   return (

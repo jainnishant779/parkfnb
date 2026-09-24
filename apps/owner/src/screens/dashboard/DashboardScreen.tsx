@@ -22,7 +22,6 @@ import {
   SectionTitle,
   Avatar,
   StatusTag,
-  ProgressTrack,
   ListRow,
   Segmented,
   IsoBlock,
@@ -708,12 +707,6 @@ export default function DashboardScreen() {
             />
             <View style={styles.featureBody}>
               <Text style={styles.featureTitle}>Booking requests</Text>
-              <ProgressTrack
-                steps={4}
-                current={computedData.requestsCount > 0 ? 0 : 1}
-                trackColor="#F7D3A6"
-                style={styles.featureTrack}
-              />
               <View style={styles.featureMetaRow}>
                 <View>
                   <Text style={styles.featureMetaTitle}>{computedData.requestsCount}</Text>
@@ -738,12 +731,6 @@ export default function DashboardScreen() {
             <StatusTag label={`${computedData.activeBookingsCount} live`} tone="ink" />
             <View style={styles.featureBody}>
               <Text style={styles.featureTitle}>Active bookings</Text>
-              <ProgressTrack
-                steps={4}
-                current={2}
-                trackColor="#BCD0F4"
-                style={styles.featureTrack}
-              />
               <View style={styles.featureMetaRow}>
                 <View>
                   <Text style={styles.featureMetaTitle}>

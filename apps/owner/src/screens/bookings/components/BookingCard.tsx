@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { palette, radii, fonts } from '../../../theme/kit';
-import { PillButton, StatusTag, ProgressTrack, IsoBlock } from '../../../components/ui';
+import { PillButton, StatusTag, IsoBlock } from '../../../components/ui';
 import type { FullBooking, BookingStatus, VehicleType } from '../../../types/models';
 
 type Tone = 'peach' | 'blue' | 'grey';
@@ -24,12 +24,6 @@ const TONE_BG: Record<Tone, string> = {
   peach: palette.peachSoft,
   blue: palette.blueSoft,
   grey: palette.surface,
-};
-
-const TRACK_COLOR: Record<Tone, string> = {
-  peach: '#F7D3A6',
-  blue: '#BCD0F4',
-  grey: palette.line,
 };
 
 // Vehicle type icons
@@ -134,12 +128,6 @@ function BookingCard({
         <Text style={styles.ref} numberOfLines={1}>
           #{booking.id.slice(-6).toUpperCase()}
         </Text>
-        <ProgressTrack
-          steps={4}
-          current={statusConfig.step}
-          trackColor={TRACK_COLOR[tone]}
-          style={styles.track}
-        />
         <View style={styles.metaRow}>
           <View style={styles.metaCol}>
             <Text style={styles.metaTitle} numberOfLines={1}>{booking.listingName}</Text>

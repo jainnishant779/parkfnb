@@ -5,11 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Modal,
   Animated,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { palette, radii, spacing, fonts } from '../../theme';
 import {
@@ -26,6 +25,7 @@ import {
   Segmented,
   IsoBlock,
 } from '../../components/ui';
+import SheetModal from '../../components/ui/SheetModal';
 
 // Sample subscription plans data
 const subscriptionPlans = [
@@ -140,27 +140,12 @@ const BILLING_OPTIONS = [
 const cardLabel = (method) =>
   `${method.type.charAt(0).toUpperCase() + method.type.slice(1)} ****${method.last4}`;
 
-// Bottom sheet shell: backdrop, white sheet with top radius and grabber.
-const Sheet = ({ visible, onClose, children, style }) => {
-  const insets = useSafeAreaInsets();
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalOverlay}>
-        <View pointerEvents="none" style={styles.modalBackdrop} />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.xl }, style]}>
-          <View style={styles.grabber} />
-          {children}
-        </View>
-      </View>
-    </Modal>
-  );
-};
+// Bottom sheet shell: fading backdrop, sliding white sheet with grabber.
+const Sheet = ({ visible, onClose, children, style }) => (
+  <SheetModal visible={visible} onClose={onClose} style={style}>
+    {children}
+  </SheetModal>
+);
 
 const SheetHeader = ({ title, onClose }) => (
   <View style={styles.sheetHeader}>

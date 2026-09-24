@@ -18,7 +18,6 @@ import {
   IconCircle,
   ScreenHeader,
   StatusTag,
-  ProgressTrack,
   InfoGrid,
   TimelineItem,
   ContactCard,
@@ -59,16 +58,6 @@ function getStatusLabel(status: FullBooking['status']): string {
     case 'REJECTED':   return 'Rejected';
     case 'NO_SHOW':    return 'No Show';
     default:           return status;
-  }
-}
-
-// Position on the 4-step track (Requested → Approved → Parked → Done).
-function getTrackStep(status: FullBooking['status']): number {
-  switch (status) {
-    case 'REQUESTED': return 0;
-    case 'UPCOMING':  return 1;
-    case 'ACTIVE':    return 2;
-    default:          return 4;
   }
 }
 
@@ -399,7 +388,6 @@ export default function BookingDetailsScreen({ route, navigation }: Props) {
               />
             </View>
           </View>
-          <ProgressTrack steps={4} current={getTrackStep(booking.status)} style={styles.summaryTrack} />
           <InfoGrid
             style={styles.summaryGrid}
             items={[

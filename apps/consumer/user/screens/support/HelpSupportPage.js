@@ -27,6 +27,7 @@ import {
   EmptyState,
   IsoBlock,
 } from '../../components/ui';
+import KeyboardInset from '../../components/KeyboardInset';
 
 // FAQ Data
 const faqData = [
@@ -512,6 +513,7 @@ const HelpSupportPage = ({ navigation }) => {
         statusBarTranslucent
         onRequestClose={() => setShowSuccessModal(false)}
       >
+<KeyboardInset>
         <View style={styles.modalOverlay}>
           <View pointerEvents="none" style={styles.modalBackdrop} />
           <View style={styles.successModal}>
@@ -522,7 +524,8 @@ const HelpSupportPage = ({ navigation }) => {
             <Text style={styles.successText}>We'll get back to you within 24 hours.</Text>
           </View>
         </View>
-      </Modal>
+      </KeyboardInset>
+</Modal>
     </SafeAreaView>
   );
 };

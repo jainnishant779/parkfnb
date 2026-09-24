@@ -47,6 +47,18 @@ const maskPhone = (digits: string): string => {
 // MAIN SCREEN
 // ============================================================================
 
+// Mobile field: digits only, max 10. The input's maxLength={10} stops
+// typing at 10 (trimming in JS instead made Android move the cursor, so
+// extra digits landed in the middle). A leading +91 / 0 is dropped.
+const toTenDigits = (raw: string): string => {
+  let v = String(raw || '').trim();
+  if (v.startsWith('+91')) v = v.slice(3);
+  let d = v.replace(/\D/g, '');
+  if (d.length > 10 && d.startsWith('91')) d = d.slice(2);
+  if (d.startsWith('0')) d = d.replace(/^0+/, '');
+  return d.slice(0, 10);
+};
+
 export default function SignInScreen() {
   const navigation = useNavigation<NavigationProp>();
   const [phone, setPhone] = useState('');
@@ -134,11 +146,11 @@ export default function SignInScreen() {
             value={phone}
             onChangeText={(v) => {
               setErrorMessage('');
-              setPhone(v);
+              setPhone(toTenDigits(v));
             }}
             keyboardType="phone-pad"
             autoComplete="tel"
-            maxLength={15}
+            maxLength={10}
             onFocus={handleInputFocus}
             onBlur={() => setFocused(false)}
           />

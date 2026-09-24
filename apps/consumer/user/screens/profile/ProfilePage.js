@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Modal,
   Switch,
   Animated,
   StatusBar,
@@ -36,6 +35,7 @@ import {
   IsoBlock,
 } from '../../components/ui';
 import { resolveImageUri } from '../../utils/imageUri';
+import SheetModal from '../../components/ui/SheetModal';
 
 // Payment methods — stays mock (no backend support)
 // eslint-disable-next-line no-unused-vars
@@ -92,37 +92,25 @@ const vehicleIconMap = {
   truck: 'truck',
 };
 
-// Bottom-sheet shell: grabber, title row with close button, body.
-const Sheet = ({ visible, onClose, title, bottomPad, children, footer }) => (
-  <Modal
-    visible={visible}
-    transparent
-    animationType="slide"
-    statusBarTranslucent
-    onRequestClose={onClose}
-  >
-    <KeyboardAvoidingView
-      style={styles.sheetOverlay}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={onClose} />
-      <View style={[styles.sheet, { paddingBottom: bottomPad }]}>
-        <View style={styles.grabber} />
-        <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>{title}</Text>
-          <IconCircle icon="x" size={40} variant="grey" onPress={onClose} />
-        </View>
-        <ScrollView
-          style={styles.sheetBody}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {children}
-        </ScrollView>
-        {footer}
+// Bottom-sheet shell: title row with close button, scrollable body, footer.
+// SheetModal fades the backdrop and slides only the card.
+const Sheet = ({ visible, onClose, title, children, footer }) => (
+  <SheetModal visible={visible} onClose={onClose}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={styles.sheetHeader}>
+        <Text style={styles.sheetTitle}>{title}</Text>
+        <IconCircle icon="x" size={40} variant="grey" onPress={onClose} />
       </View>
+      <ScrollView
+        style={styles.sheetBody}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
+      {footer}
     </KeyboardAvoidingView>
-  </Modal>
+  </SheetModal>
 );
 
 const ProfilePage = ({ navigation }) => {

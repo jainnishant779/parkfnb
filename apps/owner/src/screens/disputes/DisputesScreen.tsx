@@ -25,7 +25,6 @@ import {
   SearchPill,
   ScreenHeader,
   StatusTag,
-  ProgressTrack,
   InfoGrid,
   TimelineItem,
   IsoBlock,
@@ -366,15 +365,6 @@ const EmptyState = ({ title, body, actionLabel, onAction }: { title: string; bod
   />
 );
 
-// Status → position on the Open → Under review → Closed track.
-const STATUS_STEP: Record<DisputeStatus, number> = {
-  open: 0,
-  under_review: 1,
-  resolved: 3,
-  rejected: 3,
-  archived: 3,
-};
-
 // ============================================================================
 // DISPUTE CARD
 // ============================================================================
@@ -391,12 +381,6 @@ const DisputeCard = ({ item, onPress, onLongPress }: { item: DisputeCase; onPres
         <Ionicons name="chevron-forward" size={20} color={palette.textSubtle} />
       </View>
       <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-      <ProgressTrack
-        steps={4}
-        current={STATUS_STEP[item.status]}
-        trackColor={palette.line}
-        style={styles.cardTrack}
-      />
       <View style={styles.cardMeta}>
         <View style={styles.metaRow}>
           <Ionicons name="bookmark-outline" size={13} color={palette.text} />
@@ -834,11 +818,6 @@ export default function DisputesScreen() {
                     {selectedDispute.requiresAction && <StatusTag label="Action Required" tone="danger" />}
                   </View>
                   <Text style={styles.detailTitle}>{selectedDispute.title}</Text>
-                  <ProgressTrack
-                    steps={4}
-                    current={STATUS_STEP[selectedDispute.status]}
-                    style={styles.summaryTrack}
-                  />
                   <InfoGrid
                     style={styles.summaryGrid}
                     items={[

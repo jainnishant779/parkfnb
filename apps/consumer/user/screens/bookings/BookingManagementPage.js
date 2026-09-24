@@ -31,7 +31,6 @@ import {
   SearchPill,
   ScreenHeader,
   StatusTag,
-  ProgressTrack,
   InfoGrid,
   TimelineItem,
   Chip,
@@ -39,6 +38,8 @@ import {
   EmptyState,
   IsoBlock,
 } from '../../components/ui';
+import SheetModal from '../../components/ui/SheetModal';
+import KeyboardInset from '../../components/KeyboardInset';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -573,12 +574,6 @@ const BookingManagementPage = ({ navigation }) => {
     }
   };
 
-  // Stepper → ProgressTrack position. A finished booking fills the track.
-  const trackPosition = (status) => {
-    const st = getStepperState(status);
-    return st.current === -1 ? STEPPER_STEPS.length : st.current;
-  };
-
   // Timeline entries built only from timestamps the API returned, newest first.
   const buildTimeline = (b) => {
     const st = getStepperState(b.status);
@@ -734,7 +729,6 @@ const BookingManagementPage = ({ navigation }) => {
     const past = ['completed', 'cancelled', 'rejected', 'no_show'].includes(item.status);
     const tone = past ? 'grey' : index % 2 === 0 ? 'peach' : 'blue';
     const bg = { peach: palette.peachSoft, blue: palette.blueSoft, grey: palette.surface }[tone];
-    const trackColor = { peach: '#F7D3A6', blue: '#BCD0F4', grey: palette.line }[tone];
     const price = item.totalAmount ?? 0;
 
     return (
@@ -752,12 +746,6 @@ const BookingManagementPage = ({ navigation }) => {
           <Text style={styles.cardRef} numberOfLines={1}>
             #{item.bookingNumber || item.id?.slice(-6)}
           </Text>
-          <ProgressTrack
-            steps={STEPPER_STEPS.length}
-            current={trackPosition(item.status)}
-            trackColor={trackColor}
-            style={styles.cardTrack}
-          />
           <View style={styles.cardMetaRow}>
             <View style={styles.cardMetaCol}>
               <Text style={styles.cardMetaTitle} numberOfLines={1}>{getSpaceName(item)}</Text>
@@ -847,11 +835,6 @@ const BookingManagementPage = ({ navigation }) => {
                 <StatusTag label={copy.badge} tone={getStatusTone(b.status)} style={styles.statusTagGap} />
               </View>
             </View>
-            <ProgressTrack
-              steps={STEPPER_STEPS.length}
-              current={trackPosition(b.status)}
-              style={styles.summaryTrack}
-            />
             <InfoGrid
               style={styles.summaryGrid}
               items={[
@@ -1092,21 +1075,13 @@ const BookingManagementPage = ({ navigation }) => {
         statusBarTranslucent
         onRequestClose={() => setShowDetailsModal(false)}
       >
+<KeyboardInset>
         {renderDetails()}
-      </Modal>
+      </KeyboardInset>
+</Modal>
 
       {/* ── Cancel confirmation ── */}
-      <Modal
-        visible={showCancelModal}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => setShowCancelModal(false)}
-      >
-        <View style={styles.sheetOverlay}>
-          <View pointerEvents="none" style={styles.sheetBackdrop} />
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.grabber} />
+      <SheetModal visible={showCancelModal} onClose={() => setShowCancelModal(false)}>
             <View style={[styles.sheetIcon, { backgroundColor: palette.dangerSoft }]}>
               <Icon name="alert-triangle" size={26} color={palette.danger} />
             </View>
@@ -1140,22 +1115,10 @@ const BookingManagementPage = ({ navigation }) => {
                 style={styles.flex}
               />
             </View>
-          </View>
-        </View>
-      </Modal>
+      </SheetModal>
 
       {/* ── Extend ── */}
-      <Modal
-        visible={showExtendModal}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => setShowExtendModal(false)}
-      >
-        <View style={styles.sheetOverlay}>
-          <View pointerEvents="none" style={styles.sheetBackdrop} />
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.grabber} />
+      <SheetModal visible={showExtendModal} onClose={() => setShowExtendModal(false)}>
             <Text style={styles.sheetTitle}>Extend parking</Text>
             <Text style={styles.sheetText}>How many more hours do you need?</Text>
             <View style={styles.hourRow}>
@@ -1190,22 +1153,10 @@ const BookingManagementPage = ({ navigation }) => {
                 style={styles.flex}
               />
             </View>
-          </View>
-        </View>
-      </Modal>
+      </SheetModal>
 
       {/* ── Review ── */}
-      <Modal
-        visible={showReviewModal}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => setShowReviewModal(false)}
-      >
-        <View style={styles.sheetOverlay}>
-          <View pointerEvents="none" style={styles.sheetBackdrop} />
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.grabber} />
+      <SheetModal visible={showReviewModal} onClose={() => setShowReviewModal(false)}>
             <Text style={styles.sheetTitle}>Rate your experience</Text>
             {selectedBooking && <Text style={styles.sheetText}>{getSpaceName(selectedBooking)}</Text>}
             <View style={styles.reviewStars}>{renderStars(reviewRating, true, 36)}</View>
@@ -1233,22 +1184,10 @@ const BookingManagementPage = ({ navigation }) => {
                 style={styles.flex}
               />
             </View>
-          </View>
-        </View>
-      </Modal>
+      </SheetModal>
 
       {/* ── Filter ── */}
-      <Modal
-        visible={showFilterModal}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => setShowFilterModal(false)}
-      >
-        <View style={styles.sheetOverlay}>
-          <View pointerEvents="none" style={styles.sheetBackdrop} />
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.grabber} />
+      <SheetModal visible={showFilterModal} onClose={() => setShowFilterModal(false)}>
             <View style={styles.filterHeader}>
               <Text style={styles.sheetTitle}>Filter bookings</Text>
               <IconCircle icon="x" size={40} variant="grey" onPress={() => setShowFilterModal(false)} />
@@ -1274,9 +1213,7 @@ const BookingManagementPage = ({ navigation }) => {
               />
               <PillButton label="Apply" variant="ink" onPress={() => setShowFilterModal(false)} style={styles.flex} />
             </View>
-          </View>
-        </View>
-      </Modal>
+      </SheetModal>
     </View>
   );
 };
@@ -1306,9 +1243,12 @@ const styles = StyleSheet.create({
   cardMetaSub: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 2 },
   cardNote: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   cardNoteText: { ...fonts.semibold, fontSize: 12.5, color: palette.warning, marginLeft: 6 },
-  cardActions: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
-  actionBtn: { marginRight: 8, marginBottom: 8 },
+  // Two equal columns so the pills line up in pairs.
+  cardActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 14 },
+  actionBtn: { width: '48.5%', marginBottom: 8 },
   ratedPill: {
+    width: '48.5%',
+    alignItems: 'center',
     height: 40,
     paddingHorizontal: 12,
     borderRadius: radii.pill,
