@@ -1,5 +1,5 @@
 import React, { memo, useMemo, useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import TabItem, { TabIconName } from './TabItem';
@@ -71,6 +71,16 @@ function TabBar({
   showLotSetupTab = false,
 }: TabBarProps) {
   const insets = useSafeAreaInsets();
+  // Hide while typing: with the keyboard open the bar would float on top of it.
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   // Select the correct tab config based on owner type
   const tabConfig = useMemo(() => {
@@ -137,6 +147,8 @@ function TabBar({
     },
     [navigation]
   );
+
+  if (keyboardOpen) return null;
 
   // Pill floats above the home indicator; content scrolls underneath it.
   const bottomPadding = Math.max(insets.bottom - 6, 12);

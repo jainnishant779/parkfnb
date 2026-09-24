@@ -744,8 +744,12 @@ const BookingManagementPage = ({ navigation }) => {
         onPress={() => handleViewDetails(item)}
         activeOpacity={0.9}
       >
-        <View style={styles.cardArt} pointerEvents="none">
-          <IsoBlock size={132} tone={tone} />
+        {/* Only the art is clipped; clipping the whole card made Android
+            drop the card's content after a re-render. */}
+        <View style={styles.cardArtClip} pointerEvents="none">
+          <View style={styles.cardArt}>
+            <IsoBlock size={132} tone={tone} />
+          </View>
         </View>
 
         <View style={styles.cardBody}>
@@ -1238,8 +1242,16 @@ const styles = StyleSheet.create({
   loadingText: { ...fonts.medium, fontSize: 14, color: palette.textMuted, marginTop: 12 },
   listContent: { paddingHorizontal: 16, flexGrow: 1 },
 
-  bookingCard: { borderRadius: radii.xl, padding: 18, marginBottom: 12, overflow: 'hidden' },
-  cardArt: { position: 'absolute', right: -30, top: 30 },
+  bookingCard: { borderRadius: radii.xl, padding: 18, marginBottom: 12 },
+  cardArtClip: {
+    position: 'absolute',
+    right: 0,
+    top: 30,
+    width: 104,
+    height: 132,
+    overflow: 'hidden',
+  },
+  cardArt: { position: 'absolute', left: 0, top: 0 },
   cardBody: { width: '66%' },
   cardRef: { ...fonts.bold, fontSize: 23, letterSpacing: -0.5, color: palette.text, marginTop: 12 },
   cardTrack: { marginTop: 14 },

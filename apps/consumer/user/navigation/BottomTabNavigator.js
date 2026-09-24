@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, Platform, TouchableOpacity, Easing } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, Platform, TouchableOpacity, Easing, Keyboard } from 'react-native';
 import { BlurView } from '@react-native-community/blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -26,6 +26,17 @@ const TABS = [
  */
 function FloatingTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
+  // Hide while typing: with the keyboard open the bar would float on top of it.
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  if (keyboardOpen) return null;
 
   return (
     <View

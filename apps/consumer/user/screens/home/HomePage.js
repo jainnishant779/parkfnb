@@ -778,8 +778,12 @@ const HomePage = ({ navigation }) => {
           selectedSpot === spot.id && styles.spotCardSelected,
         ]}
       >
-        <View style={styles.spotArt} pointerEvents="none">
-          <IsoBlock size={150} tone={tone} />
+        {/* Only the art is clipped (to the card's corner). Clipping the whole
+            card made Android drop the card's text after a re-render. */}
+        <View style={styles.spotArtClip} pointerEvents="none">
+          <View style={styles.spotArt}>
+            <IsoBlock size={150} tone={tone} />
+          </View>
         </View>
 
         <View style={styles.spotTop}>
@@ -1440,9 +1444,17 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 12,
     minHeight: 160,
-    overflow: 'hidden',
   },
   spotCardSelected: { borderWidth: 2, borderColor: palette.ink },
+  spotArtClip: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 124,
+    height: 128,
+    borderBottomRightRadius: radii.xl,
+    overflow: 'hidden',
+  },
   spotArt: { position: 'absolute', right: -30, bottom: -26 },
   spotTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heartBtn: {
