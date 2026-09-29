@@ -1,0 +1,15 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "docs/indore-landowner-proposal",
+    "main"
+  ],
+  "parent": {
+    "docs/indore-landowner-proposal": "main",
+    "main": null
+  },
+  "order": [
+    "main",
+    "docs/indore-landowner-proposal"
+  ]
+}
