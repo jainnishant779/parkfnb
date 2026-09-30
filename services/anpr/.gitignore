@@ -2,3 +2,15 @@ weights/
 __pycache__/
 *.pyc
 _*.jpg
+*.pt
+*.pem
+*.mp4
+
+# Generated outputs -- inputs (frames, bays json) stay tracked
+test_fixtures/*_result.jpg
+test_fixtures/*_annotated.jpg
+test_fixtures/*_overlay.jpg
+*_annotated.jpg
+*_crop.jpg
+*_plate_large.jpg
+venue_car_full.jpg

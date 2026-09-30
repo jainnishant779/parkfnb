@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ParkFNB — Bay Occupancy & Positioning Tool</title>
+<style>
+  :root {
+    --bg: #0f1216;
+    --panel: #171b21;
+    --line: #262c35;
+    --ink: #e8ecf1;
+    --muted: #8b97a6;
+    --ok: #2fbf5b;
+    --no: #e5484d;
+    --wait: #f5a524;
+    --accent: #3b82f6;
+    --grid-col: #0284c7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    padding: 14px 24px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+  header .tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(59,130,246,0.2); color: var(--accent); }
+  
+  .layout {
+    display: grid; grid-template-columns: 1fr 400px; gap: 20px;
+    padding: 20px; max-width: 1600px; margin: 0 auto;
+  }
+  @media (max-width: 1080px) { .layout { grid-template-columns: 1fr; } }
+
+  .canvas-card, .sidebar-card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px;
+  }
+
+  .canvas-wrap {
+    position: relative; overflow: auto; border: 1px solid var(--line);
+    border-radius: 8px; background: #080a0d; min-height: 480px;
+    display: flex; justify-content: center; align-items: center;
+  }
+  canvas { display: block; max-width: 100%; cursor: crosshair; }
+
+  .toolbar {
+    display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;
+  }
+  button {
+    background: var(--accent); color: #fff; border: 0; padding: 8px 14px;
+    border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;
+  }
+  button.ghost { background: #262c36; color: var(--ink); }
+  button.ghost:hover { background: #323a46; }
+  button.danger { background: #dc2626; }
+  button.magic { background: #6366f1; }
+  button.grid-tool { background: #0284c7; }
+  button.grid-tool:hover { background: #0369a1; }
+  button.active-tool {
+    background: #0284c7 !important;
+    box-shadow: 0 0 0 2px #38bdf8, 0 0 12px rgba(56,189,248,0.4);
+    color: #ffffff !important;
+  }
+  button.toggle-active {
+    background: rgba(56, 189, 248, 0.15) !important;
+    border: 1px solid #38bdf8 !important;
+    color: #38bdf8 !important;
+  }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .banner-info {
+    background: rgba(2, 132, 199, 0.15); border: 1px solid #0284c7;
+    border-radius: 6px; padding: 8px 14px; margin-bottom: 10px;
+    font-size: 13px; color: #bae6fd; display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .bay-badge {
+    padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+    margin-bottom: 10px; background: #12151a; font-size: 13px;
+  }
+  .bay-badge.occupied { border-color: rgba(229,72,77,0.4); background: rgba(229,72,77,0.08); }
+  .bay-badge.empty { border-color: rgba(47,191,91,0.4); background: rgba(47,191,91,0.08); }
+  .status-tag { font-weight: 700; font-size: 11px; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; }
+  .status-tag.occupied { background: var(--no); color: #fff; }
+  .status-tag.empty { background: var(--ok); color: #fff; }
+  .status-tag.unknown { background: var(--wait); color: #000; }
+  .plate-tag {
+    font-family: Consolas, monospace; font-size: 13px; font-weight: 800;
+    padding: 2px 8px; border-radius: 4px; background: #1e293b; color: #38bdf8;
+    border: 1px solid #334155; letter-spacing: 0.05em;
+  }
+
+  textarea {
+    width: 100%; height: 160px; background: #0d1014; border: 1px solid var(--line);
+    border-radius: 6px; color: #7dd3fc; font-family: Consolas, monospace; font-size: 12px;
+    padding: 10px; resize: vertical;
+  }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 12px; }
+  .help { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  /* Explainability Inspector Modal */
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center; z-index: 1000;
+  }
+  .modal-content {
+    background: #0f172a; border: 1px solid #334155; border-radius: 12px;
+    width: 480px; max-width: 90%; padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+  }
+  .diag-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0;
+  }
+  .diag-cell {
+    background: #1e293b; padding: 8px 10px; border-radius: 6px; border: 1px solid #334155;
+  }
+  .diag-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 600; }
+  .diag-value { font-size: 15px; font-weight: bold; color: #f8fafc; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ParkFNB <span>Bay Positioning & Calibrator</span> <span class="tag">ANPR Service</span></h1>
+  <div>
+    <a href="/" style="color: var(--muted); text-decoration: none; font-size: 13px;">&larr; Back to Gate ANPR</a>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="canvas-card">
+    <div class="toolbar">
+      <input type="file" id="fileInput" accept="image/*" style="display:none">
+      <button onclick="document.getElementById('fileInput').click()">Upload Frame / Photo</button>
+      <input type="file" id="videoInput" accept="video/mp4,video/avi,video/mkv,video/webm" style="display:none">
+      <button id="btnUploadVideo" style="background:#0284c7;" onclick="document.getElementById('videoInput').click()">📹 Upload CCTV Video</button>
+      <button class="magic" id="btnImportOptimizer" style="background:#7c3aed;">📥 Import Space Optimizer</button>
+      <button class="magic" id="btnAutoFit">🪄 Auto-Fit Bays</button>
+      <button class="grid-tool" id="btnAutoGrid">📐 Auto-Grid Lane</button>
+      <button class="ghost" id="btnNewBay">+ Draw Bay</button>
+      <button class="ghost" id="btnUndo">Undo</button>
+      <button class="ghost danger" id="btnClearBays">Clear All</button>
+      <div style="display:flex;align-items:center;gap:6px;background:#1e293b;padding:3px 8px;border-radius:6px;border:1px solid #334155;">
+        <span style="font-size:12px;color:#94a3b8;">📷 Angle:</span>
+        <select id="cameraAnglePreset" style="background:#0f172a;color:#f8fafc;border:1px solid #475569;border-radius:4px;padding:3px 6px;font-size:12px;">
+          <option value="medium" selected>Medium Angle (1st Floor ~45°)</option>
+          <option value="high">High Angle (Balcony/Pole ~70°)</option>
+          <option value="low">Low Angle (Ground Pole ~25°)</option>
+          <option value="topdown">Top-Down (Drone / Ceiling 90°)</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;background:#1e293b;padding:3px 8px;border-radius:6px;border:1px solid #334155;">
+        <span style="font-size:12px;color:#94a3b8;">📦 Footprint:</span>
+        <select id="footprintModeSelect" style="background:#0f172a;color:#f8fafc;border:1px solid #475569;border-radius:4px;padding:3px 6px;font-size:12px;">
+          <option value="oriented" selected>Oriented Chassis Footprint</option>
+          <option value="full_box">Full 2D Box (Drawn Car Outline)</option>
+          <option value="bottom_fraction">Bottom Tarmac Slice (Flat)</option>
+        </select>
+      </div>
+      <button class="ghost" id="btnToggleAiBoxes" title="Toggle AI detection boxes & ground footprint boxes">
+        <span id="aiToggleIcon">👁️</span> <span id="aiToggleText">Hide AI Bounding Boxes</span>
+      </button>
+      <button id="btnRunCheck" style="background:#10b981;">&#9654; Run Occupancy Check</button>
+    </div>
+
+    <!-- Auto-Grid Interactive Guidance Banner -->
+    <div id="gridBanner" class="banner-info" style="display:none;">
+      <span>📐 <strong>Auto-Grid Lane Active:</strong> Click 4 corners of the parking lane polygon (<span id="gridPointCount">0/4 corners clicked</span>).</span>
+      <button class="ghost" id="btnCancelGrid" style="padding: 3px 10px; font-size: 12px;">Cancel</button>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="mainCanvas"></canvas>
+    </div>
+    <!-- CCTV Video Playback Bar -->
+    <div id="videoBar" style="display:none; margin-top:8px; background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 12px; align-items:center; gap:12px;">
+      <button id="btnPlayPause" style="background:#0284c7; width:34px; height:34px; border-radius:50%; border:none; color:#fff; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center;">▶</button>
+      <input type="range" id="videoScrubber" min="0" max="0" value="0" style="flex:1; accent-color:#0284c7; cursor:pointer;">
+      <span id="videoTimeLabel" style="font-size:12px; color:#cbd5e1; font-family:monospace; min-width:120px;">00:00 / 00:00</span>
+      <span style="font-size:11px; padding:2px 8px; border-radius:12px; background:#047857; color:#ecfdf5; font-weight:600;">CCTV Stream</span>
+    </div>
+    <div class="help" id="helpText">
+      <strong>Controls:</strong> Upload a photo &rarr; Use <strong>"📥 Import Space Optimizer"</strong> to bridge layouts, <strong>"📐 Auto-Grid Lane"</strong> for IRC parking lanes, or <strong>"🪄 Auto-Fit Bays"</strong> to snap onto cars.
+    </div>
+  </div>
+
+  <div class="sidebar-card">
+    <h2>7-State Fleet Analytics</h2>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;">
+      <div style="background:#14532d;padding:8px 6px;border-radius:6px;text-align:center;border:1px solid #16a34a;">
+        <div style="font-size:10px;color:#86efac;text-transform:uppercase;font-weight:700;">Correct</div>
+        <div id="kpiCorrect" style="font-size:18px;font-weight:bold;color:#fff;">0</div>
+      </div>
+      <div style="background:#78350f;padding:8px 6px;border-radius:6px;text-align:center;border:1px solid #d97706;">
+        <div style="font-size:10px;color:#fde047;text-transform:uppercase;font-weight:700;">Suspicious</div>
+        <div id="kpiSuspicious" style="font-size:18px;font-weight:bold;color:#fff;">0</div>
+      </div>
+      <div style="background:#7f1d1d;padding:8px 6px;border-radius:6px;text-align:center;border:1px solid #dc2626;">
+        <div style="font-size:10px;color:#fca5a5;text-transform:uppercase;font-weight:700;">Wrong</div>
+        <div id="kpiWrong" style="font-size:18px;font-weight:bold;color:#fff;">0</div>
+      </div>
+      <div style="background:#1e293b;padding:8px 6px;border-radius:6px;text-align:center;border:1px solid #334155;">
+        <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;font-weight:700;">Free</div>
+        <div id="kpiFree" style="font-size:18px;font-weight:bold;color:#fff;">0</div>
+      </div>
+    </div>
+
+    <h2>Camera Calibration</h2>
+    <div id="calibPanel" style="font-size:12px;color:#cbd5e1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;margin-bottom:16px;">
+      <div style="color: var(--muted);">Run an occupancy check to calibrate the camera from the drawn bays.</div>
+    </div>
+
+    <h2>Top-down Plan (metres)</h2>
+    <div id="planPanel" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px;margin-bottom:16px;">
+      <div style="color: var(--muted); font-size:12px;">Run an occupancy check to see stalls and cars from above.</div>
+    </div>
+
+    <h2>Active Bays & Multi-Metric Intelligence</h2>
+    <div id="bayList" style="max-height: 280px; overflow-y: auto; margin-bottom: 16px;">
+      <div style="color: var(--muted); font-size: 13px;">No bays defined yet. Upload a photo and click "Auto-Grid Lane", "Auto-Fit Bays" or "Import Space Optimizer".</div>
+    </div>
+
+    <h2>Bays JSON (API Payload)</h2>
+    <textarea id="jsonOutput" readonly></textarea>
+    <div style="margin-top: 8px; display: flex; gap: 8px;">
+      <button class="ghost" id="btnCopyJson" style="flex:1">Copy JSON</button>
+      <button class="ghost" id="btnApplyBays" style="flex:1">Apply to Server</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let img = null;
+let currentPoints = [];
+let gridPoints = [];
+let bays = {};
+let observations = {};
+let hideAiBoxes = false;
+let lastAnnotatedImg = null;
+let appMode = 'bay'; // 'bay' | 'grid'
+
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+
+bays = {};
+updateJson();
+renderBayList();
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      lastAnnotatedImg = null;
+      redraw();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+});
+
+// Toggle Clean View vs AI Bounding Boxes
+document.getElementById('btnToggleAiBoxes').onclick = () => {
+  hideAiBoxes = !hideAiBoxes;
+  const btn = document.getElementById('btnToggleAiBoxes');
+  const txt = document.getElementById('aiToggleText');
+  const icon = document.getElementById('aiToggleIcon');
+  if (hideAiBoxes) {
+    btn.classList.add('toggle-active');
+    txt.textContent = 'Show AI Bounding Boxes';
+    icon.textContent = '👁️‍🗨️';
+  } else {
+    btn.classList.remove('toggle-active');
+    txt.textContent = 'Hide AI Bounding Boxes';
+    icon.textContent = '👁️';
+  }
+  redraw();
+};
+
+// Auto-Grid Lane Mode Activation
+document.getElementById('btnAutoGrid').onclick = () => {
+  if (appMode === 'grid') {
+    exitGridMode();
+  } else {
+    enterGridMode();
+  }
+};
+
+document.getElementById('btnCancelGrid').onclick = () => {
+  exitGridMode();
+};
+
+function enterGridMode() {
+  if (!img) {
+    alert("Please upload a parking frame or photo first!");
+    return;
+  }
+  appMode = 'grid';
+  gridPoints = [];
+  currentPoints = [];
+  document.getElementById('btnAutoGrid').classList.add('active-tool');
+  document.getElementById('btnAutoGrid').textContent = '📐 Cancel Auto-Grid';
+  document.getElementById('gridBanner').style.display = 'flex';
+  document.getElementById('gridPointCount').textContent = '0/4 corners clicked';
+  redraw();
+}
+
+function exitGridMode() {
+  appMode = 'bay';
+  gridPoints = [];
+  document.getElementById('btnAutoGrid').classList.remove('active-tool');
+  document.getElementById('btnAutoGrid').textContent = '📐 Auto-Grid Lane';
+  document.getElementById('gridBanner').style.display = 'none';
+  redraw();
+}
+
+document.getElementById('btnNewBay').onclick = () => {
+  if (appMode === 'grid') exitGridMode();
+  currentPoints = [];
+  alert("Click 4 corners on the canvas to manually draw a parking bay polygon.");
+};
+
+document.getElementById('btnAutoFit').onclick = async () => {
+  const f = document.getElementById('fileInput').files[0];
+  if (!f) {
+    alert("Please upload a photo first!");
+    return;
+  }
+  const fd = new FormData();
+  fd.append('image', f);
+  try {
+    const r = await fetch('/occupancy/auto-bays', { method: 'POST', body: fd });
+    const res = await r.json();
+    if (res.bays && Object.keys(res.bays).length > 0) {
+      bays = res.bays;
+      lastAnnotatedImg = null;
+      updateJson();
+      renderBayList();
+      redraw();
+      alert(`Auto-detected ${res.count} parking bays! Click 'Run Occupancy Check' to see state and number plates.`);
+    } else {
+      alert("No vehicles found to auto-fit bays. Use '📐 Auto-Grid Lane' or draw manually.");
+    }
+  } catch (err) {
+    alert("Auto-fit failed: " + err.message);
+  }
+};
+
+canvas.addEventListener('click', (e) => {
+  if (!img) return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = Math.round((e.clientX - rect.left) * scaleX);
+  const y = Math.round((e.clientY - rect.top) * scaleY);
+
+  if (appMode === 'grid') {
+    gridPoints.push([x, y]);
+    document.getElementById('gridPointCount').textContent = `${gridPoints.length}/4 corners clicked`;
+    redraw();
+    if (gridPoints.length === 4) {
+      setTimeout(() => {
+        handleGridGeneration();
+      }, 50);
+    }
+  } else {
+    // Standard manual bay drawing
+    currentPoints.push([x, y]);
+    if (currentPoints.length === 4) {
+      const nextIdx = Object.keys(bays).length + 1;
+      const name = prompt("Enter Bay ID:", "Bay-0" + nextIdx) || ("Bay-0" + nextIdx);
+      bays[name] = [...currentPoints];
+      currentPoints = [];
+      lastAnnotatedImg = null;
+      updateJson();
+      renderBayList();
+    }
+    redraw();
+  }
+});
+
+// Auto-Grid Lane Generator Dialog & Partition Execution
+function handleGridGeneration() {
+  const countStr = prompt("📐 Auto-Grid Lane: Enter number of bays to partition in this lane (e.g. 10):", "10");
+  if (!countStr) {
+    exitGridMode();
+    return;
+  }
+  const n = parseInt(countStr, 10);
+  if (isNaN(n) || n <= 0) {
+    alert("Invalid bay count. Please enter a positive integer.");
+    exitGridMode();
+    return;
+  }
+
+  const prefix = prompt("Enter Bay ID prefix for this lane (e.g. Bay-, A-, Lane1-):", "Bay-") || "Bay-";
+
+  // Mathematically partition quadrilateral into n equal IRC-compliant bays
+  const partitionedBays = partitionLanePolygon(gridPoints, n);
+
+  // Determine starting index to avoid ID collision
+  let startNum = 1;
+  const regex = new RegExp(`^${prefix}(\\d+)$`);
+  for (const bid of Object.keys(bays)) {
+    const m = bid.match(regex);
+    if (m) {
+      startNum = Math.max(startNum, parseInt(m[1], 10) + 1);
+    }
+  }
+
+  for (let i = 0; i < partitionedBays.length; i++) {
+    const bayId = `${prefix}${String(startNum + i).padStart(2, '0')}`;
+    bays[bayId] = partitionedBays[i];
+  }
+
+  const firstId = `${prefix}${String(startNum).padStart(2, '0')}`;
+  const lastId = `${prefix}${String(startNum + n - 1).padStart(2, '0')}`;
+
+  exitGridMode();
+  lastAnnotatedImg = null;
+  updateJson();
+  renderBayList();
+  redraw();
+
+  alert(`✅ Generated ${n} IRC-compliant parking bays (${firstId} to ${lastId})!\nClick 'Run Occupancy Check' to detect occupancy and number plates.`);
+}
+
+/**
+ * Mathematical Partitioning of a 4-corner Lane Quadrilateral into N equal bays.
+ * 1. Orders corners clockwise to [TL, TR, BR, BL] regardless of click order.
+ * 2. Determines lane longitudinal axis (horizontal-dominant vs vertical-dominant).
+ * 3. Performs bilinear parametric interpolation across opposing edges:
+ *    t_1 = i/N, t_2 = (i+1)/N for i in [0, N-1].
+ * 4. Yields N uniform, non-overlapping, gapless bays with identical frontage.
+ */
+function partitionLanePolygon(pts, n) {
+  const q = orderQuadrilateral(pts);
+
+  const dist = (p1, p2) => Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+  const lenA = (dist(q[0], q[1]) + dist(q[3], q[2])) / 2.0; // horizontal edges
+  const lenB = (dist(q[1], q[2]) + dist(q[0], q[3])) / 2.0; // vertical edges
+
+  const baysList = [];
+  if (lenA >= lenB) {
+    // Horizontal-dominant lane: partition along top edge (q0 -> q1) and bottom edge (q3 -> q2)
+    for (let i = 0; i < n; i++) {
+      const t1 = i / n;
+      const t2 = (i + 1) / n;
+      const pTl = [
+        Math.round((1 - t1) * q[0][0] + t1 * q[1][0]),
+        Math.round((1 - t1) * q[0][1] + t1 * q[1][1])
+      ];
+      const pTr = [
+        Math.round((1 - t2) * q[0][0] + t2 * q[1][0]),
+        Math.round((1 - t2) * q[0][1] + t2 * q[1][1])
+      ];
+      const pBr = [
+        Math.round((1 - t2) * q[3][0] + t2 * q[2][0]),
+        Math.round((1 - t2) * q[3][1] + t2 * q[2][1])
+      ];
+      const pBl = [
+        Math.round((1 - t1) * q[3][0] + t1 * q[2][0]),
+        Math.round((1 - t1) * q[3][1] + t1 * q[2][1])
+      ];
+      baysList.push([pTl, pTr, pBr, pBl]);
+    }
+  } else {
+    // Vertical-dominant lane: partition along left edge (q0 -> q3) and right edge (q1 -> q2)
+    for (let i = 0; i < n; i++) {
+      const t1 = i / n;
+      const t2 = (i + 1) / n;
+      const pTl = [
+        Math.round((1 - t1) * q[0][0] + t1 * q[3][0]),
+        Math.round((1 - t1) * q[0][1] + t1 * q[3][1])
+      ];
+      const pTr = [
+        Math.round((1 - t1) * q[1][0] + t1 * q[2][0]),
+        Math.round((1 - t1) * q[1][1] + t1 * q[2][1])
+      ];
+      const pBr = [
+        Math.round((1 - t2) * q[1][0] + t2 * q[2][0]),
+        Math.round((1 - t2) * q[1][1] + t2 * q[2][1])
+      ];
+      const pBl = [
+        Math.round((1 - t2) * q[0][0] + t2 * q[3][0]),
+        Math.round((1 - t2) * q[0][1] + t2 * q[3][1])
+      ];
+      baysList.push([pTl, pTr, pBr, pBl]);
+    }
+  }
+  return baysList;
+}
+
+/**
+ * Normalizes 4 arbitrarily ordered points into clockwise [TL, TR, BR, BL] vertices.
+ */
+function orderQuadrilateral(pts) {
+  const cx = (pts[0][0] + pts[1][0] + pts[2][0] + pts[3][0]) / 4;
+  const cy = (pts[0][1] + pts[1][1] + pts[2][1] + pts[3][1]) / 4;
+
+  const sorted = [...pts].sort((a, b) => {
+    return Math.atan2(a[1] - cy, a[0] - cx) - Math.atan2(b[1] - cy, b[0] - cx);
+  });
+
+  const v1x = sorted[1][0] - sorted[0][0];
+  const v1y = sorted[1][1] - sorted[0][1];
+  const v2x = sorted[2][0] - sorted[1][0];
+  const v2y = sorted[2][1] - sorted[1][1];
+  const cross = v1x * v2y - v1y * v2x;
+  if (cross < 0) {
+    sorted.reverse();
+  }
+
+  let tlIdx = 0;
+  let minSum = Infinity;
+  for (let i = 0; i < 4; i++) {
+    const sum = sorted[i][0] + sorted[i][1];
+    if (sum < minSum) {
+      minSum = sum;
+      tlIdx = i;
+    }
+  }
+
+  return [
+    sorted[tlIdx],
+    sorted[(tlIdx + 1) % 4],
+    sorted[(tlIdx + 2) % 4],
+    sorted[(tlIdx + 3) % 4]
+  ];
+}
+
+document.getElementById('btnUndo').onclick = () => {
+  if (appMode === 'grid' && gridPoints.length > 0) {
+    gridPoints.pop();
+    document.getElementById('gridPointCount').textContent = `${gridPoints.length}/4 corners clicked`;
+    redraw();
+    return;
+  }
+  if (currentPoints.length > 0) {
+    currentPoints.pop();
+    redraw();
+    return;
+  }
+  const bayKeys = Object.keys(bays);
+  if (bayKeys.length > 0) {
+    const lastKey = bayKeys[bayKeys.length - 1];
+    delete bays[lastKey];
+    delete observations[lastKey];
+    lastAnnotatedImg = null;
+    updateJson();
+    renderBayList();
+    redraw();
+  }
+};
+
+document.getElementById('btnClearBays').onclick = () => {
+  if (confirm("Clear all defined bays?")) {
+    bays = {};
+    observations = {};
+    currentPoints = [];
+    gridPoints = [];
+    lastAnnotatedImg = null;
+    if (appMode === 'grid') exitGridMode();
+    updateJson();
+    renderBayList();
+    redraw();
+  }
+};
+
+document.getElementById('btnCopyJson').onclick = () => {
+  navigator.clipboard.writeText(document.getElementById('jsonOutput').value);
+  alert("Copied bays payload to clipboard!");
+};
+
+document.getElementById('btnApplyBays').onclick = async () => {
+  try {
+    const payload = { camera_id: "venue-lot", view: "oblique", bays: bays };
+    const r = await fetch('/occupancy/bays', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+    alert("Bays saved to server for camera: " + data.camera_id + " (" + data.count + " bays)");
+  } catch (err) {
+    alert("Failed to apply: " + err.message);
+  }
+};
+
+document.getElementById('btnRunCheck').onclick = async () => {
+  const f = document.getElementById('fileInput').files[0];
+  if (!f) {
+    alert("Please upload a photo first!");
+    return;
+  }
+  const anglePreset = document.getElementById('cameraAnglePreset').value;
+  const fpMode = document.getElementById('footprintModeSelect').value;
+  const viewType = anglePreset === 'topdown' ? 'topdown' : 'oblique';
+
+  // Set camera profile with current dropdown values
+  await fetch('/camera/profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ camera_id: 'venue-lot', view_angle: anglePreset, footprint_method: fpMode })
+  });
+
+  await fetch('/occupancy/bays', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ camera_id: "venue-lot", view: viewType, bays: bays })
+  });
+
+  const fd = new FormData();
+  fd.append('image', f);
+  fd.append('camera_id', 'venue-lot');
+  // A still photo has no "5 seconds later": the persistence debounce is for
+  // live streams and video, and here it only ever demoted WRONG to SUSPICIOUS.
+  fd.append('track', 'false');
+
+  const r = await fetch('/occupancy/check', { method: 'POST', body: fd });
+  const res = await r.json();
+  if (res.annotated) {
+    const annImg = new Image();
+    annImg.onload = () => {
+      lastAnnotatedImg = annImg;
+      redraw();
+    };
+    annImg.src = res.annotated;
+  }
+  if (res.observations) {
+    observations = {};
+    for (const o of res.observations) {
+      observations[o.bay_id] = o;
+    }
+  }
+  if (res.bays) {
+    for (const [bid, binfo] of Object.entries(res.bays)) {
+      if (!observations[bid]) {
+        observations[bid] = binfo;
+      } else {
+        Object.assign(observations[bid], binfo);
+      }
+    }
+  }
+  renderBayList();
+  renderCalibration(res.calibration, res.segmentation);
+  renderPlan(res.plan);
+  if (res.summary) {
+    const corr = (res.summary.correctly_parked !== undefined && res.summary.correctly_parked > 0)
+      ? res.summary.correctly_parked
+      : (res.summary.occupied || 0);
+    document.getElementById('kpiCorrect').textContent = corr;
+    document.getElementById('kpiSuspicious').textContent = res.summary.suspicious || 0;
+    document.getElementById('kpiWrong').textContent = (res.summary.wrong_parking || res.summary.badly_parked) || 0;
+    document.getElementById('kpiFree').textContent = res.summary.free !== undefined ? res.summary.free : (res.summary.empty || 0);
+  }
+  redraw();
+};
+
+// --- Camera calibration panel -------------------------------------------------
+// Built with textContent throughout: bay ids come from user drawings.
+function renderCalibration(cal, seg) {
+  const panel = document.getElementById('calibPanel');
+  if (!panel || !cal) return;
+  panel.replaceChildren();
+  const line = (text, color) => {
+    const d = document.createElement('div');
+    d.textContent = text;
+    if (color) d.style.color = color;
+    d.style.marginBottom = '3px';
+    panel.appendChild(d);
+    return d;
+  };
+  const pct = Math.round((cal.confidence || 0) * 100);
+  const qColor = pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
+  line(`Overall: ${pct}%  (${cal.method === 'site' ? 'one camera from all bays' : 'per-bay'})`, qColor).style.fontWeight = '700';
+  if (cal.camera) {
+    const c = cal.camera;
+    line(`Camera: height ${c.height_m} m · pitch ${c.pitch_deg}° · focal ${c.focal_px} px`);
+  } else {
+    line('Camera: could not be recovered — decisions use the box estimate', '#f59e0b');
+  }
+  if (cal.rms_px !== null && cal.rms_px !== undefined) line(`Corner fit error: ${cal.rms_px} px`);
+  if (seg) {
+    line(seg.available ? `Segmentation: on (${seg.vehicles_with_silhouette} silhouettes)`
+                       : 'Segmentation: off — decisions use the box estimate', seg.available ? null : '#f59e0b');
+  }
+  for (const f of (cal.flags || [])) line(`⚠ ${f}`, '#f59e0b');
+  const colors = { good: '#22c55e', degraded: '#f59e0b', rejected: '#ef4444' };
+  for (const [bid, b] of Object.entries(cal.bays || {})) {
+    const size = b.measured_m ? ` · measures ${b.measured_m[0]}×${b.measured_m[1]} m` : '';
+    const err = b.reproj_px ? ` · ${b.reproj_px}px` : '';
+    line(`${bid}: ${b.status}${size}${err}`, colors[b.status]);
+  }
+}
+
+// --- Top-down plan -------------------------------------------------------------
+// Every stall and measured car in one ground frame (metres, camera at the origin
+// looking along +Y), drawn so the far end is at the top, as in the camera view.
+// SVG built with createElementNS/textContent: bay ids come from user drawings.
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const PLAN_COLOURS = { free: '#6ea03c', correct: '#22c55e', suspicious: '#f59e0b', wrong: '#ef4444',
+                       occluded: '#a855f7', occupied: '#ef4444', unknown: '#94a3b8' };
+let planSelected = null;
+
+function clearanceColour(m) {
+  return m < 0 ? '#ef4444' : m < 0.25 ? '#f59e0b' : '#22c55e';
+}
+
+function renderPlan(plan) {
+  const panel = document.getElementById('planPanel');
+  if (!panel || !plan) return;
+  panel.replaceChildren();
+  if (!plan.available) {
+    const d = document.createElement('div');
+    d.style.cssText = 'color:#f59e0b;font-size:12px;';
+    d.textContent = `Plan view unavailable: ${plan.reason || 'no site calibration'}`;
+    panel.appendChild(d);
+    return;
+  }
+  const pts = plan.bays.flatMap(b => b.corners.concat(b.car || []));
+  if (!pts.length) return;
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const pad = 0.6;
+  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
+  const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${maxX - minX} ${maxY - minY}`);
+  svg.style.cssText = 'width:100%;height:auto;display:block;background:#020617;border-radius:6px;';
+  // World (x, y) -> SVG: flip y so the far end is up.
+  const P = p => [p[0] - minX, maxY - p[1]];
+  const poly = (corners, attrs) => {
+    const el = document.createElementNS(SVG_NS, 'polygon');
+    el.setAttribute('points', corners.map(c => P(c).join(',')).join(' '));
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    svg.appendChild(el);
+    return el;
+  };
+  const line = (a, b, attrs) => {
+    const el = document.createElementNS(SVG_NS, 'line');
+    const [x1, y1] = P(a), [x2, y2] = P(b);
+    el.setAttribute('x1', x1); el.setAttribute('y1', y1); el.setAttribute('x2', x2); el.setAttribute('y2', y2);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    svg.appendChild(el);
+  };
+  const text = (p, str, attrs) => {
+    const el = document.createElementNS(SVG_NS, 'text');
+    const [x, y] = P(p);
+    el.setAttribute('x', x); el.setAttribute('y', y);
+    el.setAttribute('font-size', '0.32'); el.setAttribute('text-anchor', 'middle');
+    el.setAttribute('font-family', 'monospace');
+    for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+    el.textContent = str;
+    svg.appendChild(el);
+  };
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const centre = cs => [cs.reduce((s, c) => s + c[0], 0) / cs.length, cs.reduce((s, c) => s + c[1], 0) / cs.length];
+
+  for (const b of plan.bays) {
+    const col = PLAN_COLOURS[b.state] || '#94a3b8';
+    const selected = planSelected === b.bay_id;
+    const el = poly(b.corners, {
+      fill: col, 'fill-opacity': selected ? 0.28 : 0.12, stroke: col,
+      'stroke-width': selected ? 0.08 : 0.04,
+      'stroke-dasharray': b.calibration === 'good' ? '' : '0.15 0.1',
+    });
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      planSelected = b.bay_id;
+      renderPlan(plan);
+      showInspectorModal(b.bay_id, observations[b.bay_id]);
+    });
+    // Bay id just beyond the far line, clear of the car and its labels.
+    text(mid(b.corners[2], b.corners[3]), b.bay_id, { fill: '#e2e8f0', dy: '-0.12', 'font-size': '0.28' });
+
+    if (!b.car) continue;
+    const rel = b.relation, c = rel.clearance;
+    // Car sides: near, right, far, left -- solid when measured, dashed when estimated.
+    poly(b.car, { fill: '#38bdf8', 'fill-opacity': 0.18, stroke: 'none' });
+    ['near', 'right', 'far', 'left'].forEach((s, i) => {
+      line(b.car[i], b.car[(i + 1) % 4], {
+        stroke: '#e0f2fe', 'stroke-width': 0.06,
+        'stroke-dasharray': c[s].source === 'measured' ? '' : '0.18 0.12',
+      });
+    });
+    // Clearance arrows: car edge midpoint to the matching stall edge midpoint.
+    const pairs = { left: [mid(b.car[3], b.car[0]), mid(b.corners[3], b.corners[0]), 'L'],
+                    right: [mid(b.car[1], b.car[2]), mid(b.corners[1], b.corners[2]), 'R'],
+                    near: [mid(b.car[0], b.car[1]), mid(b.corners[0], b.corners[1]), 'N'] };
+    // Labels sit inside the car -- left one toward the far end, right one toward
+    // the near end -- so neighbouring bays' labels never share the gap between cars.
+    const lerp = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    const across = [b.car[1][0] - b.car[0][0], b.car[1][1] - b.car[0][1]];
+    const n = Math.hypot(...across) || 1;
+    const inward = (p, k) => [p[0] + across[0] / n * k, p[1] + across[1] / n * k];
+    const labelAt = { left: [inward(lerp(b.car[0], b.car[3], 0.78), 0.1), 'start'],
+                      right: [inward(lerp(b.car[1], b.car[2], 0.22), -0.1), 'end'] };
+    for (const [s, [a, e, tag]] of Object.entries(pairs)) {
+      const v = c[s];
+      const colr = clearanceColour(v.seen_m);
+      line(a, e, { stroke: colr, 'stroke-width': 0.05 });
+      const f = m => `${m >= 0 ? '+' : ''}${m.toFixed(2)}`;
+      const lbl = `${tag} ${f(v.seen_m)}${v.source === 'measured' ? '' : ` (~${f(v.m)})`}`;
+      if (s === 'near') {
+        text(mid(a, e), lbl, { fill: colr, dy: '0.35', 'font-size': '0.24' });
+      } else {
+        const [p, anchor] = labelAt[s];
+        text(p, lbl, { fill: colr, 'font-size': '0.22', 'text-anchor': anchor });
+      }
+    }
+    const cc = centre(b.car);
+    text(cc, rel.label, { fill: '#f8fafc', 'font-weight': 'bold', 'font-size': '0.28' });
+    const hd = rel.heading_deg === null ? 'angle ?' : `${rel.heading_deg.toFixed(0)}°`;
+    text([cc[0], cc[1] - 0.45], `off ${rel.offset_m >= 0 ? '+' : ''}${rel.offset_m.toFixed(2)} · ${hd}`,
+         { fill: '#cbd5e1', 'font-size': '0.24' });
+  }
+  panel.appendChild(svg);
+
+  const legend = document.createElement('div');
+  legend.style.cssText = 'font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.4;';
+  legend.textContent = 'Solid edge = seen by camera, dashed = estimated from car size. ' +
+    'L/R/N = gap to left/right/near (camera-side) line as seen by the camera, (~whole-car estimate) when the ' +
+    'outermost corner is hidden; negative = over the line. Click a bay for details.';
+  panel.appendChild(legend);
+}
+
+// --- CCTV Video Processing & Timeline Playback ------------------------------
+let videoTimeline = [];
+let videoPlaybackTimer = null;
+let currentVideoFrameIdx = 0;
+
+document.getElementById('videoInput').onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+
+  const btn = document.getElementById('btnUploadVideo');
+  const origText = btn.textContent;
+  btn.textContent = "⏳ Analyzing CCTV Video...";
+  btn.disabled = true;
+
+  try {
+    const anglePreset = document.getElementById('cameraAnglePreset').value;
+    const fpMode = document.getElementById('footprintModeSelect').value;
+    const viewType = anglePreset === 'topdown' ? 'topdown' : 'oblique';
+
+    // 1. Update camera profile
+    await fetch('/camera/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: 'venue-lot', view_angle: anglePreset, footprint_method: fpMode })
+    });
+
+    // 2. Sync bays to server
+    await fetch('/occupancy/bays', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: "venue-lot", view: viewType, bays: bays })
+    });
+
+    // 3. Upload and process video
+    const fd = new FormData();
+    fd.append('video', f);
+    fd.append('camera_id', 'venue-lot');
+    fd.append('sample_fps', '1.0');
+    fd.append('track', 'true');
+
+    const r = await fetch('/occupancy/check-video', { method: 'POST', body: fd });
+    const res = await r.json();
+    if (res.error) {
+      alert("Video Error: " + res.error);
+      return;
+    }
+
+    if (res.timeline && res.timeline.length > 0) {
+      videoTimeline = res.timeline;
+      currentVideoFrameIdx = 0;
+
+      const vbar = document.getElementById('videoBar');
+      vbar.style.display = 'flex';
+      const scrubber = document.getElementById('videoScrubber');
+      scrubber.min = 0;
+      scrubber.max = videoTimeline.length - 1;
+      scrubber.value = 0;
+
+      showVideoFrame(0);
+      alert(`📹 CCTV Video Processed! Sampled ${res.sampled_frames} frames across ${res.video_duration_sec}s with MOT tracking & temporal debouncing. Use the playback controls below the video!`);
+    }
+  } catch (err) {
+    alert("Video processing failed: " + err.message);
+  } finally {
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+};
+
+function showVideoFrame(idx) {
+  if (!videoTimeline || !videoTimeline[idx]) return;
+  currentVideoFrameIdx = idx;
+  const frame = videoTimeline[idx];
+
+  const scrubber = document.getElementById('videoScrubber');
+  scrubber.value = idx;
+  const totalDuration = videoTimeline[videoTimeline.length - 1].timestamp_sec;
+  document.getElementById('videoTimeLabel').textContent =
+    `${frame.timestamp_sec.toFixed(1)}s / ${totalDuration.toFixed(1)}s (#${idx + 1})`;
+
+  if (frame.annotated) {
+    const annImg = new Image();
+    annImg.onload = () => {
+      lastAnnotatedImg = annImg;
+      if (!img) {
+        img = annImg;
+        canvas.width = annImg.width;
+        canvas.height = annImg.height;
+      }
+      redraw();
+    };
+    annImg.src = frame.annotated;
+  }
+
+  if (frame.plan) renderPlan(frame.plan);
+
+  if (frame.bays) {
+    observations = {};
+    for (const [bid, binfo] of Object.entries(frame.bays)) {
+      observations[bid] = binfo;
+    }
+    renderBayList();
+  }
+
+  if (frame.summary) {
+    document.getElementById('kpiCorrect').textContent = frame.summary.correctly_parked || 0;
+    document.getElementById('kpiSuspicious').textContent = frame.summary.suspicious || 0;
+    document.getElementById('kpiWrong').textContent = frame.summary.wrong_parking || 0;
+    document.getElementById('kpiFree').textContent = frame.summary.free || 0;
+  }
+}
+
+document.getElementById('videoScrubber').oninput = (e) => {
+  showVideoFrame(parseInt(e.target.value, 10));
+};
+
+document.getElementById('btnPlayPause').onclick = () => {
+  const btn = document.getElementById('btnPlayPause');
+  if (videoPlaybackTimer) {
+    clearInterval(videoPlaybackTimer);
+    videoPlaybackTimer = null;
+    btn.textContent = "▶";
+  } else {
+    btn.textContent = "⏸";
+    videoPlaybackTimer = setInterval(() => {
+      let nextIdx = currentVideoFrameIdx + 1;
+      if (nextIdx >= videoTimeline.length) {
+        nextIdx = 0;
+      }
+      showVideoFrame(nextIdx);
+    }, 500);
+  }
+};
+
+function redraw() {
+  if (!img) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // If Clean UI View is active OR we don't have a server-annotated image yet,
+  // render the pristine base frame + clean bay polygons & plate labels.
+  if (hideAiBoxes || !lastAnnotatedImg) {
+    ctx.drawImage(img, 0, 0);
+    drawCleanBays();
+  } else {
+    // Show AI Bounding Boxes: draw server-annotated frame containing white vehicle boxes and cyan footprint boxes
+    ctx.drawImage(lastAnnotatedImg, 0, 0);
+  }
+
+  // Draw any active drafting points / overlays
+  drawDraftingOverlays();
+}
+
+/**
+ * Renders crisp colored bay polygons and plate labels without AI bounding boxes.
+ */
+/**
+ * Renders crisp colored bay polygons and plate labels without AI bounding boxes.
+ */
+function drawCleanBays() {
+  for (const [bid, pts] of Object.entries(bays)) {
+    if (!pts || pts.length < 3) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+
+    const obs = observations[bid];
+    let fillColor = 'rgba(59, 130, 246, 0.20)'; // Default calibrated blue
+    let strokeColor = '#3b82f6';
+
+    if (obs) {
+      if (obs.state === 'correct') {
+        fillColor = 'rgba(34, 197, 94, 0.28)';
+        strokeColor = '#22c55e';
+      } else if (obs.state === 'suspicious') {
+        fillColor = 'rgba(245, 158, 11, 0.32)';
+        strokeColor = '#f59e0b';
+      } else if (obs.state === 'wrong' || obs.state === 'badly_parked') {
+        fillColor = 'rgba(239, 68, 68, 0.38)';
+        strokeColor = '#ef4444';
+      } else if (obs.state === 'occluded') {
+        fillColor = 'rgba(168, 85, 247, 0.32)';
+        strokeColor = '#a855f7';
+      } else if (obs.state === 'empty' || obs.state === 'free') {
+        fillColor = 'rgba(16, 185, 129, 0.15)';
+        strokeColor = '#10b981';
+      } else {
+        fillColor = 'rgba(229, 72, 77, 0.25)';
+        strokeColor = '#e5484d';
+      }
+    }
+
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Polygon centroid for label placement
+    let cx = 0, cy = 0;
+    for (const p of pts) {
+      cx += p[0];
+      cy += p[1];
+    }
+    cx = Math.round(cx / pts.length);
+    cy = Math.round(cy / pts.length);
+
+    // Format text
+    let mainLabel = bid;
+    if (obs && obs.state !== 'empty' && obs.state !== 'free') {
+      const outPct = (obs.outside_slot_percent !== undefined) ? `${Math.round(obs.outside_slot_percent)}% out` : '';
+      const tid = (obs.vehicle_track_id !== undefined && obs.vehicle_track_id !== null) ? `ID:${obs.vehicle_track_id}` : '';
+      const extras = [tid, outPct].filter(Boolean).join(' ');
+      if (extras) mainLabel += ` (${extras})`;
+    } else {
+      mainLabel += ` (Free)`;
+    }
+
+    const plateText = (obs && obs.plate) ? obs.plate : '';
+
+    // Measure text dimensions for backdrop pill
+    ctx.font = 'bold 12px sans-serif';
+    const mainWidth = ctx.measureText(mainLabel).width;
+    ctx.font = '800 13px Consolas, monospace';
+    const plateWidth = plateText ? ctx.measureText(`[${plateText}]`).width : 0;
+
+    const pillW = Math.max(mainWidth, plateWidth) + 16;
+    const pillH = plateText ? 42 : 22;
+    const pillX = cx - pillW / 2;
+    const pillY = cy - pillH / 2;
+
+    // Dark high-contrast label pill
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(pillX, pillY, pillW, pillH, 5);
+    } else {
+      ctx.rect(pillX, pillY, pillW, pillH);
+    }
+    ctx.fill();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Draw Bay ID + Coverage
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = plateText ? 'top' : 'middle';
+    ctx.fillText(mainLabel, cx, plateText ? pillY + 5 : cy);
+
+    // Draw Number Plate
+    if (plateText) {
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '800 12px Consolas, monospace';
+      ctx.fillText(`[${plateText}]`, cx, pillY + 22);
+    }
+  }
+}
+
+/**
+ * Draws active drafting lines, corner points and numbered badges.
+ */
+function drawDraftingOverlays() {
+  const isGrid = (appMode === 'grid');
+  const pts = isGrid ? gridPoints : currentPoints;
+  if (pts.length === 0) return;
+
+  const lineCol = isGrid ? '#0284c7' : '#3b82f6';
+  const badgeCol = isGrid ? '#38bdf8' : '#60a5fa';
+
+  ctx.strokeStyle = lineCol;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) {
+    ctx.lineTo(pts[i][0], pts[i][1]);
+  }
+  if (isGrid && pts.length === 4) {
+    ctx.closePath();
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    ctx.fillStyle = badgeCol;
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(i + 1), p[0], p[1]);
+  }
+}
+
+function updateJson() {
+  const payload = {
+    camera_id: "venue-lot",
+    view: "oblique",
+    bays: bays
+  };
+  document.getElementById('jsonOutput').value = JSON.stringify(payload, null, 2);
+}
+
+function renderBayList() {
+  const c = document.getElementById('bayList');
+  c.innerHTML = '';
+  const entries = Object.keys(bays);
+  if (entries.length === 0) {
+    c.innerHTML = '<div style="color:var(--muted);font-size:13px">No bays registered yet.</div>';
+    document.getElementById('kpiCorrect').textContent = '0';
+    document.getElementById('kpiSuspicious').textContent = '0';
+    document.getElementById('kpiWrong').textContent = '0';
+    document.getElementById('kpiFree').textContent = '0';
+    return;
+  }
+
+  let correctCount = 0, suspiciousCount = 0, wrongCount = 0, freeCount = 0;
+  for (const bid of entries) {
+    const obs = observations[bid];
+    const st = obs ? obs.state : 'calibrated';
+    if (st === 'correct' || st === 'occupied') correctCount++;
+    else if (st === 'suspicious') suspiciousCount++;
+    else if (st === 'wrong' || st === 'badly_parked') wrongCount++;
+    else if (st === 'free' || st === 'empty' || st === 'calibrated') freeCount++;
+  }
+  document.getElementById('kpiCorrect').textContent = correctCount;
+  document.getElementById('kpiSuspicious').textContent = suspiciousCount;
+  document.getElementById('kpiWrong').textContent = wrongCount;
+  document.getElementById('kpiFree').textContent = freeCount;
+
+  for (const bid of entries) {
+    const obs = observations[bid];
+    const st = obs ? obs.state : 'calibrated';
+    
+    let stBadge = '';
+    if (st === 'correct') {
+      stBadge = '<span class="status-tag" style="background:#16a34a;color:#fff;">Correct</span>';
+    } else if (st === 'occupied') {
+      stBadge = '<span class="status-tag" style="background:#16a34a;color:#fff;">Occupied</span>';
+    } else if (st === 'suspicious') {
+      stBadge = '<span class="status-tag" style="background:#d97706;color:#fff;">Suspicious</span>';
+    } else if (st === 'wrong' || st === 'badly_parked') {
+      stBadge = '<span class="status-tag" style="background:#dc2626;color:#fff;">Wrong Park</span>';
+    } else if (st === 'occluded') {
+      stBadge = '<span class="status-tag" style="background:#9333ea;color:#fff;">Occluded</span>';
+    } else if (st === 'free' || st === 'empty') {
+      stBadge = '<span class="status-tag" style="background:#334155;color:#94a3b8;">Free</span>';
+    } else {
+      stBadge = `<span class="status-tag" style="background:#334155;color:#94a3b8;">${st}</span>`;
+    }
+
+    const plateBadge = (obs && obs.plate) ? `<span class="plate-tag">${obs.plate}</span>` : '';
+    const trackBadge = (obs && (obs.vehicle_track_id || obs.vehicle_id)) ? `<span style="font-size:11px;background:#0369a1;color:#fff;padding:1px 5px;border-radius:3px;">ID #${obs.vehicle_track_id || obs.vehicle_id}</span>` : '';
+    const outInfo = (obs && obs.outside_slot_percent !== undefined && obs.outside_slot_percent > 0) ? `<span style="font-size:11px;color:#fca5a5;">${Math.round(obs.outside_slot_percent)}% outside</span>` : '';
+    const occlVal = (obs && obs.occlusion_level !== undefined && obs.occlusion_level >= 0.15) ? Math.round(obs.occlusion_level * 100) : null;
+    const occlBadge = occlVal ? `<span style="font-size:10px;background:#581c87;color:#e9d5ff;padding:1px 5px;border-radius:3px;font-weight:600;">${occlVal}% occluded</span>` : '';
+    const confVal = (obs && obs.parking_confidence !== undefined && obs.parking_confidence > 0) ? Math.round(obs.parking_confidence * 100) : null;
+    const confBadge = confVal ? `<span style="font-size:10px;color:#94a3b8;">${confVal}% conf</span>` : '';
+    const noteText = (obs && (obs.reason || obs.quality_note)) ? `<div style="font-size:11px;color:#cbd5e1;margin-top:4px;">${obs.reason || obs.quality_note}</div>` : '';
+
+    const el = document.createElement('div');
+    el.className = 'bay-badge ' + (obs ? obs.state : '');
+    el.style.display = 'block';
+    el.style.cursor = 'pointer';
+    el.title = 'Click to inspect explainable diagnostics';
+    el.onclick = () => showInspectorModal(bid, obs);
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <strong>${bid}</strong>
+          ${trackBadge}
+          ${plateBadge}
+          ${occlBadge}
+          ${confBadge}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          ${outInfo}
+          ${stBadge}
+        </div>
+      </div>
+      ${noteText}
+    `;
+    c.appendChild(el);
+  }
+}
+
+function showInspectorModal(bid, obs) {
+  const modal = document.getElementById('inspectorModal');
+  document.getElementById('inspSlotTitle').textContent = `Slot ${bid} Inspection`;
+  
+  const tid = (obs && (obs.vehicle_track_id || obs.vehicle_id)) ? `#${obs.vehicle_track_id || obs.vehicle_id}` : 'None';
+  const plt = (obs && obs.plate) ? ` [${obs.plate}]` : '';
+  document.getElementById('inspVehicle').textContent = `${tid}${plt}`;
+  
+  const st = obs ? (obs.state || 'FREE').toUpperCase() : 'FREE';
+  document.getElementById('inspState').textContent = st;
+  
+  const outPct = (obs && obs.outside_slot_percent !== undefined) ? `${Math.round(obs.outside_slot_percent)}%` : '0%';
+  document.getElementById('inspOutside').textContent = outPct;
+  
+  const ang = (obs && obs.angle_error_deg !== null && obs.angle_error_deg !== undefined) ? `${Math.round(obs.angle_error_deg)}°` : '0°';
+  document.getElementById('inspAngle').textContent = ang;
+  
+  const adj = (obs && obs.adjacent_slot_overlap !== undefined) ? `${Math.round(obs.adjacent_slot_overlap * 100)}%` : '0%';
+  document.getElementById('inspAdjacent').textContent = adj;
+  
+  const occ = (obs && obs.occlusion_level !== undefined) ? `${Math.round(obs.occlusion_level * 100)}%` : '0%';
+  document.getElementById('inspOcclusion').textContent = occ;
+  
+  const vgc = (obs && obs.visible_geometry_confidence !== undefined) ? `${Math.round(obs.visible_geometry_confidence * 100)}%` : '100%';
+  document.getElementById('inspGeomConf').textContent = vgc;
+  
+  const pcf = (obs && obs.parking_confidence !== undefined) ? `${Math.round(obs.parking_confidence * 100)}%` : '100%';
+  document.getElementById('inspParkingConf').textContent = pcf;
+  
+  const rsn = (obs && (obs.reason || obs.quality_note)) ? (obs.reason || obs.quality_note) : 'Normal slot state within boundary lines.';
+  document.getElementById('inspReason').textContent = rsn;
+
+  const relBox = document.getElementById('inspRelationBox');
+  const relEl = document.getElementById('inspRelation');
+  const rel = obs && obs.bay_relation;
+  relEl.replaceChildren();
+  relBox.style.display = rel ? 'block' : 'none';
+  if (rel) {
+    const row = (label, value, colour) => {
+      const d = document.createElement('div');
+      const l = document.createElement('span');
+      l.style.color = '#94a3b8';
+      l.textContent = label.padEnd(14, ' ');
+      const v = document.createElement('span');
+      v.textContent = value;
+      if (colour) v.style.color = colour;
+      d.append(l, v);
+      relEl.appendChild(d);
+    };
+    const sgn = m => `${m >= 0 ? '+' : ''}${m.toFixed(2)} m`;
+    row('Label', rel.label, rel.label === 'CORRECT' ? '#22c55e' : '#f59e0b');
+    const names = { left: 'Left gap', right: 'Right gap', near: 'Near gap', far: 'Far gap' };
+    for (const s of ['left', 'right', 'near', 'far']) {
+      const c = rel.clearance[s];
+      const est = c.source === 'measured' ? '' : `, whole car ~${sgn(c.m)}`;
+      row(names[s], `${sgn(c.seen_m)} seen${est}  [${c.lo.toFixed(2)}…${c.hi.toFixed(2)}]`, clearanceColour(c.seen_m));
+    }
+    row('Off-centre', `${sgn(rel.offset_m)}  (+ right, − left)`);
+    row('Heading', rel.heading_deg === null ? 'unknown' : `${rel.heading_deg.toFixed(1)}°`);
+    row('In own bay', `${Math.round(rel.own_share * 100)}%`);
+    for (const [b, v] of Object.entries(rel.neighbour_share || {})) row(`In ${b}`, `${Math.round(v * 100)}%`);
+    for (const [b, v] of Object.entries(rel.neighbour_gap_m || {})) {
+      row(`Gap to ${b}`, `${v.toFixed(2)} m${v < 0.6 ? ' (door tight)' : ''}`, v < 0.6 ? '#f59e0b' : null);
+    }
+    if (rel.calibration && rel.calibration !== 'good') row('Calibration', rel.calibration, '#f59e0b');
+  }
+  
+  modal.style.display = 'flex';
+}
+
+function closeInspectorModal(e) {
+  if (e && e.target && e.target.id !== 'inspectorModal' && !e.target.matches('button')) return;
+  document.getElementById('inspectorModal').style.display = 'none';
+}
+
+// Camera Angle Preset Listener
+document.getElementById('cameraAnglePreset').addEventListener('change', async (e) => {
+  const val = e.target.value;
+  try {
+    await fetch('/camera/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: 'venue-lot', view_angle: val })
+    });
+  } catch (err) {
+    console.error("Failed to update camera angle:", err);
+  }
+});
+
+// Footprint Mode Selector Listener
+document.getElementById('footprintModeSelect').addEventListener('change', async (e) => {
+  const mode = e.target.value;
+  const angle = document.getElementById('cameraAnglePreset').value;
+  let viewAngle = angle;
+  let bottomFrac = null;
+  if (mode === 'full_box') {
+    viewAngle = 'topdown';
+    bottomFrac = 1.0;
+  }
+  try {
+    await fetch('/camera/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        camera_id: 'venue-lot',
+        view_angle: viewAngle,
+        footprint_method: mode,
+        bottom_fraction: bottomFrac
+      })
+    });
+  } catch (err) {
+    console.error("Failed to update footprint mode:", err);
+  }
+});
+
+// Space Optimizer Import Listener
+document.getElementById('btnImportOptimizer').addEventListener('click', async () => {
+  const jsonStr = prompt("Paste Space Optimizer 'parking_layout.json' content or slot array:");
+  if (!jsonStr) return;
+  try {
+    const parsed = JSON.parse(jsonStr);
+    const resp = await fetch('/occupancy/import-layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: 'venue-lot', layout: parsed, view: 'oblique' })
+    });
+    const res = await resp.json();
+    if (!resp.ok) throw new Error(res.error || "Failed to import layout");
+    alert(`Successfully imported ${res.bays_imported} parking slots from Space Optimizer!`);
+    if (res.slots_dict && Object.keys(res.slots_dict).length > 0) {
+      bays = res.slots_dict;
+    }
+    updateJson();
+    renderBayList();
+    redraw();
+  } catch (err) {
+    alert("Import Error: " + err.message);
+  }
+});
+</script>
+
+<!-- Explainability Inspector Modal Dialog -->
+<div id="inspectorModal" class="modal-overlay" onclick="closeInspectorModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #334155;padding-bottom:10px;">
+      <div>
+        <h3 id="inspSlotTitle" style="margin:0;font-size:16px;color:#38bdf8;">Slot Inspector</h3>
+        <div id="inspSubTitle" style="font-size:12px;color:#94a3b8;">Explainable Parking Intelligence Diagnostics</div>
+      </div>
+      <button class="ghost" onclick="closeInspectorModal()" style="padding:4px 10px;font-size:14px;">✕</button>
+    </div>
+    
+    <div class="diag-grid">
+      <div class="diag-cell">
+        <div class="diag-label">State / Verdict</div>
+        <div class="diag-value" id="inspState">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Vehicle ID</div>
+        <div class="diag-value" id="inspVehicle">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Outside Ratio</div>
+        <div class="diag-value" id="inspOutside">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Angle Error</div>
+        <div class="diag-value" id="inspAngle">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Adjacent Overlap</div>
+        <div class="diag-value" id="inspAdjacent">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Occlusion Level</div>
+        <div class="diag-value" id="inspOcclusion">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Visible Geom Conf</div>
+        <div class="diag-value" id="inspGeomConf">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Parking Confidence</div>
+        <div class="diag-value" id="inspParkingConf">-</div>
+      </div>
+    </div>
+
+    <div id="inspRelationBox" style="background:#1e293b;padding:10px;border-radius:6px;border:1px solid #334155;margin-bottom:14px;display:none;">
+      <div class="diag-label" style="margin-bottom:4px;">Car inside the bay (metres)</div>
+      <div id="inspRelation" style="font-size:13px;color:#e2e8f0;line-height:1.5;font-family:monospace;white-space:pre;"></div>
+    </div>
+
+    <div style="background:#1e293b;padding:10px;border-radius:6px;border:1px solid #334155;margin-bottom:14px;">
+      <div class="diag-label" style="margin-bottom:4px;">Diagnostic Evidence Reason</div>
+      <div id="inspReason" style="font-size:13px;color:#e2e8f0;line-height:1.4;">-</div>
+    </div>
+
+    <div style="text-align:right;">
+      <button onclick="closeInspectorModal()" style="background:#3b82f6;padding:6px 16px;">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
