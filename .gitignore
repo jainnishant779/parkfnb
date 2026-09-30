@@ -69,3 +69,8 @@ temp_hindi_audio/
 
 # Holds live credentials for the deploy — never commit
 docs/status/RENDER_ENV.md
+
+# Private keys and model weights -- never commit; weights go to a release/LFS
+*.pem
+*.pt
+*.onnx
