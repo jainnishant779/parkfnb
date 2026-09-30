@@ -1,32 +1,37 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
-  Platform,
+  TouchableOpacity,
   ActivityIndicator,
-  Modal,
   RefreshControl,
+  type TextStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  FadeIn,
-  SlideInRight,
-} from 'react-native-reanimated';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
-import AppHeader from '../../components/headers/AppHeader';
+import Animated, { FadeIn, SlideInRight } from 'react-native-reanimated';
+import * as Kit from '../../theme/kit';
+import * as UI from '../../components/ui';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const {
+  T,
+  Card,
+  PillButton,
+  IconCircle,
+  ScreenHeader,
+  StatusTag,
+  ProgressTrack,
+  EmptyState,
+  IsoBlock,
+} = UI as unknown as Record<string, React.ComponentType<any>>;
+const { palette, radii } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
 
 // Storage keys
 const INTEGRATION_DATA_KEY = 'owners:integrations_data';
@@ -141,95 +146,57 @@ const GPS_SETUP_STEPS = [
   'Enable Auto Check-in',
 ];
 
-// Component: Integration Status Card
+
+// Component: Integration Status (hero) Card
 interface IntegrationStatusCardProps {
   isConnected: boolean;
   isConnecting: boolean;
   onConnect: () => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
 function IntegrationStatusCard({
   isConnected,
   isConnecting,
   onConnect,
-  theme,
 }: IntegrationStatusCardProps) {
-  const scale = useSharedValue(1);
-
-  const handlePressIn = useCallback(() => {
-    if (!isConnected) {
-      scale.value = withSpring(0.98, { damping: 15, stiffness: 200 });
-    }
-  }, [scale, isConnected]);
-
-  const handlePressOut = useCallback(() => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
   return (
-    <Animated.View style={[styles.card, { backgroundColor: theme.surface }, animatedStyle]}>
-      <View style={styles.cardHeader}>
-        <View style={[styles.cardIconContainer, { backgroundColor: isConnected ? theme.successLight : theme.warningLight }]}>
-          <MaterialCommunityIcons
-            name={isConnected ? 'link-variant' : 'link-variant-off'}
-            size={24}
-            color={isConnected ? theme.success : theme.warning}
-          />
-        </View>
-        <View style={styles.cardHeaderContent}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Integration Status</Text>
-          <View style={styles.statusContainer}>
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: isConnected ? theme.success : theme.warning },
-              ]}
-            />
-            <Text
-              style={[
-                styles.statusText,
-                { color: isConnected ? theme.success : theme.warning },
-              ]}
-            >
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </Text>
-          </View>
-        </View>
+    <Card tone="blue" style={styles.hero}>
+      <View style={styles.heroText}>
+        <StatusTag
+          label={isConnected ? 'Connected' : 'Disconnected'}
+          tone={isConnected ? 'success' : 'grey'}
+          style={styles.heroTag}
+        />
+        <T variant="h2">Fleet & GPS{'\n'}integration</T>
+        <T variant="bodySmall" style={styles.heroSub}>
+          Manage your fleet, track vehicles in real-time, and integrate GPS systems for automated check-ins and check-outs.
+        </T>
+      </View>
+      <View style={styles.heroArt} pointerEvents="none">
+        <IsoBlock size={140} tone="blue" />
       </View>
 
       {isConnected ? (
-        <View style={[styles.integrationActiveContainer, { backgroundColor: theme.successLight }]}>
-          <Ionicons name="checkmark-circle" size={20} color={theme.success} />
-          <Text style={[styles.integrationActiveText, { color: theme.success }]}>
+        <View style={styles.heroActive}>
+          <View style={styles.heroActiveIcon}>
+            <Ionicons name="checkmark" size={14} color={palette.textInverse} />
+          </View>
+          <Text style={styles.heroActiveText}>
             Integration Active - Real-time tracking enabled
           </Text>
         </View>
       ) : (
-        <Pressable
+        <PillButton
+          label="Connect Now"
+          icon="zap"
+          variant="ink"
+          size="md"
           onPress={onConnect}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          disabled={isConnecting}
-          accessibilityLabel="Connect to fleet integration"
-          accessibilityRole="button"
-          style={[styles.connectButton, { backgroundColor: theme.primary }]}
-        >
-          {isConnecting ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <>
-              <Ionicons name="flash" size={18} color="#FFFFFF" />
-              <Text style={styles.connectButtonText}>Connect Now</Text>
-            </>
-          )}
-        </Pressable>
+          loading={isConnecting}
+          style={styles.heroButton}
+        />
       )}
-    </Animated.View>
+    </Card>
   );
 }
 
@@ -237,82 +204,39 @@ function IntegrationStatusCard({
 interface FleetVehicleCardProps {
   vehicle: FleetVehicle;
   onToggleStatus: (id: string) => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
-function FleetVehicleCard({ vehicle, onToggleStatus, theme }: FleetVehicleCardProps) {
-  const scale = useSharedValue(1);
+function FleetVehicleCard({ vehicle, onToggleStatus }: FleetVehicleCardProps) {
   const isInUse = vehicle.status === 'in_use';
 
-  const handlePressIn = useCallback(() => {
-    scale.value = withSpring(0.98, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const handlePressOut = useCallback(() => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={() => onToggleStatus(vehicle.id)}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+      activeOpacity={0.85}
       accessibilityLabel={`${vehicle.name}, ${vehicle.status === 'in_use' ? 'In use' : 'Available'}`}
       accessibilityRole="button"
     >
-      <Animated.View
-        entering={SlideInRight.duration(300)}
-        style={[styles.vehicleCard, { backgroundColor: theme.surface }, animatedStyle]}
-      >
-        <View style={styles.vehicleCardLeft}>
-          <View style={[styles.vehicleIconContainer, { backgroundColor: theme.primaryLight }]}>
-            <MaterialCommunityIcons name="truck" size={24} color={theme.primary} />
-          </View>
-          <View style={styles.vehicleInfo}>
-            <Text style={[styles.vehicleName, { color: theme.text }]}>{vehicle.name}</Text>
-            <Text style={[styles.vehicleType, { color: theme.textMuted }]}>{vehicle.type}</Text>
-            <View style={styles.vehicleMetaRow}>
-              <Ionicons name="time-outline" size={12} color={theme.textMuted} />
-              <Text style={[styles.vehicleMetaText, { color: theme.textMuted }]}>
-                {vehicle.lastCheckIn}
-              </Text>
-              <View style={[styles.metaDot, { backgroundColor: theme.textMuted }]} />
-              <Ionicons name="location-outline" size={12} color={theme.textMuted} />
-              <Text style={[styles.vehicleMetaText, { color: theme.textMuted }]}>
-                {vehicle.location}
-              </Text>
-            </View>
+      <Animated.View entering={SlideInRight.duration(300)} style={styles.vehicleCard}>
+        <View style={styles.iconCircle}>
+          <MaterialCommunityIcons name="truck-outline" size={22} color={palette.text} />
+        </View>
+        <View style={styles.vehicleInfo}>
+          <Text style={styles.vehicleName} numberOfLines={1}>{vehicle.name}</Text>
+          <Text style={styles.vehicleType} numberOfLines={1}>{vehicle.type}</Text>
+          <View style={styles.vehicleMetaRow}>
+            <Ionicons name="time-outline" size={12} color={palette.textMuted} />
+            <Text style={styles.vehicleMetaText}>{vehicle.lastCheckIn}</Text>
+            <View style={styles.metaDot} />
+            <Ionicons name="location-outline" size={12} color={palette.textMuted} />
+            <Text style={styles.vehicleMetaText}>{vehicle.location}</Text>
           </View>
         </View>
-        <View
-          style={[
-            styles.statusPill,
-            {
-              backgroundColor: isInUse ? theme.primaryLight : theme.successLight,
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.pillDot,
-              { backgroundColor: isInUse ? theme.primary : theme.success },
-            ]}
-          />
-          <Text
-            style={[
-              styles.statusPillText,
-              { color: isInUse ? theme.primary : theme.success },
-            ]}
-          >
-            {isInUse ? 'In Use' : 'Available'}
-          </Text>
-        </View>
+        <StatusTag
+          label={isInUse ? 'In Use' : 'Available'}
+          tone={isInUse ? 'ink' : 'success'}
+        />
       </Animated.View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -321,50 +245,38 @@ interface GPSProgressSectionProps {
   progress: number;
   isAnimating: boolean;
   onCompleteSetup: () => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
 function GPSProgressSection({
   progress,
   isAnimating,
   onCompleteSetup,
-  theme,
 }: GPSProgressSectionProps) {
-  const progressWidth = useSharedValue(progress);
   const currentStep = Math.floor((progress / 100) * GPS_SETUP_STEPS.length);
 
-  useEffect(() => {
-    progressWidth.value = withTiming(progress, { duration: 500 });
-  }, [progress, progressWidth]);
-
-  const progressAnimatedStyle = useAnimatedStyle(() => ({
-    width: `${progressWidth.value}%` as any,
-  }));
-
   return (
-    <View style={[styles.card, { backgroundColor: theme.surface }]}>
-      <View style={styles.sectionHeader}>
-        <View style={[styles.cardIconContainer, { backgroundColor: theme.infoLight }]}>
-          <MaterialCommunityIcons name="satellite-variant" size={24} color={theme.info} />
+    <Card>
+      <View style={styles.cardHeader}>
+        <View style={styles.iconCircle}>
+          <MaterialCommunityIcons name="satellite-variant" size={22} color={palette.text} />
         </View>
         <View style={styles.cardHeaderContent}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>GPS Tracker Integration</Text>
-          <Text style={[styles.cardSubtitle, { color: theme.textMuted }]}>
-            {progress}% Complete
-          </Text>
+          <Text style={styles.cardTitle}>GPS Tracker Integration</Text>
+          <Text style={styles.cardSubtitle}>Setup progress</Text>
+        </View>
+        <View style={styles.progressValueWrap}>
+          <Text style={styles.progressValue}>{progress}</Text>
+          <Text style={styles.progressPercent}>%</Text>
         </View>
       </View>
 
-      {/* Progress Bar */}
-      <View style={[styles.progressBarContainer, { backgroundColor: theme.borderLight }]}>
-        <Animated.View
-          style={[
-            styles.progressBarFill,
-            { backgroundColor: progress === 100 ? theme.success : theme.primary },
-            progressAnimatedStyle,
-          ]}
-        />
-      </View>
+      {/* Progress track */}
+      <ProgressTrack
+        steps={GPS_SETUP_STEPS.length}
+        current={Math.min(currentStep, GPS_SETUP_STEPS.length)}
+        trackColor={palette.bgSoft}
+        style={styles.progressTrack}
+      />
 
       {/* Steps */}
       <View style={styles.stepsContainer}>
@@ -377,24 +289,14 @@ function GPSProgressSection({
               <View
                 style={[
                   styles.stepIndicator,
-                  {
-                    backgroundColor: isCompleted
-                      ? theme.success
-                      : isCurrent
-                      ? theme.primary
-                      : theme.borderLight,
-                  },
+                  isCompleted && styles.stepIndicatorDone,
+                  isCurrent && styles.stepIndicatorCurrent,
                 ]}
               >
                 {isCompleted ? (
-                  <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                  <Ionicons name="checkmark" size={13} color={palette.textInverse} />
                 ) : (
-                  <Text
-                    style={[
-                      styles.stepNumber,
-                      { color: isCurrent ? '#FFFFFF' : theme.textMuted },
-                    ]}
-                  >
+                  <Text style={[styles.stepNumber, isCurrent && styles.stepNumberCurrent]}>
                     {index + 1}
                   </Text>
                 )}
@@ -402,18 +304,13 @@ function GPSProgressSection({
               <Text
                 style={[
                   styles.stepText,
-                  {
-                    color: isCompleted
-                      ? theme.success
-                      : isCurrent
-                      ? theme.text
-                      : theme.textMuted,
-                    fontWeight: isCurrent ? '600' : '400',
-                  },
+                  isCompleted && styles.stepTextDone,
+                  isCurrent && styles.stepTextCurrent,
                 ]}
               >
                 {step}
               </Text>
+              {isCurrent ? <StatusTag label="Next" tone="ink" /> : null}
             </View>
           );
         })}
@@ -421,36 +318,23 @@ function GPSProgressSection({
 
       {/* Complete Setup Button */}
       {progress < 100 && (
-        <Pressable
+        <PillButton
+          label="Complete Setup"
+          icon="settings"
+          variant="ink"
+          size="md"
           onPress={onCompleteSetup}
-          disabled={isAnimating}
-          accessibilityLabel="Complete GPS setup"
-          accessibilityRole="button"
-          style={[
-            styles.setupButton,
-            { backgroundColor: theme.primary, opacity: isAnimating ? 0.7 : 1 },
-          ]}
-        >
-          {isAnimating ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <>
-              <Ionicons name="settings-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.setupButtonText}>Complete Setup</Text>
-            </>
-          )}
-        </Pressable>
+          loading={isAnimating}
+        />
       )}
 
       {progress === 100 && (
-        <View style={[styles.setupCompleteContainer, { backgroundColor: theme.successLight }]}>
-          <Ionicons name="checkmark-circle" size={20} color={theme.success} />
-          <Text style={[styles.setupCompleteText, { color: theme.success }]}>
-            GPS Integration Complete
-          </Text>
+        <View style={styles.successRow}>
+          <Ionicons name="checkmark-circle" size={18} color={palette.success} />
+          <Text style={styles.successRowText}>GPS Integration Complete</Text>
         </View>
       )}
-    </View>
+    </Card>
   );
 }
 
@@ -458,112 +342,111 @@ function GPSProgressSection({
 interface ActivityLogItemProps {
   log: ActivityLog;
   onToggle: (id: string) => void;
-  theme: ReturnType<typeof getTheme>;
+  isLast: boolean;
 }
 
-function ActivityLogItem({ log, onToggle, theme }: ActivityLogItemProps) {
-  const getStatusColor = () => {
+function ActivityLogItem({ log, onToggle, isLast }: ActivityLogItemProps) {
+  const getStatusTone = () => {
     switch (log.status) {
       case 'success':
-        return theme.success;
+        return { fg: palette.success, bg: palette.successSoft };
       case 'failed':
-        return theme.danger;
+        return { fg: palette.danger, bg: palette.dangerSoft };
       default:
-        return theme.warning;
+        return { fg: palette.warning, bg: palette.warningSoft };
     }
   };
 
   const getStatusIcon = () => {
     switch (log.status) {
       case 'success':
-        return 'checkmark-circle';
+        return 'checkmark';
       case 'failed':
-        return 'close-circle';
+        return 'close';
       default:
-        return 'time';
+        return 'time-outline';
     }
   };
 
+  const tone = getStatusTone();
+
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={() => onToggle(log.id)}
+      activeOpacity={0.7}
       accessibilityLabel={`Activity: ${log.description}`}
       accessibilityRole="button"
     >
       <Animated.View
         entering={FadeIn.duration(200)}
-        style={[styles.activityLogItem, { borderLeftColor: getStatusColor() }]}
+        style={[styles.activityLogItem, !isLast && styles.divider]}
       >
-        <View style={styles.activityLogHeader}>
-          <View style={[styles.activityDot, { backgroundColor: getStatusColor() }]} />
-          <Text style={[styles.activityTimestamp, { color: theme.textMuted }]}>
-            {log.timestamp}
-          </Text>
-          <Ionicons name={getStatusIcon()} size={16} color={getStatusColor()} />
+        <View style={[styles.activityIcon, { backgroundColor: tone.bg }]}>
+          <Ionicons name={getStatusIcon()} size={16} color={tone.fg} />
         </View>
-        <Text
-          style={[styles.activityDescription, { color: theme.text }]}
-          numberOfLines={log.expanded ? undefined : 2}
-        >
-          {log.description}
-        </Text>
+        <View style={styles.activityBody}>
+          <Text
+            style={styles.activityDescription}
+            numberOfLines={log.expanded ? undefined : 2}
+          >
+            {log.description}
+          </Text>
+          <Text style={styles.activityTimestamp}>{log.timestamp}</Text>
+        </View>
       </Animated.View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
-// Component: Info Modal
+// Component: Info Sheet
 interface InfoModalProps {
   visible: boolean;
   onClose: () => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
-function InfoModal({ visible, onClose, theme }: InfoModalProps) {
+function InfoModal({ visible, onClose }: InfoModalProps) {
   return visible ? (
-
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-          <View style={styles.modalHeader}>
-            <View style={[styles.modalIconContainer, { backgroundColor: theme.primaryLight }]}>
-              <Ionicons name="information-circle" size={28} color={theme.primary} />
-            </View>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Fleet/GPS Integration
-            </Text>
-          </View>
-          <Text style={[styles.modalText, { color: theme.textSecondary }]}>
-            This feature enables real-time fleet tracking and automated parking management.
-            {'\n\n'}
-            <Text style={{ fontWeight: '600' }}>Features include:</Text>
-            {'\n'}• Real-time vehicle tracking
-            {'\n'}• Automated check-in/check-out
-            {'\n'}• GPS-enabled geofencing
-            {'\n'}• Fleet utilization analytics
-            {'\n\n'}
-            <Text style={{ fontStyle: 'italic', color: theme.textMuted }}>
-              Full integration coming soon.
-            </Text>
-          </Text>
-          <Pressable
-            onPress={onClose}
-            style={[styles.modalButton, { backgroundColor: theme.primary }]}
-            accessibilityLabel="Close info modal"
-            accessibilityRole="button"
-          >
-            <Text style={styles.modalButtonText}>Got it</Text>
-          </Pressable>
+    <View style={styles.modalOverlay}>
+      <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={onClose} />
+      <View style={styles.sheet}>
+        <View style={styles.grabber} />
+        <View style={styles.sheetIcon}>
+          <Ionicons name="information" size={26} color={palette.text} />
         </View>
-      </Pressable>
-    
-    ) : null;
+        <Text style={styles.sheetTitle}>Fleet/GPS Integration</Text>
+        <Text style={styles.sheetText}>
+          This feature enables real-time fleet tracking and automated parking management.
+        </Text>
+        <View style={styles.featureList}>
+          <Text style={styles.featureLabel}>Features include:</Text>
+          {[
+            'Real-time vehicle tracking',
+            'Automated check-in/check-out',
+            'GPS-enabled geofencing',
+            'Fleet utilization analytics',
+          ].map(item => (
+            <View key={item} style={styles.featureRow}>
+              <View style={styles.featureDot} />
+              <Text style={styles.featureText}>{item}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={styles.sheetNote}>Full integration coming soon.</Text>
+        <PillButton
+          label="Got it"
+          variant="ink"
+          onPress={onClose}
+          style={styles.sheetButton}
+        />
+      </View>
+    </View>
+  ) : null;
 }
 
 // Main Screen Component
 export default function IntegrationsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const theme = useMemo(() => getTheme(false), []);
 
   // State
   const [loading, setLoading] = useState(false);
@@ -690,182 +573,149 @@ export default function IntegrationsScreen() {
     (navigation as any).navigate('GPSConfiguration');
   }, [navigation]);
 
+
+  const header = (withInfo: boolean) => (
+    <ScreenHeader
+      title="Fleet/GPS Integrations"
+      onBack={() => navigation.goBack()}
+      right={
+        withInfo ? (
+          <IconCircle
+            icon="help-circle"
+            size={40}
+            onPress={() => setInfoModalVisible(true)}
+          />
+        ) : undefined
+      }
+    />
+  );
+
   // Loading state
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <AppHeader
-          variant="standard"
-          title="Fleet/GPS Integrations"
-          leftAction={{
-            icon: 'back',
-            label: 'Back',
-            onPress: () => navigation.goBack(),
-            showBackground: true,
-          }}
-          showDivider={false}
-        />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {header(false)}
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={[styles.loadingText, { color: theme.textMuted }]}>
-            Loading integration data...
-          </Text>
+          <ActivityIndicator size="large" color={palette.ink} />
+          <Text style={styles.loadingText}>Loading integration data...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <AppHeader
-          variant="standard"
-          title="Fleet/GPS Integrations"
-          leftAction={{
-            icon: 'back',
-            label: 'Back',
-            onPress: () => navigation.goBack(),
-            showBackground: true,
-          }}
-          showDivider={false}
-        />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {header(false)}
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color={theme.danger} />
-          <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
-          <Pressable
-            onPress={handleRetry}
-            style={[styles.retryButton, { backgroundColor: theme.primary }]}
-            accessibilityLabel="Retry loading"
-            accessibilityRole="button"
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </Pressable>
+          <Card padded={false}>
+            <EmptyState
+              title={error}
+              action="Retry"
+              onAction={handleRetry}
+              tone="grey"
+            />
+          </Card>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <AppHeader
-        variant="standard"
-        title="Fleet/GPS Integrations"
-        leftAction={{
-          icon: 'back',
-          label: 'Back',
-          onPress: () => navigation.goBack(),
-          showBackground: true,
-        }}
-        rightActions={[
-          {
-            icon: 'help',
-            label: 'Info',
-            onPress: () => setInfoModalVisible(true),
-          },
-        ]}
-        showDivider={false}
-      />
+      {header(true)}
 
       {/* Content */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + spacing[6] },
+          { paddingBottom: insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={theme.primary}
+            tintColor={palette.ink}
           />
         }
       >
-        {/* Header Description */}
-        <View style={styles.headerDescription}>
-          <Text style={[styles.headerDescriptionText, { color: theme.textSecondary }]}>
-            Manage your fleet, track vehicles in real-time, and integrate GPS systems for automated check-ins and check-outs.
-          </Text>
-        </View>
-
         {/* Section 1: Integration Status */}
         <IntegrationStatusCard
           isConnected={integrationData.isConnected}
           isConnecting={isConnecting}
           onConnect={handleConnect}
-          theme={theme}
         />
 
         {/* Section 2: Fleet Overview */}
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Fleet Overview</Text>
-            <Text style={[styles.sectionCount, { color: theme.textMuted }]}>
-              {integrationData.fleetVehicles.length} vehicles
-            </Text>
-          </View>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>Fleet overview</Text>
+          <Text style={styles.sectionCount}>
+            {integrationData.fleetVehicles.length} vehicles
+          </Text>
+        </View>
+        {integrationData.fleetVehicles.length === 0 ? (
+          <Card padded={false}>
+            <EmptyState
+              title="No vehicles yet"
+              subtitle="Vehicles appear here once your fleet is connected."
+              tone="grey"
+            />
+          </Card>
+        ) : (
           <View style={styles.vehicleList}>
             {integrationData.fleetVehicles.map(vehicle => (
               <FleetVehicleCard
                 key={vehicle.id}
                 vehicle={vehicle}
                 onToggleStatus={handleToggleVehicleStatus}
-                theme={theme}
               />
             ))}
           </View>
-        </View>
+        )}
 
         {/* Section 3: GPS Progress */}
-        <View style={styles.section}>
-          <GPSProgressSection
-            progress={integrationData.gpsProgress}
-            isAnimating={isAnimatingGPS}
-            onCompleteSetup={handleCompleteGPSSetup}
-            theme={theme}
-          />
-        </View>
+        <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>GPS setup</Text>
+        <GPSProgressSection
+          progress={integrationData.gpsProgress}
+          isAnimating={isAnimatingGPS}
+          onCompleteSetup={handleCompleteGPSSetup}
+        />
 
         {/* Section 4: Recent Activity */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Activity</Text>
-          <View style={[styles.activityContainer, { backgroundColor: theme.surface }]}>
-            {integrationData.activityLogs.map(log => (
+        <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Recent activity</Text>
+        <Card style={styles.activityContainer}>
+          {integrationData.activityLogs.length === 0 ? (
+            <Text style={styles.activityEmpty}>No recent activity</Text>
+          ) : (
+            integrationData.activityLogs.map((log, index) => (
               <ActivityLogItem
                 key={log.id}
                 log={log}
                 onToggle={handleToggleActivityLog}
-                theme={theme}
+                isLast={index === integrationData.activityLogs.length - 1}
               />
-            ))}
-          </View>
-        </View>
+            ))
+          )}
+        </Card>
 
         {/* Section 5: CTAs */}
         <View style={styles.ctaContainer}>
-          <Pressable
+          <PillButton
+            label="Manage Fleet"
+            icon="truck"
+            variant="ink"
             onPress={handleManageFleet}
-            accessibilityLabel="Manage Fleet"
-            accessibilityRole="button"
-            style={[styles.ctaButton, { backgroundColor: theme.primary }]}
-          >
-            <MaterialCommunityIcons name="truck-delivery" size={20} color="#FFFFFF" />
-            <Text style={styles.ctaButtonText}>Manage Fleet</Text>
-          </Pressable>
-          <Pressable
+          />
+          <PillButton
+            label="Configure GPS"
+            icon="navigation"
+            variant="white"
             onPress={handleConfigureGPS}
-            accessibilityLabel="Configure GPS Integration"
-            accessibilityRole="button"
-            style={[styles.ctaButtonSecondary, { borderColor: theme.primary }]}
-          >
-            <MaterialCommunityIcons name="satellite-uplink" size={20} color={theme.primary} />
-            <Text style={[styles.ctaButtonSecondaryText, { color: theme.primary }]}>
-              Configure GPS
-            </Text>
-          </Pressable>
+          />
         </View>
       </ScrollView>
 
@@ -873,381 +723,324 @@ export default function IntegrationsScreen() {
       <InfoModal
         visible={infoModalVisible}
         onClose={() => setInfoModalVisible(false)}
-        theme={theme}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: palette.bg,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
-  },
-  headerDescription: {
-    marginBottom: spacing[4],
-  },
-  headerDescriptionText: {
-    fontSize: fontSize.sm,
-    lineHeight: fontSize.sm * 1.5,
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing[4],
+    gap: 16,
   },
   loadingText: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.textMuted,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing[6],
-    gap: spacing[4],
-  },
-  errorText: {
-    fontSize: fontSize.base,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingHorizontal: spacing[6],
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    paddingHorizontal: 20,
   },
 
-  // Card styles
-  card: {
-    borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    marginBottom: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+  // Hero
+  hero: {
+    minHeight: 250,
+    overflow: 'hidden',
   },
-  cardHeader: {
+  heroText: {
+    maxWidth: '66%',
+  },
+  heroTag: {
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  heroSub: {
+    marginTop: 8,
+    color: palette.inkSoft,
+  },
+  heroArt: {
+    position: 'absolute',
+    right: -30,
+    bottom: -26,
+  },
+  heroButton: {
+    alignSelf: 'flex-start',
+    marginTop: 18,
+  },
+  heroActive: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing[4],
+    alignSelf: 'flex-start',
+    maxWidth: '72%',
+    marginTop: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surface,
+    gap: 10,
   },
-  cardIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cardHeaderContent: {
-    marginLeft: spacing[3],
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-  },
-  cardSubtitle: {
-    fontSize: fontSize.sm,
-    marginTop: 2,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing[1],
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: spacing[2],
-  },
-  statusText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
-  integrationActiveContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing[3],
-    borderRadius: borderRadius.md,
-    gap: spacing[2],
-  },
-  integrationActiveText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
-  connectButton: {
-    flexDirection: 'row',
+  heroActiveIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: palette.success,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
-    minHeight: 48,
   },
-  connectButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+  heroActiveText: {
+    ...fonts.semibold,
+    flexShrink: 1,
+    fontSize: 13,
+    color: palette.text,
   },
 
-  // Section styles
-  section: {
-    marginBottom: spacing[4],
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing[4],
-  },
+  // Sections
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing[3],
+    marginTop: 28,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.medium,
+    fontSize: 19,
+    letterSpacing: -0.2,
+    color: palette.text,
+  },
+  sectionTitleSpaced: {
+    marginTop: 28,
+    marginBottom: 12,
   },
   sectionCount: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+  },
+  divider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
   },
 
-  // Vehicle card styles
+  // Shared icon circle
+  iconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: palette.fill,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Vehicle card
   vehicleList: {
-    gap: spacing[3],
+    gap: 12,
   },
   vehicleCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing[4],
-    borderRadius: borderRadius.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
-  },
-  vehicleCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  vehicleIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 18,
+    borderRadius: radii.xl,
+    backgroundColor: palette.surface,
   },
   vehicleInfo: {
-    marginLeft: spacing[3],
     flex: 1,
+    marginHorizontal: 12,
   },
   vehicleName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 16,
+    color: palette.text,
   },
   vehicleType: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12.5,
+    color: palette.textMuted,
     marginTop: 2,
   },
   vehicleMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing[1],
-    gap: spacing[1],
+    marginTop: 6,
+    gap: 4,
   },
   vehicleMetaText: {
-    fontSize: 11,
+    ...fonts.medium,
+    fontSize: 11.5,
+    color: palette.textMuted,
   },
   metaDot: {
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    marginHorizontal: spacing[1],
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-    gap: spacing[1],
-  },
-  pillDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusPillText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    marginHorizontal: 4,
+    backgroundColor: palette.textSubtle,
   },
 
-  // Progress bar styles
-  progressBarContainer: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: spacing[4],
+  // GPS card
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 4,
+  cardHeaderContent: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  cardTitle: {
+    ...fonts.semibold,
+    fontSize: 16,
+    color: palette.text,
+  },
+  cardSubtitle: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 2,
+  },
+  progressValueWrap: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  progressValue: {
+    ...fonts.semibold,
+    fontSize: 34,
+    letterSpacing: -1,
+    color: palette.text,
+  },
+  progressPercent: {
+    ...fonts.semibold,
+    fontSize: 16,
+    color: palette.textMuted,
+    marginTop: 6,
+    marginLeft: 2,
+  },
+  progressTrack: {
+    marginTop: 18,
+    marginBottom: 18,
   },
   stepsContainer: {
-    gap: spacing[3],
-    marginBottom: spacing[4],
+    gap: 12,
+    marginBottom: 18,
   },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
+    gap: 12,
   },
   stepIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: palette.fill,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  stepIndicatorDone: {
+    backgroundColor: palette.ink,
+  },
+  stepIndicatorCurrent: {
+    backgroundColor: palette.surface,
+    borderWidth: 2,
+    borderColor: palette.ink,
   },
   stepNumber: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 12,
+    color: palette.textMuted,
+  },
+  stepNumberCurrent: {
+    color: palette.text,
   },
   stepText: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    flex: 1,
+    fontSize: 14.5,
+    color: palette.textMuted,
   },
-  setupButton: {
+  stepTextDone: {
+    color: palette.text,
+  },
+  stepTextCurrent: {
+    ...fonts.semibold,
+    color: palette.text,
+  },
+  successRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
-    minHeight: 48,
+    height: 48,
+    borderRadius: radii.pill,
+    backgroundColor: palette.successSoft,
+    gap: 8,
   },
-  setupButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-  setupCompleteContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing[3],
-    borderRadius: borderRadius.md,
-    gap: spacing[2],
-  },
-  setupCompleteText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+  successRowText: {
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.success,
   },
 
-  // Activity log styles
+  // Activity
   activityContainer: {
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
+    paddingVertical: 4,
   },
   activityLogItem: {
-    padding: spacing[4],
-    borderLeftWidth: 3,
-  },
-  activityLogHeader: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 14,
+    gap: 12,
+  },
+  activityIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
-    marginBottom: spacing[2],
-    gap: spacing[2],
+    justifyContent: 'center',
   },
-  activityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  activityTimestamp: {
-    fontSize: fontSize.xs,
+  activityBody: {
     flex: 1,
   },
   activityDescription: {
-    fontSize: fontSize.sm,
-    lineHeight: fontSize.sm * 1.4,
+    ...fonts.semibold,
+    fontSize: 14.5,
+    lineHeight: 20,
+    color: palette.text,
+  },
+  activityTimestamp: {
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
+    marginTop: 3,
+  },
+  activityEmpty: {
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.textMuted,
+    textAlign: 'center',
+    paddingVertical: 18,
   },
 
-  // CTA styles
+  // CTAs
   ctaContainer: {
-    gap: spacing[3],
-    marginTop: spacing[2],
-  },
-  ctaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
-    minHeight: 56,
-  },
-  ctaButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-  ctaButtonSecondary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    gap: spacing[2],
-    minHeight: 56,
-  },
-  ctaButtonSecondaryText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    gap: 12,
+    marginTop: 28,
   },
 
-  // Modal styles
+  // Info sheet
   modalOverlay: {
     // Absolutely positioned rather than flex:1 — no longer inside a
     // <Modal>, which does not present on this build.
@@ -1258,60 +1051,90 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  sheet: {
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 24,
+    paddingBottom: 36,
     alignItems: 'center',
-    padding: spacing[6],
   },
-  modalContent: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: borderRadius.xl,
-    padding: spacing[6],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+  grabber: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    marginTop: 12,
+    marginBottom: 20,
   },
-  modalHeader: {
-    alignItems: 'center',
-    marginBottom: spacing[4],
-  },
-  modalIconContainer: {
+  sheetIcon: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    justifyContent: 'center',
+    backgroundColor: palette.blueSoft,
     alignItems: 'center',
-    marginBottom: spacing[3],
+    justifyContent: 'center',
+    marginBottom: 14,
   },
-  modalTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold as any,
+  sheetTitle: {
+    ...fonts.semibold,
+    fontSize: 22,
+    letterSpacing: -0.4,
+    color: palette.text,
     textAlign: 'center',
   },
-  modalText: {
-    fontSize: fontSize.sm,
-    lineHeight: fontSize.sm * 1.6,
-    textAlign: 'left',
+  sheetText: {
+    ...fonts.medium,
+    fontSize: 14.5,
+    lineHeight: 21,
+    color: palette.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
   },
-  modalButton: {
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
+  featureLabel: {
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
+    marginBottom: 10,
+  },
+  featureList: {
+    alignSelf: 'stretch',
+    marginTop: 18,
+    padding: 16,
+    borderRadius: radii.lg,
+    backgroundColor: palette.fill,
+    gap: 10,
+  },
+  featureRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing[5],
-    minHeight: 48,
+    gap: 10,
   },
-  modalButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+  featureDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: palette.ink,
+  },
+  featureText: {
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.text,
+  },
+  sheetNote: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 14,
+  },
+  sheetButton: {
+    alignSelf: 'stretch',
+    marginTop: 20,
   },
 });

@@ -1,27 +1,35 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
-  Platform,
-  TextInput,
+  TouchableOpacity,
+  type TextStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  FadeIn,
-} from 'react-native-reanimated';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
-import AppHeader from '../../components/headers/AppHeader';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import * as Kit from '../../theme/kit';
+import * as UI from '../../components/ui';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const {
+  T,
+  Card,
+  PillButton,
+  SearchPill,
+  ScreenHeader,
+  StatusTag,
+  InfoGrid,
+  Chip,
+  EmptyState,
+  IsoBlock,
+} = UI as unknown as Record<string, React.ComponentType<any>>;
+const { palette, radii } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
 
 // Mock fleet data
 const MOCK_FLEET = [
@@ -78,34 +86,20 @@ interface FleetVehicle {
   mileage: number;
 }
 
+
 interface FleetCardProps {
   vehicle: FleetVehicle;
-  theme: ReturnType<typeof getTheme>;
 }
 
-function FleetCard({ vehicle, theme }: FleetCardProps) {
-  const scale = useSharedValue(1);
-
-  const handlePressIn = useCallback(() => {
-    scale.value = withSpring(0.98, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const handlePressOut = useCallback(() => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const getStatusColor = () => {
+function FleetCard({ vehicle }: FleetCardProps) {
+  const getStatusTone = () => {
     switch (vehicle.status) {
       case 'active':
-        return theme.success;
+        return 'success';
       case 'maintenance':
-        return theme.warning;
+        return 'warning';
       default:
-        return theme.textMuted;
+        return 'grey';
     }
   };
 
@@ -120,86 +114,65 @@ function FleetCard({ vehicle, theme }: FleetCardProps) {
     }
   };
 
+  const fuelColor =
+    vehicle.fuelLevel > 50
+      ? palette.success
+      : vehicle.fuelLevel > 25
+      ? palette.warning
+      : palette.danger;
+
   return (
-    <Pressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+    <TouchableOpacity
+      activeOpacity={0.9}
       accessibilityLabel={`Fleet vehicle ${vehicle.name}`}
       accessibilityRole="button"
     >
-      <Animated.View
-        entering={FadeIn.duration(200)}
-        style={[styles.fleetCard, { backgroundColor: theme.surface }, animatedStyle]}
-      >
+      <Animated.View entering={FadeIn.duration(200)} style={styles.fleetCard}>
         <View style={styles.fleetCardHeader}>
-          <View style={[styles.iconContainer, { backgroundColor: theme.primaryLight }]}>
-            <MaterialCommunityIcons name="truck" size={24} color={theme.primary} />
+          <View style={styles.iconCircle}>
+            <MaterialCommunityIcons name="truck-outline" size={22} color={palette.text} />
           </View>
           <View style={styles.fleetCardHeaderContent}>
-            <Text style={[styles.vehicleName, { color: theme.text }]}>{vehicle.name}</Text>
-            <Text style={[styles.vehicleType, { color: theme.textMuted }]}>{vehicle.type}</Text>
+            <Text style={styles.vehicleName} numberOfLines={1}>{vehicle.name}</Text>
+            <Text style={styles.vehicleType} numberOfLines={1}>{vehicle.type}</Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor() + '20' }]}>
-            <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
-            <Text style={[styles.statusText, { color: getStatusColor() }]}>
-              {getStatusLabel()}
-            </Text>
-          </View>
+          <StatusTag label={getStatusLabel()} tone={getStatusTone()} />
         </View>
 
-        <View style={styles.fleetCardDetails}>
-          <View style={styles.detailRow}>
-            <Ionicons name="card-outline" size={16} color={theme.textMuted} />
-            <Text style={[styles.detailLabel, { color: theme.textMuted }]}>License:</Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>{vehicle.licensePlate}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="person-outline" size={16} color={theme.textMuted} />
-            <Text style={[styles.detailLabel, { color: theme.textMuted }]}>Driver:</Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>{vehicle.driver}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="speedometer-outline" size={16} color={theme.textMuted} />
-            <Text style={[styles.detailLabel, { color: theme.textMuted }]}>Mileage:</Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>
-              {vehicle.mileage.toLocaleString()} km
-            </Text>
-          </View>
-        </View>
+        <InfoGrid
+          columns={3}
+          items={[
+            { label: 'License', value: vehicle.licensePlate },
+            { label: 'Driver', value: vehicle.driver },
+            { label: 'Mileage', value: `${vehicle.mileage.toLocaleString()} km` },
+          ]}
+          style={styles.detailsGrid}
+        />
 
         {/* Fuel Level */}
         <View style={styles.fuelContainer}>
           <View style={styles.fuelHeader}>
-            <Ionicons name="water-outline" size={16} color={theme.textMuted} />
-            <Text style={[styles.fuelLabel, { color: theme.textMuted }]}>Fuel Level</Text>
-            <Text style={[styles.fuelPercent, { color: theme.text }]}>{vehicle.fuelLevel}%</Text>
+            <Ionicons name="water-outline" size={15} color={palette.textMuted} />
+            <Text style={styles.fuelLabel}>Fuel Level</Text>
+            <Text style={styles.fuelPercent}>{vehicle.fuelLevel}%</Text>
           </View>
-          <View style={[styles.fuelBar, { backgroundColor: theme.borderLight }]}>
+          <View style={styles.fuelBar}>
             <View
               style={[
                 styles.fuelFill,
-                {
-                  width: `${vehicle.fuelLevel}%`,
-                  backgroundColor:
-                    vehicle.fuelLevel > 50
-                      ? theme.success
-                      : vehicle.fuelLevel > 25
-                      ? theme.warning
-                      : theme.danger,
-                },
+                { width: `${vehicle.fuelLevel}%`, backgroundColor: fuelColor },
               ]}
             />
           </View>
         </View>
       </Animated.View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
 export default function FleetManagementScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const theme = useMemo(() => getTheme(false), []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
@@ -225,64 +198,59 @@ export default function FleetManagementScreen() {
     inactive: 0,
   }), []);
 
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <AppHeader
-        variant="standard"
-        title="Fleet Management"
-        leftAction={{
-          icon: 'back',
-          label: 'Back',
-          onPress: () => navigation.goBack(),
-          showBackground: true,
-        }}
-        showDivider={false}
-      />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScreenHeader title="Fleet Management" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + spacing[6] },
+          { paddingBottom: insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* Stats hero */}
+        <Card tone="peach" style={styles.hero}>
+          <T variant="bodySmall" style={styles.heroLabel}>Vehicles in your fleet</T>
+          <Text style={styles.heroValue}>{stats.total}</Text>
+          <View style={styles.heroArt} pointerEvents="none">
+            <IsoBlock size={140} tone="peach" />
+          </View>
+        </Card>
+
         {/* Stats Row */}
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.statValue, { color: theme.primary }]}>{stats.total}</Text>
-            <Text style={[styles.statLabel, { color: theme.textMuted }]}>Total</Text>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{stats.active}</Text>
+            <Text style={styles.statLabel}>Active</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.statValue, { color: theme.success }]}>{stats.active}</Text>
-            <Text style={[styles.statLabel, { color: theme.textMuted }]}>Active</Text>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{stats.maintenance}</Text>
+            <Text style={styles.statLabel}>Service</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.statValue, { color: theme.warning }]}>{stats.maintenance}</Text>
-            <Text style={[styles.statLabel, { color: theme.textMuted }]}>Service</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.statValue, { color: theme.textMuted }]}>{stats.inactive}</Text>
-            <Text style={[styles.statLabel, { color: theme.textMuted }]}>Inactive</Text>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{stats.inactive}</Text>
+            <Text style={styles.statLabel}>Inactive</Text>
           </View>
         </View>
 
         {/* Search */}
-        <View style={[styles.searchContainer, { backgroundColor: theme.surface }]}>
-          <Ionicons name="search-outline" size={20} color={theme.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.text }]}
-            placeholder="Search vehicles, drivers..."
-            placeholderTextColor={theme.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color={theme.textMuted} />
-            </Pressable>
-          )}
-        </View>
+        <SearchPill
+          placeholder="Search vehicles, drivers..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.search}
+          right={
+            searchQuery.length > 0 ? (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={10}>
+                <Ionicons name="close-circle" size={20} color={palette.textMuted} />
+              </TouchableOpacity>
+            ) : null
+          }
+        />
 
         {/* Filter Chips */}
         <ScrollView
@@ -292,274 +260,194 @@ export default function FleetManagementScreen() {
           contentContainerStyle={styles.filterContainer}
         >
           {['all', 'active', 'maintenance', 'inactive'].map(status => (
-            <Pressable
+            <Chip
               key={status}
+              label={status.charAt(0).toUpperCase() + status.slice(1)}
+              selected={(status === 'all' && !filterStatus) || filterStatus === status}
               onPress={() => setFilterStatus(status === 'all' ? null : status)}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor:
-                    (status === 'all' && !filterStatus) || filterStatus === status
-                      ? theme.primary
-                      : theme.surface,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  {
-                    color:
-                      (status === 'all' && !filterStatus) || filterStatus === status
-                        ? '#FFFFFF'
-                        : theme.textSecondary,
-                  },
-                ]}
-              >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </Text>
-            </Pressable>
+              style={styles.chip}
+            />
           ))}
         </ScrollView>
 
         {/* Fleet List */}
         <View style={styles.fleetList}>
           {filteredFleet.map(vehicle => (
-            <FleetCard key={vehicle.id} vehicle={vehicle} theme={theme} />
+            <FleetCard key={vehicle.id} vehicle={vehicle} />
           ))}
         </View>
 
         {filteredFleet.length === 0 && (
-          <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="truck-outline" size={48} color={theme.textMuted} />
-            <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-              No vehicles found
-            </Text>
-          </View>
+          <Card padded={false}>
+            <EmptyState title="No vehicles found" tone="grey" />
+          </Card>
         )}
 
         {/* Add Vehicle Button (Placeholder) */}
-        <Pressable
-          style={[styles.addButton, { backgroundColor: theme.primary }]}
-          accessibilityLabel="Add new vehicle"
-          accessibilityRole="button"
-        >
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-          <Text style={styles.addButtonText}>Add Vehicle</Text>
-        </Pressable>
+        <PillButton
+          label="Add Vehicle"
+          icon="plus"
+          variant="ink"
+          style={styles.addButton}
+        />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: palette.bg,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
+
+  // Hero
+  hero: {
+    minHeight: 150,
+    overflow: 'hidden',
+  },
+  heroLabel: {
+    color: palette.inkSoft,
+  },
+  heroValue: {
+    ...fonts.semibold,
+    fontSize: 48,
+    letterSpacing: -1.4,
+    color: palette.text,
+    marginTop: 4,
+  },
+  heroArt: {
+    position: 'absolute',
+    right: -30,
+    bottom: -26,
+  },
+
+  // Stats
   statsRow: {
     flexDirection: 'row',
-    gap: spacing[2],
-    marginBottom: spacing[4],
+    gap: 10,
+    marginTop: 12,
   },
   statCard: {
     flex: 1,
-    padding: spacing[3],
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surface,
   },
   statValue: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold as any,
+    ...fonts.semibold,
+    fontSize: 28,
+    letterSpacing: -1,
+    color: palette.text,
   },
   statLabel: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12.5,
+    color: palette.textMuted,
     marginTop: 2,
   },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
-    marginBottom: spacing[3],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: fontSize.base,
-    paddingVertical: spacing[2],
+
+  // Search + filters
+  search: {
+    marginTop: 20,
+    backgroundColor: palette.surface,
   },
   filterScroll: {
-    marginBottom: spacing[4],
+    marginTop: 12,
+    marginHorizontal: -20,
   },
   filterContainer: {
-    gap: spacing[2],
+    paddingHorizontal: 20,
+    gap: 8,
   },
-  filterChip: {
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
+  chip: {
+    backgroundColor: palette.surface,
   },
-  filterChipText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
+
+  // Fleet list
   fleetList: {
-    gap: spacing[3],
+    gap: 12,
+    marginTop: 16,
+    marginBottom: 12,
   },
   fleetCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 18,
   },
   fleetCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing[4],
   },
-  iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  iconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: palette.fill,
     justifyContent: 'center',
     alignItems: 'center',
   },
   fleetCardHeaderContent: {
     flex: 1,
-    marginLeft: spacing[3],
+    marginHorizontal: 12,
   },
   vehicleName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 16,
+    color: palette.text,
   },
   vehicleType: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12.5,
+    color: palette.textMuted,
     marginTop: 2,
   },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-    gap: spacing[1],
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-  },
-  fleetCardDetails: {
-    gap: spacing[2],
-    marginBottom: spacing[4],
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  detailLabel: {
-    fontSize: fontSize.sm,
-  },
-  detailValue: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    flex: 1,
+  detailsGrid: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
   },
   fuelContainer: {
-    paddingTop: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
+    marginTop: 4,
   },
   fuelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    marginBottom: spacing[2],
+    gap: 6,
+    marginBottom: 8,
   },
   fuelLabel: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
     flex: 1,
+    fontSize: 12.5,
+    color: palette.textMuted,
   },
   fuelPercent: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.text,
   },
   fuelBar: {
-    height: 6,
-    borderRadius: 3,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: palette.fill,
     overflow: 'hidden',
   },
   fuelFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 4,
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing[10],
-    gap: spacing[3],
-  },
-  emptyText: {
-    fontSize: fontSize.base,
-  },
+
   addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
-    marginTop: spacing[4],
-    minHeight: 56,
-  },
-  addButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    marginTop: 16,
   },
 });

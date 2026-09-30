@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Parkfnb | Parking made simple</title>
+  <meta name="description" content="Find parking near you, reserve it in two taps and scan in at the gate. Parkfnb for drivers and space owners." />
+  <meta name="theme-color" content="#F3F3F3" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+  <!-- Icon + illustration sprite (Feather icons, same set as the app; IsoBlock car from components/ui/IsoBlock.js) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></symbol>
+      <symbol id="i-arrow-up-right" viewBox="0 0 24 24"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></symbol>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+      <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+      <symbol id="i-card" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></symbol>
+      <symbol id="i-star" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+      <symbol id="i-nav" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></symbol>
+      <symbol id="i-trending" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+
+      <!-- IsoBlock: same geometry as the app, one symbol per tone -->
+      <symbol id="iso-peach" viewBox="10 16 100 78">
+        <ellipse cx="62" cy="74" rx="40" ry="14" fill="rgba(120,70,20,0.16)"/>
+        <polygon points="45.4,24.1 99.4,55.3 74.6,69.6 20.6,38.4" fill="#F9D5A3"/>
+        <polygon points="20.6,51.4 74.6,82.6 74.6,69.6 20.6,38.4" fill="#F0B574"/>
+        <polygon points="99.4,68.3 74.6,82.6 74.6,69.6 99.4,55.3" fill="#E39C57"/>
+        <polygon points="34.1,43.6 63.4,60.5 56.6,45.6 39.7,35.9" fill="#F6C88C"/>
+        <polygon points="83.6,48.8 63.4,60.5 56.6,45.6 76.9,34.0" fill="#E39C57"/>
+        <polygon points="60.0,24.2 76.9,34.0 56.6,45.6 39.7,35.9" fill="#F9D5A3"/>
+        <polygon points="36.8,43.6 48.1,50.1 48.1,42.5 40.9,38.4" fill="#3A241B"/>
+        <polygon points="49.9,51.1 61.1,57.6 55.9,47.1 49.9,43.6" fill="#3A241B"/>
+        <polygon points="82.3,48.2 64.7,58.4 58.4,46.7 76.0,36.5" fill="#4B3025"/>
+        <polygon points="96.7,62.5 91.5,65.5 91.5,62.4 96.7,59.4" fill="#FFF4E2"/>
+        <polygon points="82.5,70.7 77.3,73.7 77.3,70.6 82.5,67.6" fill="#FFF4E2"/>
+        <g transform="translate(32.8,58.1) matrix(0.866,0.5,0,1,0,0)"><circle r="8.2" fill="#1E1E1E"/><circle r="3.6" fill="#9A9A9A"/></g>
+        <g transform="translate(62,75) matrix(0.866,0.5,0,1,0,0)"><circle r="8.2" fill="#1E1E1E"/><circle r="3.6" fill="#9A9A9A"/></g>
+      </symbol>
+      <symbol id="iso-blue" viewBox="10 16 100 78">
+        <ellipse cx="62" cy="74" rx="40" ry="14" fill="rgba(30,50,100,0.14)"/>
+        <polygon points="45.4,24.1 99.4,55.3 74.6,69.6 20.6,38.4" fill="#EAF0FD"/>
+        <polygon points="20.6,51.4 74.6,82.6 74.6,69.6 20.6,38.4" fill="#C4D5F3"/>
+        <polygon points="99.4,68.3 74.6,82.6 74.6,69.6 99.4,55.3" fill="#A9BEE8"/>
+        <polygon points="34.1,43.6 63.4,60.5 56.6,45.6 39.7,35.9" fill="#D7E3FA"/>
+        <polygon points="83.6,48.8 63.4,60.5 56.6,45.6 76.9,34.0" fill="#A9BEE8"/>
+        <polygon points="60.0,24.2 76.9,34.0 56.6,45.6 39.7,35.9" fill="#EAF0FD"/>
+        <polygon points="36.8,43.6 48.1,50.1 48.1,42.5 40.9,38.4" fill="#202B45"/>
+        <polygon points="49.9,51.1 61.1,57.6 55.9,47.1 49.9,43.6" fill="#202B45"/>
+        <polygon points="82.3,48.2 64.7,58.4 58.4,46.7 76.0,36.5" fill="#2C3A5A"/>
+        <polygon points="96.7,62.5 91.5,65.5 91.5,62.4 96.7,59.4" fill="#FFFFFF"/>
+        <polygon points="82.5,70.7 77.3,73.7 77.3,70.6 82.5,67.6" fill="#FFFFFF"/>
+        <g transform="translate(32.8,58.1) matrix(0.866,0.5,0,1,0,0)"><circle r="8.2" fill="#1E1E1E"/><circle r="3.6" fill="#9A9A9A"/></g>
+        <g transform="translate(62,75) matrix(0.866,0.5,0,1,0,0)"><circle r="8.2" fill="#1E1E1E"/><circle r="3.6" fill="#9A9A9A"/></g>
+      </symbol>
+    </defs>
+  </svg>
+
+  <a class="skip" href="#main">Skip to content</a>
+
+  <!-- ─── Header ─────────────────────────────────────────────── -->
+  <header class="site-header" id="top">
+    <div class="container">
+      <nav class="nav-pill" aria-label="Main">
+        <a class="brand" href="#top" aria-label="Parkfnb home">
+          <span class="brand-mark"><svg class="icon"><use href="#i-pin"/></svg></span>
+          <span class="wordmark">parkfnb<span class="dot">.</span></span>
+        </a>
+
+        <ul class="nav-links">
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#owners">For owners</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+
+        <div class="nav-actions">
+          <a class="btn btn-ink btn-sm nav-cta" href="#download">
+            Get the app <svg class="icon"><use href="#i-arrow-right"/></svg>
+          </a>
+          <button class="icon-circle menu-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+            <svg class="icon icon-open"><use href="#i-menu"/></svg>
+            <svg class="icon icon-close"><use href="#i-x"/></svg>
+          </button>
+        </div>
+      </nav>
+
+      <div class="mobile-menu" id="mobile-menu" hidden>
+        <a class="list-row" href="#how"><span class="row-icon"><svg class="icon"><use href="#i-search"/></svg></span>How it works<svg class="icon chev"><use href="#i-arrow-right"/></svg></a>
+        <a class="list-row" href="#features"><span class="row-icon"><svg class="icon"><use href="#i-zap"/></svg></span>Features<svg class="icon chev"><use href="#i-arrow-right"/></svg></a>
+        <a class="list-row" href="#owners"><span class="row-icon"><svg class="icon"><use href="#i-trending"/></svg></span>For owners<svg class="icon chev"><use href="#i-arrow-right"/></svg></a>
+        <a class="list-row" href="#faq"><span class="row-icon"><svg class="icon"><use href="#i-mail"/></svg></span>FAQ<svg class="icon chev"><use href="#i-arrow-right"/></svg></a>
+        <a class="btn btn-ink btn-block" href="#download">Get the app</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ─── Hero ─────────────────────────────────────────────── -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy reveal">
+          <span class="eyebrow-chip"><span class="live-dot"></span>Your city. Smarter parking.</span>
+          <h1 class="display">Parking<br />made simple.</h1>
+          <p class="lead">Find a spot near you, reserve it in two taps and scan in at the gate. No circling the block, no cash at the barrier.</p>
+          <div class="hero-ctas">
+            <a class="btn btn-peach" href="#download"><svg class="icon"><use href="#i-download"/></svg>Download the app</a>
+            <a class="btn btn-white" href="#owners">List your space</a>
+          </div>
+          <ul class="hero-points">
+            <li><span class="tick"><svg class="icon"><use href="#i-check"/></svg></span>Hourly, daily or monthly</li>
+            <li><span class="tick"><svg class="icon"><use href="#i-check"/></svg></span>UPI and FASTag</li>
+            <li><span class="tick"><svg class="icon"><use href="#i-check"/></svg></span>Automatic gate entry</li>
+          </ul>
+        </div>
+
+        <div class="hero-art reveal" aria-hidden="true">
+          <div class="halo halo-peach"></div>
+          <div class="halo halo-blue"></div>
+
+          <!-- Phone: the app's Home screen -->
+          <div class="phone">
+            <div class="phone-island"></div>
+            <div class="phone-screen">
+              <div class="status-bar"><span>9:41</span><span class="bars"><i></i><i></i><i></i><i></i></span></div>
+
+              <div class="app-top">
+                <div>
+                  <p class="caption">Good morning</p>
+                  <p class="app-title">Find parking</p>
+                </div>
+                <span class="icon-circle sm has-badge"><svg class="icon"><use href="#i-bell"/></svg></span>
+              </div>
+
+              <div class="search-pill"><svg class="icon"><use href="#i-search"/></svg><span>Where are you going?</span></div>
+
+              <div class="chip-row">
+                <span class="chip is-on">Nearby</span><span class="chip">Cheapest</span><span class="chip">Covered</span><span class="chip">EV</span>
+              </div>
+
+              <div class="section-row"><span>Nearby parking</span><span class="muted">See all</span></div>
+
+              <div class="spot-card tone-peach">
+                <div class="spot-top">
+                  <span class="tag tag-ink">12 spots left</span>
+                  <span class="heart"><svg class="icon"><use href="#i-heart"/></svg></span>
+                </div>
+                <svg class="spot-art"><use href="#iso-peach"/></svg>
+                <p class="spot-name">Skyline Tower Parking</p>
+                <div class="spot-meta">
+                  <div><b>1.2 km</b><span>5 min drive</span></div>
+                  <div><b>&#8377;50/hr</b><span>4.5 rating</span></div>
+                </div>
+              </div>
+
+              <div class="spot-card tone-blue short">
+                <div class="spot-top">
+                  <span class="tag tag-ink">4 spots left</span>
+                  <span class="heart"><svg class="icon"><use href="#i-heart"/></svg></span>
+                </div>
+                <svg class="spot-art"><use href="#iso-blue"/></svg>
+                <p class="spot-name">City Centre Mall</p>
+              </div>
+
+              <div class="tab-bar">
+                <span class="tab is-on"><svg class="icon"><use href="#i-home"/></svg></span>
+                <span class="tab"><svg class="icon"><use href="#i-search"/></svg></span>
+                <span class="tab"><svg class="icon"><use href="#i-bookmark"/></svg></span>
+                <span class="tab"><svg class="icon"><use href="#i-user"/></svg></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Floating cards -->
+          <div class="float-card float-confirm">
+            <div class="float-row">
+              <span class="tag tag-success">Confirmed</span>
+              <span class="caption">#PFB-28491</span>
+            </div>
+            <p class="float-title">Skyline Tower, Bay B-14</p>
+            <div class="track">
+              <i class="t-dot"></i><i class="t-line done"></i><i class="t-dot"></i><i class="t-line done"></i><i class="t-ring"></i><i class="t-line"></i><i class="t-dot soft"></i>
+            </div>
+            <div class="track-labels"><span>Booked</span><span>Paid</span><span>Arriving</span><span>Parked</span></div>
+          </div>
+
+          <div class="float-card float-gate">
+            <span class="icon-circle ink sm"><svg class="icon"><use href="#i-zap"/></svg></span>
+            <div>
+              <p class="float-title">Gate opened</p>
+              <p class="caption">MP 09 AB 1234 recognised</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── How it works ─────────────────────────────────────── -->
+    <section class="section" id="how">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">How it works</span>
+          <h2 class="h1">From search to parked in three steps.</h2>
+        </div>
+
+        <div class="steps">
+          <article class="step-card reveal" style="--img:url('assets/onboarding-1.jpg')">
+            <div class="story"><i class="on"></i><i></i><i></i></div>
+            <span class="step-num">01</span>
+            <div class="step-body">
+              <h3>Find a spot<br />near you</h3>
+              <p>See live availability on the map and compare price, distance and amenities.</p>
+            </div>
+          </article>
+          <article class="step-card reveal" style="--img:url('assets/onboarding-2.jpg')">
+            <div class="story"><i class="on"></i><i class="on"></i><i></i></div>
+            <span class="step-num">02</span>
+            <div class="step-body">
+              <h3>Reserve in<br />two taps</h3>
+              <p>Pick your time, pay in the app and lock the slot before you even leave home.</p>
+            </div>
+          </article>
+          <article class="step-card reveal" style="--img:url('assets/onboarding-3.jpg')">
+            <div class="story"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+            <span class="step-num">03</span>
+            <div class="step-body">
+              <h3>Drive in.<br />Park. Relax.</h3>
+              <p>The gate reads your number plate and lifts the barrier. We handle the rest.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Features (bento) ─────────────────────────────────── -->
+    <section class="section" id="features">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">Features</span>
+          <h2 class="h1">Everything a driver needs, nothing they don't.</h2>
+        </div>
+
+        <div class="bento">
+          <article class="card tone-peach b-live reveal">
+            <span class="tag tag-ink">Live</span>
+            <h3 class="h2">Real-time availability</h3>
+            <p>Open bays update as cars come and go, so the spot you see is the spot you get.</p>
+            <svg class="bento-art"><use href="#iso-peach"/></svg>
+          </article>
+
+          <article class="card tone-blue b-duration reveal">
+            <span class="icon-circle"><svg class="icon"><use href="#i-clock"/></svg></span>
+            <h3 class="h2">Book for as long as you need</h3>
+            <p>Pay for an hour or keep a bay for the whole month.</p>
+            <div class="segmented" role="group" aria-label="Booking duration example">
+              <button type="button" class="seg is-on">Hourly</button>
+              <button type="button" class="seg">Daily</button>
+              <button type="button" class="seg">Weekly</button>
+              <button type="button" class="seg">Monthly</button>
+            </div>
+            <div class="hour-row" role="group" aria-label="Hours example">
+              <button type="button" class="hour">1h</button><button type="button" class="hour">2h</button><button type="button" class="hour is-on">3h</button><button type="button" class="hour">4h</button><button type="button" class="hour">6h</button><button type="button" class="hour">8h</button>
+            </div>
+          </article>
+
+          <article class="card b-pay reveal">
+            <span class="icon-circle grey"><svg class="icon"><use href="#i-card"/></svg></span>
+            <h3 class="h3">Pay your way</h3>
+            <p>UPI, cards or FASTag, with an instant receipt for every booking.</p>
+            <div class="chip-row wrap">
+              <span class="chip">UPI</span><span class="chip">FASTag</span><span class="chip">Cards</span>
+            </div>
+          </article>
+
+          <article class="card b-reviews reveal">
+            <span class="icon-circle grey"><svg class="icon"><use href="#i-star"/></svg></span>
+            <h3 class="h3">Reviews you can trust</h3>
+            <p>Ratings and photos from drivers who actually parked there.</p>
+            <div class="rating">
+              <b>4.5</b>
+              <span class="stars"><svg class="icon fill"><use href="#i-star"/></svg><svg class="icon fill"><use href="#i-star"/></svg><svg class="icon fill"><use href="#i-star"/></svg><svg class="icon fill"><use href="#i-star"/></svg><svg class="icon"><use href="#i-star"/></svg></span>
+              <span class="caption">120 reviews</span>
+            </div>
+          </article>
+
+          <article class="card tone-ink b-gate reveal">
+            <span class="icon-circle glass"><svg class="icon"><use href="#i-camera"/></svg></span>
+            <h3 class="h3">The gate opens itself</h3>
+            <p>Number-plate cameras match your booking and lift the barrier. No ticket, no attendant.</p>
+            <div class="plate-row">
+              <span class="plate">MP 09 AB 1234</span>
+              <span class="tag tag-success">Access granted</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Booking details showcase ─────────────────────────── -->
+    <section class="section">
+      <div class="container split">
+        <div class="split-copy reveal">
+          <span class="eyebrow">Your bookings</span>
+          <h2 class="h1">Every booking, tracked from request to exit.</h2>
+          <p class="lead">Status, directions, timings and payment for each booking, on one screen.</p>
+          <div class="card list-card">
+            <div class="list-row static"><span class="row-icon"><svg class="icon"><use href="#i-bell"/></svg></span><div><b>Live status</b><span>Know the moment your booking is confirmed</span></div></div>
+            <div class="list-row static"><span class="row-icon"><svg class="icon"><use href="#i-nav"/></svg></span><div><b>Directions to the gate</b><span>One tap opens the route in your maps app</span></div></div>
+            <div class="list-row static"><span class="row-icon"><svg class="icon"><use href="#i-shield"/></svg></span><div><b>Secure payments</b><span>Receipts saved against every booking</span></div></div>
+            <div class="list-row static last"><span class="row-icon"><svg class="icon"><use href="#i-calendar"/></svg></span><div><b>Change of plans</b><span>Modify or cancel from the booking screen</span></div></div>
+          </div>
+        </div>
+
+        <div class="details-mock reveal" aria-hidden="true">
+          <div class="mock-header"><svg class="icon"><use href="#i-arrow-left"/></svg><span>Details</span><i></i></div>
+
+          <div class="summary-card">
+            <svg class="summary-art"><use href="#iso-peach"/></svg>
+            <div class="summary-top">
+              <div>
+                <p class="grid-label">Booking id</p>
+                <p class="summary-ref">#PFB-28491 <svg class="icon"><use href="#i-copy"/></svg></p>
+              </div>
+              <div class="right">
+                <p class="grid-label">Status</p>
+                <span class="tag tag-ink">Confirmed</span>
+              </div>
+            </div>
+            <dl class="info-grid">
+              <div><dt>Parking</dt><dd>Skyline Tower</dd></div>
+              <div><dt>Rate</dt><dd>&#8377;50/hr</dd></div>
+              <div><dt>Date</dt><dd>8 Sep 2026</dd></div>
+              <div><dt>Time</dt><dd>1:00 PM - 3:00 PM</dd></div>
+              <div><dt>Duration</dt><dd>2 hours</dd></div>
+              <div><dt>Vehicle</dt><dd>MP 09 AB 1234</dd></div>
+            </dl>
+          </div>
+
+          <div class="sheet">
+            <i class="grabber"></i>
+            <p class="sheet-lead">You're all set. Show up and the gate will let you in.</p>
+            <ol class="timeline">
+              <li class="active"><span class="tl-dot"></span><div><b>Booking confirmed</b><span>Bay B-14 is held for you</span></div><time>12:26 PM</time></li>
+              <li><span class="tl-dot"></span><div><b>Payment received</b><span>&#8377;100 via UPI</span></div><time>12:25 PM</time></li>
+              <li><span class="tl-dot"></span><div><b>Request sent</b><span>Sent to the parking owner</span></div><time>12:25 PM</time></li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Owners ───────────────────────────────────────────── -->
+    <section class="section" id="owners">
+      <div class="container">
+        <div class="owners reveal">
+          <div class="owners-copy">
+            <span class="eyebrow">For space owners</span>
+            <h2 class="h1">Turn an empty space into steady income.</h2>
+            <p class="lead">Driveway, office basement or a full lot. List it on Parkfnb and choose when it is available and what it costs.</p>
+
+            <ol class="owner-steps">
+              <li><span>1</span><div><b>List your space</b><p>Add photos, set the location and describe the spot.</p></div></li>
+              <li><span>2</span><div><b>Set your pricing</b><p>Hourly, daily or monthly rates on your own schedule.</p></div></li>
+              <li><span>3</span><div><b>Approve bookings</b><p>Only verified drivers can book your space.</p></div></li>
+              <li><span>4</span><div><b>Get paid</b><p>Track earnings, bookings and occupancy in one dashboard.</p></div></li>
+            </ol>
+
+            <a class="btn btn-ink" href="#download">Get the owner app <svg class="icon"><use href="#i-arrow-right"/></svg></a>
+          </div>
+
+          <div class="owners-art" aria-hidden="true">
+            <div class="card earn-card">
+              <div class="earn-head">
+                <div>
+                  <p class="caption">Earnings this month</p>
+                  <p class="earn-value">&#8377;24,580</p>
+                </div>
+                <span class="tag tag-success">+18%</span>
+              </div>
+              <div class="bars-chart">
+                <i style="--h:42%"></i><i style="--h:58%"></i><i style="--h:36%"></i><i style="--h:70%"></i><i style="--h:64%"></i><i style="--h:88%"></i><i class="today" style="--h:76%"></i>
+              </div>
+              <div class="bars-labels"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+              <div class="earn-stats">
+                <div><b>86</b><span>Bookings</span></div>
+                <div><b>72%</b><span>Occupancy</span></div>
+                <div><b>4.7</b><span>Rating</span></div>
+              </div>
+            </div>
+
+            <div class="card request-card">
+              <div class="avatar">RS</div>
+              <div class="req-body">
+                <b>New booking request</b>
+                <span>Today, 6:00 PM - 9:00 PM</span>
+              </div>
+              <div class="req-actions">
+                <span class="btn btn-grey btn-xs">Decline</span>
+                <span class="btn btn-ink btn-xs">Approve</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── FAQ ──────────────────────────────────────────────── -->
+    <section class="section" id="faq">
+      <div class="container faq-wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">FAQ</span>
+          <h2 class="h1">Questions, answered.</h2>
+          <p class="lead">Can't find what you need? Write to us from the Help screen in the app.</p>
+        </div>
+
+        <div class="card faq reveal">
+          <details>
+            <summary>How do I book a parking spot?<span class="faq-icon"><svg class="icon"><use href="#i-plus"/></svg></span></summary>
+            <p>Search the area you're heading to, pick a spot, choose your date and duration, then pay in the app. You get a booking ID straight away.</p>
+          </details>
+          <details>
+            <summary>How do I get in at the gate?<span class="faq-icon"><svg class="icon"><use href="#i-plus"/></svg></span></summary>
+            <p>At gates with number-plate cameras, the barrier opens automatically for the vehicle on your booking. Everywhere else, show your booking in the app.</p>
+          </details>
+          <details>
+            <summary>Can I book by the hour or by the month?<span class="faq-icon"><svg class="icon"><use href="#i-plus"/></svg></span></summary>
+            <p>Both. Spots can be booked hourly, daily, weekly or monthly, depending on what the owner offers.</p>
+          </details>
+          <details>
+            <summary>Which payment methods are supported?<span class="faq-icon"><svg class="icon"><use href="#i-plus"/></svg></span></summary>
+            <p>UPI, cards and FASTag where the location supports it. Every payment comes with a receipt in the app.</p>
+          </details>
+          <details>
+            <summary>Can I cancel a booking?<span class="faq-icon"><svg class="icon"><use href="#i-plus"/></svg></span></summary>
+            <p>Yes, from the booking details screen. The cancellation policy for each spot is shown before you pay.</p>
+          </details>
+          <details>
+            <summary>I have an empty space. How do I list it?<span class="faq-icon"><svg class="icon"><use href="#i-plus"/></svg></span></summary>
+            <p>Download the Parkfnb owner app, complete a quick verification, then add your space with photos and pricing.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Download CTA ─────────────────────────────────────── -->
+    <section class="section" id="download">
+      <div class="container">
+        <div class="cta reveal">
+          <div class="cta-copy">
+            <span class="eyebrow light">Get Parkfnb</span>
+            <h2 class="display light">Drive in.<br />Park. Relax.</h2>
+            <p>Download the app and book your first spot in under a minute.</p>
+            <div class="store-row">
+              <a class="btn btn-white" href="#" data-store="ios"><svg class="icon"><use href="#i-phone"/></svg>App Store</a>
+              <a class="btn btn-peach" href="#" data-store="android"><svg class="icon"><use href="#i-download"/></svg>Google Play</a>
+            </div>
+          </div>
+          <svg class="cta-art" aria-hidden="true"><use href="#iso-peach"/></svg>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ─── Footer ─────────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-card">
+        <div class="footer-brand">
+          <a class="brand" href="#top" aria-label="Parkfnb home">
+            <span class="brand-mark"><svg class="icon"><use href="#i-pin"/></svg></span>
+            <span class="wordmark">parkfnb<span class="dot">.</span></span>
+          </a>
+          <p>Your parking, simplified. Anywhere, anytime.</p>
+          <a class="footer-mail" href="mailto:support@parkfnb.com"><svg class="icon"><use href="#i-mail"/></svg>support@parkfnb.com</a>
+        </div>
+
+        <div class="footer-cols">
+          <div>
+            <h4>Drivers</h4>
+            <a href="#how">How it works</a>
+            <a href="#features">Features</a>
+            <a href="#download">Download</a>
+          </div>
+          <div>
+            <h4>Owners</h4>
+            <a href="#owners">List your space</a>
+            <a href="#owners">Pricing control</a>
+            <a href="#download">Owner app</a>
+          </div>
+          <div>
+            <h4>Company</h4>
+            <a href="#faq">FAQ</a>
+            <a href="#">Privacy policy</a>
+            <a href="#">Terms of service</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>&copy; <span data-year>2026</span> Parkfnb. All rights reserved.</span>
+        <a class="to-top" href="#top">Back to top <svg class="icon"><use href="#i-arrow-up-right"/></svg></a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

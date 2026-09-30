@@ -11,8 +11,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 import { formatTimeRange, formatCurrency } from '../../utils/formatters';
 import type { BookingStatus } from '../../constants/mockData';
 
@@ -29,21 +28,19 @@ export interface BookingRowProps {
   isLast?: boolean;
 }
 
-const STATUS_CONFIG: Record<BookingStatus, { label: string; colorKey: 'warning' | 'success' | 'primary' | 'textMuted' }> = {
-  request: { label: 'Pending', colorKey: 'warning' },
-  active: { label: 'Active', colorKey: 'success' },
-  upcoming: { label: 'Upcoming', colorKey: 'primary' },
-  completed: { label: 'Completed', colorKey: 'textMuted' },
-  cancelled: { label: 'Cancelled', colorKey: 'textMuted' },
-  rejected:  { label: 'Rejected',  colorKey: 'textMuted' },
+// Status pill tones, matching the kit's StatusTag (bg / fg).
+const STATUS_CONFIG: Record<BookingStatus, { label: string; bg: string; fg: string }> = {
+  request: { label: 'Pending', bg: palette.warningSoft, fg: palette.warning },
+  active: { label: 'Active', bg: palette.ink, fg: palette.textInverse },
+  upcoming: { label: 'Upcoming', bg: palette.blueSoft, fg: palette.text },
+  completed: { label: 'Completed', bg: palette.fill, fg: palette.textMuted },
+  cancelled: { label: 'Cancelled', bg: palette.fill, fg: palette.textMuted },
+  rejected:  { label: 'Rejected',  bg: palette.fill, fg: palette.textMuted },
 };
 
-// Generate consistent color from initials
+// Consistent soft avatar tone from initials
 function getAvatarColor(initials: string): string {
-  const colors = [
-    '#0D7377', '#10B981', '#F59E0B', '#EF4444',
-    '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16',
-  ];
+  const colors = [palette.peachSoft, palette.blueSoft, palette.fill, palette.peachWash];
   const charCode = initials.charCodeAt(0) + (initials.charCodeAt(1) || 0);
   return colors[charCode % colors.length];
 }
@@ -66,7 +63,6 @@ function BookingRow({
 
   const avatarColor = useMemo(() => getAvatarColor(renterInitials), [renterInitials]);
   const statusConfig = STATUS_CONFIG[status];
-  const statusColor = theme[statusConfig.colorKey];
 
   const handlePressIn = useCallback(() => {
     if (onPress) {
@@ -135,10 +131,10 @@ function BookingRow({
           <View
             style={[
               styles.statusPill,
-              { backgroundColor: `${statusColor}20` },
+              { backgroundColor: statusConfig.bg },
             ]}
           >
-            <Text style={[styles.statusText, { color: statusColor }]}>
+            <Text style={[styles.statusText, { color: statusConfig.fg }]}>
               {statusConfig.label}
             </Text>
           </View>
@@ -152,54 +148,57 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing[3],
+    paddingVertical: 14,
   },
   withBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.bold,
+    color: palette.text,
+    fontSize: 15,
   },
   content: {
     flex: 1,
-    marginLeft: spacing[3],
+    marginLeft: 12,
     gap: 2,
   },
   name: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 15.5,
   },
   time: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12.5,
   },
   listing: {
-    fontSize: fontSize.xs - 1,
+    ...fonts.medium,
+    fontSize: 12,
   },
   rightSide: {
     alignItems: 'flex-end',
-    gap: spacing[1],
+    gap: 6,
   },
   amount: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.bold,
+    fontSize: 15,
+    letterSpacing: -0.2,
   },
   statusPill: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
   },
   statusText: {
-    fontSize: fontSize.xs - 1,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 11,
   },
 });
 

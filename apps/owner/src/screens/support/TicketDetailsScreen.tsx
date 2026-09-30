@@ -1,10 +1,44 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import * as Kit from '../../theme/kit';
+import * as UI from '../../components/ui';
+
+// The UI kit is plain JS; give it loose component types.
+const { Card, ScreenHeader, EmptyState } = UI as unknown as Record<string, React.ComponentType<any>>;
+const { palette } = Kit;
 
 export default function TicketDetailsScreen() {
+  const navigation = useNavigation();
+
   return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <Text className="text-xl font-bold">Ticket Details</Text>
-    </View>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <ScreenHeader
+        title="Ticket Details"
+        onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      />
+      <View style={styles.body}>
+        <Card padded={false}>
+          <EmptyState
+            title="Ticket Details"
+            subtitle="Your ticket conversation will appear here."
+            tone="blue"
+          />
+        </Card>
+      </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: palette.bg,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+});

@@ -11,6 +11,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import { palette, fonts, radii } from '../theme';
 
 // ============================================================================
 // AppAlert — drop-in replacement for `Alert.alert` from react-native, but
@@ -188,7 +189,7 @@ export function AppAlertProvider({ children }) {
                       isCancel && styles.buttonCancel,
                       isDestructive && styles.buttonDestructive,
                       !isCancel && !isDestructive && styles.buttonPrimary,
-                      isStacked && styles.buttonFull,
+                      isStacked ? styles.buttonFull : styles.buttonRow,
                       spacingStyle,
                     ]}
                   >
@@ -218,7 +219,7 @@ export function AppAlertProvider({ children }) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   backdropPress: {
     flex: 1,
@@ -231,52 +232,45 @@ const styles = StyleSheet.create({
     maxWidth: 420,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 22,
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 24,
     width: '100%',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.22,
-        shadowRadius: 28,
+        shadowOffset: { width: 0, height: 14 },
+        shadowOpacity: 0.16,
+        shadowRadius: 30,
       },
       android: { elevation: 14 },
     }),
   },
-  title: { fontSize: 17, fontWeight: '700', color: '#0F172A', marginBottom: 8 },
-  messageScroll: { maxHeight: 240, marginBottom: 18 },
+  title: { ...fonts.semibold, fontSize: 20, letterSpacing: -0.3, color: palette.text, marginBottom: 8 },
+  messageScroll: { maxHeight: 240, marginBottom: 22 },
   messageContainer: { paddingRight: 4 },
-  message: { fontSize: 14, color: '#475569', lineHeight: 20 },
-  // Default 2-button layout: row, right-aligned, no wrap. With many
-  // buttons (>2) we switch to a vertical stack so each gets full width.
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
+  message: { ...fonts.medium, fontSize: 14.5, color: palette.textMuted, lineHeight: 21 },
+  // Two buttons share a row at equal width; more than two stack.
+  actions: { flexDirection: 'row', alignItems: 'center' },
   actionsStacked: { flexDirection: 'column-reverse', alignItems: 'stretch' },
   button: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    minHeight: 40,
-    minWidth: 88,
+    paddingHorizontal: 18,
+    height: 52,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonRow: { flex: 1 },
   buttonFull: { width: '100%' },
-  buttonPressed: { opacity: 0.7 },
-  // Every button carries a border in its own colour as well as a fill.
-  // The fill alone was not enough: on Android the button laid out and was
-  // tappable, but painted nothing, leaving white label on the white card —
-  // an alert that looked like it had no button at all and could only be
-  // dismissed by guessing that the backdrop closes it. The border survives
-  // whatever eats the background, so the button is always visible.
-  buttonPrimary: { backgroundColor: '#0D7377', borderWidth: 1.5, borderColor: '#0D7377' },
-  buttonCancel: { backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#CBD5E1' },
-  buttonDestructive: { backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#EF4444' },
-  buttonText: { fontSize: 14, fontWeight: '600' },
-  buttonTextPrimary: { color: '#FFFFFF' },
-  buttonTextCancel: { color: '#1F2937' },
-  buttonTextDestructive: { color: '#FFFFFF' },
+  // Fill plus a same-colour border: on Android the fill alone sometimes
+  // failed to paint inside this nested modal, leaving an invisible button.
+  buttonPrimary: { backgroundColor: palette.ink, borderWidth: 1.5, borderColor: palette.ink },
+  buttonCancel: { backgroundColor: palette.fill, borderWidth: 1.5, borderColor: palette.fill },
+  buttonDestructive: { backgroundColor: palette.danger, borderWidth: 1.5, borderColor: palette.danger },
+  buttonText: { ...fonts.semibold, fontSize: 15 },
+  buttonTextPrimary: { color: palette.textInverse },
+  buttonTextCancel: { color: palette.text },
+  buttonTextDestructive: { color: palette.textInverse },
 });
 
 export default AppAlert;

@@ -3,12 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 
 export interface EmptyStateProps {
   icon?: string;
@@ -35,21 +34,21 @@ function EmptyState({
       <View
         style={[
           styles.iconContainer,
-          { backgroundColor: theme.borderLight },
+          { backgroundColor: palette.peachSoft },
           compact && styles.iconContainerCompact,
         ]}
       >
         <Ionicons
           name={icon}
-          size={compact ? 24 : 32}
-          color={theme.textMuted}
+          size={compact ? 22 : 30}
+          color={palette.text}
         />
       </View>
 
       <Text
         style={[
           styles.title,
-          { color: theme.textSecondary },
+          { color: theme.text },
           compact && styles.titleCompact,
         ]}
       >
@@ -69,17 +68,15 @@ function EmptyState({
       )}
 
       {actionLabel && onAction && (
-        <Pressable
+        <TouchableOpacity
           onPress={onAction}
-          style={[
-            styles.actionButton,
-            { backgroundColor: theme.primary },
-          ]}
+          activeOpacity={0.8}
+          style={styles.actionButton}
           accessibilityLabel={actionLabel}
           accessibilityRole="button"
         >
           <Text style={styles.actionButtonText}>{actionLabel}</Text>
-        </Pressable>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -89,54 +86,57 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing[6],
-    paddingHorizontal: spacing[4],
+    paddingVertical: 32,
+    paddingHorizontal: 24,
   },
   containerCompact: {
-    paddingVertical: spacing[4],
+    paddingVertical: 16,
   },
   iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing[3],
+    marginBottom: 14,
   },
   iconContainerCompact: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginBottom: spacing[2],
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginBottom: 10,
   },
   title: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 18,
     textAlign: 'center',
-    marginBottom: spacing[1],
+    marginBottom: 6,
   },
   titleCompact: {
-    fontSize: fontSize.sm,
+    fontSize: 15,
   },
   description: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    fontSize: 14,
     textAlign: 'center',
     maxWidth: 280,
     lineHeight: 20,
   },
   descriptionCompact: {
-    fontSize: fontSize.xs,
+    fontSize: 13,
   },
   actionButton: {
-    marginTop: spacing[4],
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.md,
+    marginTop: 18,
+    paddingHorizontal: 22,
+    height: 48,
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    backgroundColor: palette.ink,
   },
   actionButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    color: palette.textInverse,
+    fontSize: 15,
   },
 });
 

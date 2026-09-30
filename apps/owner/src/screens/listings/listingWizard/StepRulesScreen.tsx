@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import WizardHeader from '../../../components/wizard/WizardHeader';
 import WizardFooter from '../../../components/wizard/WizardFooter';
 import { useSpaceWizard } from '../../../context/ListingWizardContext';
 import type { SpaceVehicleType, BookingMode } from '../../../types/api';
+import { palette, radii, fonts } from '../../../theme/kit';
 
 const VEHICLE_TYPES: { value: SpaceVehicleType; label: string; icon: string }[] = [
   { value: 'car', label: 'Car', icon: 'car-outline' },
@@ -48,73 +49,82 @@ export default function StepRulesScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <View style={styles.screen}>
       <WizardHeader
         title={data.editSpaceId ? 'Edit Space' : 'Add Space'}
         step={5}
         totalSteps={5}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.h1}>Rules & amenities</Text>
         <Text style={styles.sub}>Who can park here and how bookings work.</Text>
 
-        <Text style={styles.sectionTitle}>Allowed vehicle types *</Text>
-        <View style={styles.chipGrid}>
-          {VEHICLE_TYPES.map((v) => {
-            const selected = data.allowedVehicleTypes.includes(v.value);
-            return (
-              <Pressable
-                key={v.value}
-                onPress={() => toggleVehicle(v.value)}
-                style={[styles.chip, selected && styles.chipSelected]}
-              >
-                <Ionicons
-                  name={v.icon as any}
-                  size={18}
-                  color={selected ? '#FFFFFF' : '#0D7377'}
-                />
-                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                  {v.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>
+            Allowed vehicle types <Text style={styles.required}>*</Text>
+          </Text>
+          <View style={styles.chipGrid}>
+            {VEHICLE_TYPES.map((v) => {
+              const selected = data.allowedVehicleTypes.includes(v.value);
+              return (
+                <TouchableOpacity
+                  key={v.value}
+                  activeOpacity={0.75}
+                  onPress={() => toggleVehicle(v.value)}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                >
+                  <Ionicons
+                    name={v.icon as any}
+                    size={17}
+                    color={selected ? palette.textInverse : palette.text}
+                  />
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                    {v.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Booking mode</Text>
-        <View>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Booking mode</Text>
           {BOOKING_MODES.map((m) => {
             const selected = data.bookingMode === m.value;
             return (
-              <Pressable
+              <TouchableOpacity
                 key={m.value}
+                activeOpacity={0.8}
                 onPress={() => updateField('bookingMode', m.value)}
                 style={[styles.modeRow, selected && styles.modeRowSelected]}
               >
-                <View style={styles.modeRadio}>
+                <View style={[styles.modeRadio, selected && styles.modeRadioOn]}>
                   {selected && <View style={styles.modeRadioDot} />}
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={styles.flex}>
                   <Text style={styles.modeLabel}>{m.label}</Text>
                   <Text style={styles.modeDesc}>{m.description}</Text>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             );
           })}
         </View>
 
-        <Text style={styles.sectionTitle}>Amenities</Text>
-        <View style={styles.amenityRow}>
-          <View style={{ flex: 1 }}>
+        <View style={[styles.card, styles.amenityRow]}>
+          <View style={styles.amenityIcon}>
+            <Ionicons name="flash-outline" size={20} color={palette.text} />
+          </View>
+          <View style={styles.flex}>
             <Text style={styles.amenityLabel}>EV charging available</Text>
             <Text style={styles.amenityHint}>Attract EV-driving renters</Text>
           </View>
           <Switch
             value={data.hasEvCharging}
             onValueChange={(v) => updateField('hasEvCharging', v)}
-            trackColor={{ false: '#D1D5DB', true: '#7FC5BF' }}
-            thumbColor={data.hasEvCharging ? '#0D7377' : '#F3F4F6'}
+            trackColor={{ false: palette.bgSoft, true: palette.ink }}
+            thumbColor={palette.surface}
+            ios_backgroundColor={palette.bgSoft}
           />
         </View>
       </ScrollView>
@@ -124,59 +134,69 @@ export default function StepRulesScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: palette.bg },
+  flex: { flex: 1 },
   content: { padding: 16, paddingBottom: 80 },
-  h1: { fontSize: 22, fontWeight: '700', color: '#1F2937', marginBottom: 6 },
-  sub: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginTop: 16, marginBottom: 10 },
+  h1: { ...fonts.semibold, fontSize: 26, letterSpacing: -0.6, color: palette.text, marginBottom: 6 },
+  sub: { ...fonts.medium, fontSize: 14.5, lineHeight: 20, color: palette.textMuted, marginBottom: 18 },
+  card: {
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 18,
+    marginBottom: 12,
+  },
+  sectionTitle: { ...fonts.semibold, fontSize: 17, color: palette.text, marginBottom: 12 },
+  required: { color: palette.danger },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#0D7377',
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
   },
-  chipSelected: { backgroundColor: '#0D7377' },
-  chipText: { marginLeft: 6, color: '#0D7377', fontSize: 13, fontWeight: '500' },
-  chipTextSelected: { color: '#FFFFFF' },
+  chipSelected: { backgroundColor: palette.ink },
+  chipText: { ...fonts.semibold, marginLeft: 6, color: palette.text, fontSize: 13.5 },
+  chipTextSelected: { color: palette.textInverse },
   modeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderRadius: radii.lg,
+    backgroundColor: palette.surfaceDim,
     marginBottom: 8,
   },
-  modeRowSelected: { borderColor: '#0D7377', backgroundColor: '#E8F5F4' },
+  modeRowSelected: { backgroundColor: palette.peachSoft },
   modeRadio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 2,
-    borderColor: '#0D7377',
+    borderColor: palette.textSubtle,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
+  modeRadioOn: { borderColor: palette.ink },
   modeRadioDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#0D7377',
+    backgroundColor: palette.ink,
   },
-  modeLabel: { fontSize: 15, fontWeight: '600', color: '#1F2937' },
-  modeDesc: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  amenityRow: {
-    flexDirection: 'row',
+  modeLabel: { ...fonts.semibold, fontSize: 15.5, color: palette.text },
+  modeDesc: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginTop: 2 },
+  amenityRow: { flexDirection: 'row', alignItems: 'center' },
+  amenityIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: palette.fill,
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: '#F9FAFB',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  amenityLabel: { fontSize: 15, fontWeight: '600', color: '#1F2937' },
-  amenityHint: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  amenityLabel: { ...fonts.semibold, fontSize: 15.5, color: palette.text },
+  amenityHint: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginTop: 2 },
 });

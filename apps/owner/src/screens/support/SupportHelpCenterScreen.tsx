@@ -11,21 +11,43 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
-  Pressable,
-  Modal,
+  TouchableOpacity,
   Animated,
   Platform,
   KeyboardAvoidingView,
   LayoutAnimation,
   UIManager,
-  Keyboard,
   Linking,
   DimensionValue,
+  type TextStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import * as Kit from '../../theme/kit';
+import * as UI from '../../components/ui';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const {
+  T,
+  Card,
+  PillButton,
+  IconCircle,
+  SearchPill,
+  Field,
+  ScreenHeader,
+  SectionTitle,
+  StatusTag,
+  InfoGrid,
+  ListRow,
+  TimelineItem,
+  Segmented,
+  EmptyState: KitEmptyState,
+  IsoBlock,
+} = UI as unknown as Record<string, React.ComponentType<any>>;
+const { palette, radii, shadow } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -55,9 +77,9 @@ const CATEGORIES = [
 type CategoryKey = typeof CATEGORIES[number]['key'];
 
 const PRIORITY_OPTIONS = [
-  { key: 'low', label: 'Low', color: '#10B981' },
-  { key: 'medium', label: 'Medium', color: '#F59E0B' },
-  { key: 'high', label: 'High', color: '#EF4444' },
+  { key: 'low', label: 'Low', color: palette.success },
+  { key: 'medium', label: 'Medium', color: palette.warning },
+  { key: 'high', label: 'High', color: palette.danger },
 ] as const;
 
 type PriorityKey = typeof PRIORITY_OPTIONS[number]['key'];
@@ -347,36 +369,14 @@ const spacing = {
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 24,
-  xxl: 32,
+  xl: 20,
+  xxl: 28,
 };
 
-const colors = {
-  background: '#F8FAFC',
-  surface: '#FFFFFF',
-  primary: '#0D7377',
-  primaryLight: '#E8F5F4',
-  text: '#1E293B',
-  textSecondary: '#64748B',
-  textMuted: '#94A3B8',
-  border: '#E2E8F0',
-  borderLight: '#F1F5F9',
-  success: '#10B981',
-  successLight: '#ECFDF5',
-  warning: '#F59E0B',
-  warningLight: '#FFFBEB',
-  danger: '#EF4444',
-  dangerLight: '#FEF2F2',
-};
-
-const typography = {
-  title: { fontSize: 26, fontWeight: '700' as const },
-  sectionHeader: { fontSize: 18, fontWeight: '600' as const },
-  body: { fontSize: 15, fontWeight: '400' as const },
-  bodyMedium: { fontSize: 15, fontWeight: '500' as const },
-  small: { fontSize: 13, fontWeight: '400' as const },
-  smallMedium: { fontSize: 13, fontWeight: '500' as const },
-  tiny: { fontSize: 11, fontWeight: '500' as const },
+const PRIORITY_SOFT: Record<PriorityKey, string> = {
+  low: palette.successSoft,
+  medium: palette.warningSoft,
+  high: palette.dangerSoft,
 };
 
 // ============================================================================
@@ -428,25 +428,24 @@ const Toast: React.FC<ToastProps> = ({ toast, onHide }) => {
 
   if (!toast.visible) return null;
 
-  const bgColor = toast.type === 'success' ? colors.successLight
-    : toast.type === 'error' ? colors.dangerLight
-    : colors.primaryLight;
-  const textColor = toast.type === 'success' ? colors.success
-    : toast.type === 'error' ? colors.danger
-    : colors.primary;
-  const icon = toast.type === 'success' ? 'checkmark-circle'
-    : toast.type === 'error' ? 'close-circle'
-    : 'information-circle';
+  const iconBg = toast.type === 'success' ? palette.success
+    : toast.type === 'error' ? palette.danger
+    : palette.ink;
+  const icon = toast.type === 'success' ? 'checkmark'
+    : toast.type === 'error' ? 'close'
+    : 'information';
 
   return (
     <Animated.View
       style={[
         styles.toast,
-        { backgroundColor: bgColor, transform: [{ translateY }], opacity },
+        { transform: [{ translateY }], opacity },
       ]}
     >
-      <Ionicons name={icon} size={20} color={textColor} />
-      <Text style={[styles.toastText, { color: textColor }]}>{toast.message}</Text>
+      <View style={[styles.toastIcon, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={16} color={palette.textInverse} />
+      </View>
+      <Text style={styles.toastText}>{toast.message}</Text>
     </Animated.View>
   );
 };
@@ -463,63 +462,22 @@ interface EmptyStateProps {
   onAction?: () => void;
 }
 
+// `icon` is kept for API parity; the kit empty state draws the car illustration.
 const EmptyState: React.FC<EmptyStateProps> = ({
-  icon,
   title,
   subtitle,
   actionLabel,
   onAction,
 }) => (
-  <View style={styles.emptyState}>
-    <View style={styles.emptyStateIconContainer}>
-      <Ionicons name={icon as any} size={48} color={colors.textMuted} />
-    </View>
-    <Text style={styles.emptyStateTitle}>{title}</Text>
-    {subtitle && <Text style={styles.emptyStateSubtitle}>{subtitle}</Text>}
-    {actionLabel && onAction && (
-      <Pressable onPress={onAction} style={styles.emptyStateButton}>
-        <Text style={styles.emptyStateButtonText}>{actionLabel}</Text>
-      </Pressable>
-    )}
-  </View>
-);
-
-// ============================================================================
-// SEARCH BAR COMPONENT
-// ============================================================================
-
-interface SearchBarProps {
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder?: string;
-}
-
-const SearchBar: React.FC<SearchBarProps> = ({
-  value,
-  onChangeText,
-  placeholder = 'Search...',
-}) => (
-  <View style={styles.searchBar}>
-    <Ionicons name="search-outline" size={20} color={colors.textMuted} />
-    <TextInput
-      style={styles.searchInput}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.textMuted}
-      returnKeyType="search"
-      accessibilityLabel="Search help articles"
+  <Card padded={false} style={styles.emptyCard}>
+    <KitEmptyState
+      title={title}
+      subtitle={subtitle}
+      action={actionLabel && onAction ? actionLabel : undefined}
+      onAction={onAction}
+      tone="grey"
     />
-    {value.length > 0 && (
-      <Pressable
-        onPress={() => onChangeText('')}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        accessibilityLabel="Clear search"
-      >
-        <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-      </Pressable>
-    )}
-  </View>
+  </Card>
 );
 
 // ============================================================================
@@ -539,31 +497,32 @@ const QuickActionChip: React.FC<QuickActionChipProps> = ({
   isSelected,
   onPress,
 }) => (
-  <Pressable
+  <TouchableOpacity
     onPress={onPress}
+    activeOpacity={0.75}
     style={[
-      styles.quickActionChip,
-      isSelected && styles.quickActionChipSelected,
+      styles.chip,
+      isSelected && styles.chipSelected,
     ]}
     accessibilityRole="button"
     accessibilityState={{ selected: isSelected }}
     accessibilityLabel={label}
   >
     <Ionicons
-      name={icon as any}
-      size={18}
-      color={isSelected ? colors.primary : colors.textSecondary}
+      name={icon}
+      size={16}
+      color={isSelected ? palette.textInverse : palette.text}
     />
     <Text
       style={[
-        styles.quickActionChipText,
-        isSelected && styles.quickActionChipTextSelected,
+        styles.chipText,
+        isSelected && styles.chipTextSelected,
       ]}
       numberOfLines={1}
     >
       {label}
     </Text>
-  </Pressable>
+  </TouchableOpacity>
 );
 
 // ============================================================================
@@ -577,6 +536,7 @@ interface AccordionItemProps {
   feedback?: FAQFeedback;
   onVote: (vote: 'yes' | 'no') => void;
   onSubmitFeedback: (text: string) => void;
+  isLast?: boolean;
 }
 
 const AccordionItem: React.FC<AccordionItemProps> = ({
@@ -586,6 +546,7 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
   feedback,
   onVote,
   onSubmitFeedback,
+  isLast,
 }) => {
   const [showFeedbackInput, setShowFeedbackInput] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
@@ -617,19 +578,23 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
     }
   };
 
+  const votedYes = feedback?.userVote === 'yes';
+  const votedNo = feedback?.userVote === 'no';
+
   return (
-    <View style={styles.accordionItem}>
-      <Pressable
+    <View style={[styles.accordionItem, !isLast && styles.divider]}>
+      <TouchableOpacity
         onPress={onToggle}
+        activeOpacity={0.7}
         style={styles.accordionHeader}
         accessibilityRole="button"
         accessibilityState={{ expanded: isExpanded }}
       >
         <Text style={styles.accordionQuestion}>{faq.question}</Text>
-        <Animated.View style={{ transform: [{ rotate: rotation }] }}>
-          <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+        <Animated.View style={[styles.chevronCircle, { transform: [{ rotate: rotation }] }]}>
+          <Ionicons name="chevron-down" size={18} color={palette.text} />
         </Animated.View>
-      </Pressable>
+      </TouchableOpacity>
 
       {isExpanded && (
         <View style={styles.accordionContent}>
@@ -638,50 +603,36 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
           <View style={styles.helpfulSection}>
             <Text style={styles.helpfulText}>Was this helpful?</Text>
             <View style={styles.helpfulButtons}>
-              <Pressable
+              <TouchableOpacity
                 onPress={() => onVote('yes')}
-                style={[
-                  styles.helpfulButton,
-                  feedback?.userVote === 'yes' && styles.helpfulButtonActive,
-                ]}
+                activeOpacity={0.75}
+                style={[styles.helpfulButton, votedYes && styles.helpfulButtonActive]}
                 accessibilityLabel="Yes, this was helpful"
               >
                 <Ionicons
                   name="thumbs-up-outline"
-                  size={16}
-                  color={feedback?.userVote === 'yes' ? colors.success : colors.textSecondary}
+                  size={15}
+                  color={votedYes ? palette.textInverse : palette.text}
                 />
-                <Text
-                  style={[
-                    styles.helpfulButtonText,
-                    feedback?.userVote === 'yes' && { color: colors.success },
-                  ]}
-                >
+                <Text style={[styles.helpfulButtonText, votedYes && styles.helpfulButtonTextActive]}>
                   Yes
                 </Text>
-              </Pressable>
-              <Pressable
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={handleNoVote}
-                style={[
-                  styles.helpfulButton,
-                  feedback?.userVote === 'no' && styles.helpfulButtonActiveNo,
-                ]}
+                activeOpacity={0.75}
+                style={[styles.helpfulButton, votedNo && styles.helpfulButtonActive]}
                 accessibilityLabel="No, this was not helpful"
               >
                 <Ionicons
                   name="thumbs-down-outline"
-                  size={16}
-                  color={feedback?.userVote === 'no' ? colors.danger : colors.textSecondary}
+                  size={15}
+                  color={votedNo ? palette.textInverse : palette.text}
                 />
-                <Text
-                  style={[
-                    styles.helpfulButtonText,
-                    feedback?.userVote === 'no' && { color: colors.danger },
-                  ]}
-                >
+                <Text style={[styles.helpfulButtonText, votedNo && styles.helpfulButtonTextActive]}>
                   No
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -693,20 +644,18 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
                 value={feedbackText}
                 onChangeText={setFeedbackText}
                 placeholder="Your feedback..."
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={palette.textSubtle}
                 multiline
                 maxLength={200}
               />
-              <Pressable
+              <PillButton
+                label="Save"
+                variant="ink"
+                size="sm"
                 onPress={handleSubmitFeedback}
-                style={[
-                  styles.feedbackSubmitButton,
-                  !feedbackText.trim() && styles.feedbackSubmitButtonDisabled,
-                ]}
                 disabled={!feedbackText.trim()}
-              >
-                <Text style={styles.feedbackSubmitButtonText}>Save</Text>
-              </Pressable>
+                style={styles.feedbackSubmitButton}
+              />
             </View>
           )}
         </View>
@@ -714,46 +663,6 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
     </View>
   );
 };
-
-// ============================================================================
-// SEGMENTED CONTROL COMPONENT
-// ============================================================================
-
-interface SegmentedControlProps {
-  options: { key: string; label: string }[];
-  selectedKey: string;
-  onSelect: (key: string) => void;
-}
-
-const SegmentedControl: React.FC<SegmentedControlProps> = ({
-  options,
-  selectedKey,
-  onSelect,
-}) => (
-  <View style={styles.segmentedControl}>
-    {options.map((option) => (
-      <Pressable
-        key={option.key}
-        onPress={() => onSelect(option.key)}
-        style={[
-          styles.segmentedOption,
-          selectedKey === option.key && styles.segmentedOptionSelected,
-        ]}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: selectedKey === option.key }}
-      >
-        <Text
-          style={[
-            styles.segmentedOptionText,
-            selectedKey === option.key && styles.segmentedOptionTextSelected,
-          ]}
-        >
-          {option.label}
-        </Text>
-      </Pressable>
-    ))}
-  </View>
-);
 
 // ============================================================================
 // TICKET CARD COMPONENT
@@ -769,55 +678,40 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onPress }) => {
   const priority = PRIORITY_OPTIONS.find((p) => p.key === ticket.priority);
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
+      activeOpacity={0.85}
       style={styles.ticketCard}
       accessibilityRole="button"
       accessibilityLabel={`Ticket: ${ticket.title}`}
     >
-      <View style={styles.ticketCardHeader}>
-        <View style={styles.ticketCardTitleRow}>
-          <Text style={styles.ticketCardTitle} numberOfLines={1}>
-            {ticket.title}
-          </Text>
+      <View style={styles.ticketCardTop}>
+        <Text style={styles.ticketCardId}>#{ticket.id.slice(-6).toUpperCase()}</Text>
+        <StatusTag
+          label={ticket.status === 'open' ? 'Open' : 'Closed'}
+          tone={ticket.status === 'open' ? 'ink' : 'grey'}
+        />
+      </View>
+      <Text style={styles.ticketCardTitle} numberOfLines={2}>
+        {ticket.title}
+      </Text>
+      <View style={styles.ticketCardMeta}>
+        <View style={styles.metaPill}>
+          <Ionicons
+            name={category?.icon || 'help-circle-outline'}
+            size={14}
+            color={palette.text}
+          />
+          <Text style={styles.metaPillText}>{category?.label}</Text>
+        </View>
+        <View style={styles.metaPill}>
           <View
             style={[
-              styles.ticketStatusPill,
-              ticket.status === 'open'
-                ? { backgroundColor: colors.primaryLight }
-                : { backgroundColor: colors.borderLight },
+              styles.priorityDot,
+              { backgroundColor: priority?.color || palette.textMuted },
             ]}
-          >
-            <Text
-              style={[
-                styles.ticketStatusText,
-                ticket.status === 'open'
-                  ? { color: colors.primary }
-                  : { color: colors.textSecondary },
-              ]}
-            >
-              {ticket.status === 'open' ? 'Open' : 'Closed'}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.ticketCardMeta}>
-          <View style={styles.ticketCardCategory}>
-            <Ionicons
-              name={category?.icon as any || 'help-circle-outline'}
-              size={14}
-              color={colors.textSecondary}
-            />
-            <Text style={styles.ticketCardCategoryText}>{category?.label}</Text>
-          </View>
-          <View style={styles.ticketCardPriority}>
-            <View
-              style={[
-                styles.priorityDot,
-                { backgroundColor: priority?.color || colors.textMuted },
-              ]}
-            />
-            <Text style={styles.ticketCardPriorityText}>{priority?.label}</Text>
-          </View>
+          />
+          <Text style={styles.metaPillText}>{priority?.label}</Text>
         </View>
       </View>
       <View style={styles.ticketCardFooter}>
@@ -826,14 +720,14 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onPress }) => {
         </Text>
         {ticket.comments.length > 0 && (
           <View style={styles.ticketCardComments}>
-            <Ionicons name="chatbubble-outline" size={12} color={colors.textMuted} />
+            <Ionicons name="chatbubble-outline" size={13} color={palette.textMuted} />
             <Text style={styles.ticketCardCommentsText}>
               {ticket.comments.length}
             </Text>
           </View>
         )}
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 
@@ -857,23 +751,16 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
   maxHeight = '85%',
 }) =>
   visible ? (
-
     <View style={styles.modalOverlay}>
-      <Pressable style={styles.modalBackdrop} onPress={onClose} />
+      <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={onClose} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[styles.modalContent, { maxHeight }]}
       >
         <View style={styles.modalHandle} />
         <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>{title}</Text>
-          <Pressable
-            onPress={onClose}
-            style={styles.modalCloseButton}
-            accessibilityLabel="Close"
-          >
-            <Ionicons name="close" size={24} color={colors.textSecondary} />
-          </Pressable>
+          <Text style={styles.modalTitle} numberOfLines={1}>{title}</Text>
+          <IconCircle icon="x" variant="grey" size={38} onPress={onClose} />
         </View>
         <ScrollView
           style={styles.modalBody}
@@ -884,11 +771,10 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
-  
   ) : null;
 
 // ============================================================================
-// CONTACT CARD COMPONENT
+// CONTACT ROW COMPONENT
 // ============================================================================
 
 interface ContactCardProps {
@@ -899,6 +785,7 @@ interface ContactCardProps {
   onAction: () => void;
   copyValue?: string;
   onCopy?: () => void;
+  isLast?: boolean;
 }
 
 const ContactCard: React.FC<ContactCardProps> = ({
@@ -909,34 +796,29 @@ const ContactCard: React.FC<ContactCardProps> = ({
   onAction,
   copyValue,
   onCopy,
+  isLast,
 }) => (
-  <View style={styles.contactCard}>
-    <View style={styles.contactCardIcon}>
-      <Ionicons name={icon as any} size={24} color={colors.primary} />
-    </View>
-    <View style={styles.contactCardContent}>
-      <Text style={styles.contactCardTitle}>{title}</Text>
-      <Text style={styles.contactCardSubtitle}>{subtitle}</Text>
-    </View>
-    <View style={styles.contactCardActions}>
-      {copyValue && onCopy && (
-        <Pressable
-          onPress={onCopy}
-          style={styles.contactCardCopyButton}
-          accessibilityLabel={`Copy ${title}`}
-        >
-          <Ionicons name="copy-outline" size={18} color={colors.primary} />
-        </Pressable>
-      )}
-      <Pressable
-        onPress={onAction}
-        style={styles.contactCardActionButton}
-        accessibilityLabel={actionLabel}
-      >
-        <Text style={styles.contactCardActionText}>{actionLabel}</Text>
-      </Pressable>
-    </View>
-  </View>
+  <ListRow
+    icon={icon}
+    title={title}
+    subtitle={subtitle}
+    isLast={isLast}
+    right={
+      <View style={styles.contactActions}>
+        {copyValue && onCopy && (
+          <IconCircle icon="copy" variant="grey" size={36} onPress={onCopy} />
+        )}
+        <PillButton
+          label={actionLabel}
+          variant="ink"
+          size="sm"
+          onPress={onAction}
+          style={styles.contactActionButton}
+          textStyle={styles.contactActionText}
+        />
+      </View>
+    }
+  />
 );
 
 // ============================================================================
@@ -1216,117 +1098,125 @@ export default function SupportHelpCenterScreen() {
     setShowCreateTicket(true);
   }, []);
 
+
+  const openCount = tickets.filter((t) => t.status === 'open').length;
+  const closedCount = tickets.filter((t) => t.status === 'closed').length;
+  const selectedPriority = selectedTicket
+    ? PRIORITY_OPTIONS.find((p) => p.key === selectedTicket.priority)
+    : undefined;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Toast */}
       <Toast toast={toast} onHide={() => setToast((prev) => ({ ...prev, visible: false }))} />
 
+      {/* Header */}
+      <ScreenHeader
+        title="Support & Help"
+        onBack={() => navigation.goBack()}
+        right={<IconCircle icon="settings" size={40} onPress={() => {}} />}
+      />
+
       {/* Storage Error Banner */}
       {storageError && (
         <View style={styles.errorBanner}>
-          <Ionicons name="warning-outline" size={16} color={colors.warning} />
+          <Ionicons name="warning-outline" size={16} color={palette.warning} />
           <Text style={styles.errorBannerText}>
             Couldn't save locally. Changes may not persist.
           </Text>
-          <Pressable onPress={() => setStorageError(false)}>
-            <Ionicons name="close" size={16} color={colors.textSecondary} />
-          </Pressable>
+          <TouchableOpacity onPress={() => setStorageError(false)} hitSlop={8}>
+            <Ionicons name="close" size={16} color={palette.textMuted} />
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          accessibilityLabel="Go back"
-        >
-          <View style={styles.backButtonCircle}>
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
-          </View>
-        </Pressable>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Support & Help</Text>
-          <Text style={styles.headerSubtitle}>Find answers or contact support</Text>
-        </View>
-        <Pressable
-          onPress={() => {}}
-          style={styles.settingsButton}
-          accessibilityLabel="Settings"
-        >
-          <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
-        </Pressable>
-      </View>
-
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing.xl }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing.xxl }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Search Bar */}
-        <View style={styles.section}>
-          <SearchBar
+        {/* Hero + search */}
+        <Card tone="peach" style={styles.hero}>
+          <View style={styles.heroText}>
+            <T variant="h2">How can we{'\n'}help?</T>
+            <T variant="bodySmall" style={styles.heroSub}>
+              Find answers or contact support
+            </T>
+          </View>
+          <View style={styles.heroArt} pointerEvents="none">
+            <IsoBlock size={140} tone="peach" />
+          </View>
+          <SearchPill
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search help articles"
+            returnKeyType="search"
+            accessibilityLabel="Search help articles"
+            style={styles.heroSearch}
+            right={
+              searchQuery.length > 0 ? (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery('')}
+                  hitSlop={10}
+                  accessibilityLabel="Clear search"
+                >
+                  <Ionicons name="close-circle" size={20} color={palette.textMuted} />
+                </TouchableOpacity>
+              ) : null
+            }
           />
-        </View>
+        </Card>
 
         {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.quickActionsContainer}
-          >
-            {CATEGORIES.map((category) => (
-              <QuickActionChip
-                key={category.key}
-                icon={category.icon}
-                label={category.label}
-                isSelected={selectedCategory === category.key}
-                onPress={() => handleCategorySelect(category.key)}
-              />
-            ))}
-          </ScrollView>
-        </View>
+        <SectionTitle title="Quick actions" style={styles.sectionTitle} />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipsScroll}
+          contentContainerStyle={styles.chipsRow}
+        >
+          {CATEGORIES.map((category) => (
+            <QuickActionChip
+              key={category.key}
+              icon={category.icon}
+              label={category.label}
+              isSelected={selectedCategory === category.key}
+              onPress={() => handleCategorySelect(category.key)}
+            />
+          ))}
+        </ScrollView>
 
         {/* FAQ Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>
-              FAQs {selectedCategory && `• ${CATEGORIES.find((c) => c.key === selectedCategory)?.label}`}
-            </Text>
-            {expandedFaqId && (
-              <Pressable onPress={handleCollapseAll}>
-                <Text style={styles.collapseAllText}>Collapse all</Text>
-              </Pressable>
-            )}
-          </View>
+        <SectionTitle
+          title={`FAQs${selectedCategory ? ` · ${CATEGORIES.find((c) => c.key === selectedCategory)?.label}` : ''}`}
+          action={expandedFaqId ? 'Collapse all' : undefined}
+          onAction={handleCollapseAll}
+          style={styles.sectionTitle}
+        />
 
-          {filteredFaqs.length === 0 ? (
-            <EmptyState
-              icon="search-outline"
-              title="No matches found"
-              subtitle="Try different keywords or clear the search"
-              actionLabel="Clear search"
-              onAction={() => {
-                setSearchQuery('');
-                setSelectedCategory(null);
-              }}
-            />
-          ) : (
-            <View style={styles.faqContainer}>
-              {Object.entries(groupedFaqs).map(([categoryKey, faqs]) => (
-                <View key={categoryKey} style={styles.faqCategoryGroup}>
-                  {!selectedCategory && (
-                    <Text style={styles.faqCategoryTitle}>
-                      {CATEGORIES.find((c) => c.key === categoryKey)?.label}
-                    </Text>
-                  )}
-                  {faqs.map((faq) => (
+        {filteredFaqs.length === 0 ? (
+          <EmptyState
+            icon="search-outline"
+            title="No matches found"
+            subtitle="Try different keywords or clear the search"
+            actionLabel="Clear search"
+            onAction={() => {
+              setSearchQuery('');
+              setSelectedCategory(null);
+            }}
+          />
+        ) : (
+          <View style={styles.faqContainer}>
+            {Object.entries(groupedFaqs).map(([categoryKey, faqs]) => (
+              <View key={categoryKey}>
+                {!selectedCategory && (
+                  <Text style={styles.faqCategoryTitle}>
+                    {CATEGORIES.find((c) => c.key === categoryKey)?.label}
+                  </Text>
+                )}
+                <Card style={styles.listCard}>
+                  {faqs.map((faq, index) => (
                     <AccordionItem
                       key={faq.id}
                       faq={faq}
@@ -1335,89 +1225,86 @@ export default function SupportHelpCenterScreen() {
                       feedback={faqFeedback[faq.id]}
                       onVote={(vote) => handleFaqVote(faq.id, vote)}
                       onSubmitFeedback={(text) => handleFaqFeedbackSubmit(faq.id, text)}
+                      isLast={index === faqs.length - 1}
                     />
                   ))}
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
+                </Card>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* My Tickets Section */}
-        <View style={styles.section}>
-          <View style={styles.ticketsSectionHeader}>
-            <Text style={styles.sectionTitle}>My Tickets</Text>
-            <Pressable
-              onPress={() => setShowCreateTicket(true)}
-              style={styles.raiseTicketButton}
-              accessibilityLabel="Raise a Ticket"
-            >
-              <Ionicons name="add-circle" size={18} color={colors.surface} />
-              <Text style={styles.raiseTicketButtonText}>Raise Ticket</Text>
-            </Pressable>
-          </View>
-          <SegmentedControl
-            options={[
-              { key: 'open', label: `Open (${tickets.filter((t) => t.status === 'open').length})` },
-              { key: 'closed', label: `Closed (${tickets.filter((t) => t.status === 'closed').length})` },
-            ]}
-            selectedKey={ticketTab}
-            onSelect={(key) => setTicketTab(key as 'open' | 'closed')}
+        <View style={styles.ticketsSectionHeader}>
+          <Text style={styles.sectionHeading}>My tickets</Text>
+          <PillButton
+            label="Raise Ticket"
+            icon="plus"
+            variant="ink"
+            size="sm"
+            onPress={() => setShowCreateTicket(true)}
           />
-
-          {filteredTickets.length === 0 ? (
-            <EmptyState
-              icon="ticket-outline"
-              title={ticketTab === 'open' ? 'No open tickets' : 'No closed tickets'}
-              subtitle={ticketTab === 'open' ? 'Create a ticket if you need help' : 'Your resolved tickets will appear here'}
-              actionLabel={ticketTab === 'open' ? 'Create your first ticket' : undefined}
-              onAction={ticketTab === 'open' ? () => setShowCreateTicket(true) : undefined}
-            />
-          ) : (
-            <View style={styles.ticketsList}>
-              {filteredTickets.map((ticket) => (
-                <TicketCard
-                  key={ticket.id}
-                  ticket={ticket}
-                  onPress={() => handleTicketPress(ticket)}
-                />
-              ))}
-            </View>
-          )}
         </View>
+        <Segmented
+          options={[
+            { id: 'open', label: `Open (${openCount})` },
+            { id: 'closed', label: `Closed (${closedCount})` },
+          ]}
+          value={ticketTab}
+          onChange={(key: string) => setTicketTab(key as 'open' | 'closed')}
+          style={styles.segmented}
+        />
+
+        {filteredTickets.length === 0 ? (
+          <EmptyState
+            icon="ticket-outline"
+            title={ticketTab === 'open' ? 'No open tickets' : 'No closed tickets'}
+            subtitle={ticketTab === 'open' ? 'Create a ticket if you need help' : 'Your resolved tickets will appear here'}
+            actionLabel={ticketTab === 'open' ? 'Create your first ticket' : undefined}
+            onAction={ticketTab === 'open' ? () => setShowCreateTicket(true) : undefined}
+          />
+        ) : (
+          <View style={styles.ticketsList}>
+            {filteredTickets.map((ticket) => (
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                onPress={() => handleTicketPress(ticket)}
+              />
+            ))}
+          </View>
+        )}
 
         {/* Contact Options */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Contact Us</Text>
-          <View style={styles.contactCardsContainer}>
-            <ContactCard
-              icon="chatbubbles-outline"
-              title="Chat with Support"
-              subtitle="Get instant help from our team"
-              actionLabel="Start Chat"
-              onAction={() => {}}
-            />
-            <ContactCard
-              icon="mail-outline"
-              title="Email Support"
-              subtitle={SUPPORT_EMAIL}
-              actionLabel="Send Email"
-              onAction={handleEmailPress}
-              copyValue={SUPPORT_EMAIL}
-              onCopy={() => handleCopyText(SUPPORT_EMAIL)}
-            />
-            <ContactCard
-              icon="call-outline"
-              title="Call Support"
-              subtitle={SUPPORT_PHONE}
-              actionLabel="Call Now"
-              onAction={handlePhonePress}
-              copyValue={SUPPORT_PHONE}
-              onCopy={() => handleCopyText(SUPPORT_PHONE)}
-            />
-          </View>
-        </View>
-
+        <SectionTitle title="Contact us" style={styles.sectionTitle} />
+        <Card style={styles.listCard}>
+          <ContactCard
+            icon="message-circle"
+            title="Chat with Support"
+            subtitle="Get instant help from our team"
+            actionLabel="Start Chat"
+            onAction={() => {}}
+          />
+          <ContactCard
+            icon="mail"
+            title="Email Support"
+            subtitle={SUPPORT_EMAIL}
+            actionLabel="Send Email"
+            onAction={handleEmailPress}
+            copyValue={SUPPORT_EMAIL}
+            onCopy={() => handleCopyText(SUPPORT_EMAIL)}
+          />
+          <ContactCard
+            icon="phone"
+            title="Call Support"
+            subtitle={SUPPORT_PHONE}
+            actionLabel="Call Now"
+            onAction={handlePhonePress}
+            copyValue={SUPPORT_PHONE}
+            onCopy={() => handleCopyText(SUPPORT_PHONE)}
+            isLast
+          />
+        </Card>
       </ScrollView>
 
       {/* Create Ticket Modal */}
@@ -1440,28 +1327,13 @@ export default function SupportHelpCenterScreen() {
               contentContainerStyle={styles.categoryPicker}
             >
               {CATEGORIES.map((cat) => (
-                <Pressable
+                <QuickActionChip
                   key={cat.key}
+                  icon={cat.icon}
+                  label={cat.label}
+                  isSelected={newTicketCategory === cat.key}
                   onPress={() => setNewTicketCategory(cat.key)}
-                  style={[
-                    styles.categoryOption,
-                    newTicketCategory === cat.key && styles.categoryOptionSelected,
-                  ]}
-                >
-                  <Ionicons
-                    name={cat.icon as any}
-                    size={18}
-                    color={newTicketCategory === cat.key ? colors.primary : colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.categoryOptionText,
-                      newTicketCategory === cat.key && styles.categoryOptionTextSelected,
-                    ]}
-                  >
-                    {cat.label}
-                  </Text>
-                </Pressable>
+                />
               ))}
             </ScrollView>
             {formErrors.category && (
@@ -1471,13 +1343,12 @@ export default function SupportHelpCenterScreen() {
 
           {/* Title */}
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Title *</Text>
-            <TextInput
-              style={[styles.formInput, formErrors.title && styles.formInputError]}
+            <Field
+              label="Title *"
+              icon="edit-3"
               value={newTicketTitle}
               onChangeText={setNewTicketTitle}
               placeholder="Brief summary of your issue"
-              placeholderTextColor={colors.textMuted}
               maxLength={100}
             />
             {formErrors.title && (
@@ -1488,17 +1359,19 @@ export default function SupportHelpCenterScreen() {
           {/* Description */}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Description *</Text>
-            <TextInput
-              style={[styles.formInputMultiline, formErrors.description && styles.formInputError]}
-              value={newTicketDescription}
-              onChangeText={setNewTicketDescription}
-              placeholder="Please provide as much detail as possible..."
-              placeholderTextColor={colors.textMuted}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-              maxLength={500}
-            />
+            <View style={[styles.textAreaWrap, !!formErrors.description && styles.inputError]}>
+              <TextInput
+                style={styles.textArea}
+                value={newTicketDescription}
+                onChangeText={setNewTicketDescription}
+                placeholder="Please provide as much detail as possible..."
+                placeholderTextColor={palette.textSubtle}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                maxLength={500}
+              />
+            </View>
             <Text style={styles.formCharCount}>
               {newTicketDescription.length}/500
             </Text>
@@ -1511,31 +1384,25 @@ export default function SupportHelpCenterScreen() {
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Priority</Text>
             <View style={styles.priorityPicker}>
-              {PRIORITY_OPTIONS.map((priority) => (
-                <Pressable
-                  key={priority.key}
-                  onPress={() => setNewTicketPriority(priority.key)}
-                  style={[
-                    styles.priorityOption,
-                    newTicketPriority === priority.key && {
-                      backgroundColor: `${priority.color}15`,
-                      borderColor: priority.color,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[styles.priorityDotLarge, { backgroundColor: priority.color }]}
-                  />
-                  <Text
+              {PRIORITY_OPTIONS.map((priority) => {
+                const active = newTicketPriority === priority.key;
+                return (
+                  <TouchableOpacity
+                    key={priority.key}
+                    onPress={() => setNewTicketPriority(priority.key)}
+                    activeOpacity={0.75}
                     style={[
-                      styles.priorityOptionText,
-                      newTicketPriority === priority.key && { color: priority.color },
+                      styles.priorityOption,
+                      active && { backgroundColor: PRIORITY_SOFT[priority.key] },
                     ]}
                   >
-                    {priority.label}
-                  </Text>
-                </Pressable>
-              ))}
+                    <View style={[styles.priorityDotLarge, { backgroundColor: priority.color }]} />
+                    <Text style={[styles.priorityOptionText, active && { color: priority.color }]}>
+                      {priority.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
@@ -1543,7 +1410,9 @@ export default function SupportHelpCenterScreen() {
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Attachments</Text>
             <View style={styles.attachmentPlaceholder}>
-              <Ionicons name="cloud-upload-outline" size={24} color={colors.textMuted} />
+              <View style={styles.attachmentIcon}>
+                <Ionicons name="cloud-upload-outline" size={20} color={palette.textMuted} />
+              </View>
               <Text style={styles.attachmentPlaceholderText}>
                 Coming soon - File attachments will be available in a future update
               </Text>
@@ -1551,13 +1420,13 @@ export default function SupportHelpCenterScreen() {
           </View>
 
           {/* Submit Button */}
-          <Pressable
+          <PillButton
+            label="Submit Ticket"
+            icon="send"
+            variant="ink"
             onPress={handleCreateTicket}
             style={styles.submitButton}
-            accessibilityLabel="Submit ticket"
-          >
-            <Text style={styles.submitButtonText}>Submit Ticket</Text>
-          </Pressable>
+          />
         </View>
       </BottomSheetModal>
 
@@ -1575,51 +1444,28 @@ export default function SupportHelpCenterScreen() {
         {selectedTicket && (
           <View style={styles.ticketDetailsContent}>
             {/* Ticket Info */}
-            <View style={styles.ticketDetailsHeader}>
-              <Text style={styles.ticketDetailsTitle}>{selectedTicket.title}</Text>
-              <View
-                style={[
-                  styles.ticketStatusPillLarge,
-                  selectedTicket.status === 'open'
-                    ? { backgroundColor: colors.primaryLight }
-                    : { backgroundColor: colors.borderLight },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.ticketStatusTextLarge,
-                    selectedTicket.status === 'open'
-                      ? { color: colors.primary }
-                      : { color: colors.textSecondary },
-                  ]}
-                >
-                  {selectedTicket.status === 'open' ? 'Open' : 'Closed'}
-                </Text>
-              </View>
-            </View>
+            <StatusTag
+              label={selectedTicket.status === 'open' ? 'Open' : 'Closed'}
+              tone={selectedTicket.status === 'open' ? 'ink' : 'grey'}
+              style={styles.detailsTag}
+            />
+            <Text style={styles.ticketDetailsTitle}>{selectedTicket.title}</Text>
 
-            <View style={styles.ticketDetailsMeta}>
-              <View style={styles.ticketDetailsMetaItem}>
-                <Ionicons name="folder-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.ticketDetailsMetaText}>
-                  {CATEGORIES.find((c) => c.key === selectedTicket.category)?.label}
-                </Text>
-              </View>
-              <View style={styles.ticketDetailsMetaItem}>
-                <View
-                  style={[
-                    styles.priorityDot,
-                    {
-                      backgroundColor:
-                        PRIORITY_OPTIONS.find((p) => p.key === selectedTicket.priority)?.color,
-                    },
-                  ]}
-                />
-                <Text style={styles.ticketDetailsMetaText}>
-                  {PRIORITY_OPTIONS.find((p) => p.key === selectedTicket.priority)?.label} Priority
-                </Text>
-              </View>
-            </View>
+            <InfoGrid
+              items={[
+                {
+                  label: 'Category',
+                  value: CATEGORIES.find((c) => c.key === selectedTicket.category)?.label,
+                },
+                {
+                  label: 'Priority',
+                  value: selectedPriority ? `${selectedPriority.label} Priority` : undefined,
+                },
+                { label: 'Created', value: formatDateTime(selectedTicket.createdAt) },
+                { label: 'Updated', value: formatDate(selectedTicket.updatedAt) },
+              ]}
+              style={styles.detailsGrid}
+            />
 
             <View style={styles.ticketDetailsDescription}>
               <Text style={styles.ticketDetailsDescriptionText}>
@@ -1628,28 +1474,23 @@ export default function SupportHelpCenterScreen() {
             </View>
 
             {/* Timeline */}
+            <Text style={styles.detailsSectionTitle}>Timeline</Text>
             <View style={styles.ticketTimeline}>
-              <Text style={styles.ticketTimelineTitle}>Timeline</Text>
               {selectedTicket.timeline.map((entry, index) => (
-                <View key={entry.id} style={styles.ticketTimelineItem}>
-                  <View style={styles.ticketTimelineDot} />
-                  {index < selectedTicket.timeline.length - 1 && (
-                    <View style={styles.ticketTimelineLine} />
-                  )}
-                  <View style={styles.ticketTimelineContent}>
-                    <Text style={styles.ticketTimelineLabel}>{entry.label}</Text>
-                    <Text style={styles.ticketTimelineDate}>
-                      {formatDateTime(entry.createdAt)}
-                    </Text>
-                  </View>
-                </View>
+                <TimelineItem
+                  key={entry.id}
+                  title={entry.label}
+                  date={formatDateTime(entry.createdAt)}
+                  active={index === selectedTicket.timeline.length - 1}
+                  isLast={index === selectedTicket.timeline.length - 1}
+                />
               ))}
             </View>
 
             {/* Comments */}
             {selectedTicket.comments.length > 0 && (
               <View style={styles.ticketComments}>
-                <Text style={styles.ticketCommentsTitle}>Comments</Text>
+                <Text style={styles.detailsSectionTitle}>Comments</Text>
                 {selectedTicket.comments.map((comment) => (
                   <View key={comment.id} style={styles.ticketCommentItem}>
                     <Text style={styles.ticketCommentText}>{comment.message}</Text>
@@ -1669,33 +1510,33 @@ export default function SupportHelpCenterScreen() {
                   value={newComment}
                   onChangeText={setNewComment}
                   placeholder="Add a comment..."
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={palette.textSubtle}
                   multiline
                   maxLength={300}
                 />
-                <Pressable
+                <TouchableOpacity
                   onPress={handleAddComment}
+                  activeOpacity={0.8}
                   style={[
                     styles.addCommentButton,
                     !newComment.trim() && styles.addCommentButtonDisabled,
                   ]}
                   disabled={!newComment.trim()}
+                  accessibilityLabel="Send comment"
                 >
-                  <Ionicons name="send" size={18} color={colors.surface} />
-                </Pressable>
+                  <Ionicons name="send" size={18} color={palette.textInverse} />
+                </TouchableOpacity>
               </View>
             )}
 
             {/* Close Ticket Button */}
             {selectedTicket.status === 'open' && (
-              <Pressable
+              <PillButton
+                label="Close Ticket"
+                icon="check-circle"
+                variant="grey"
                 onPress={handleCloseTicket}
-                style={styles.closeTicketButton}
-                accessibilityLabel="Close ticket"
-              >
-                <Ionicons name="checkmark-circle-outline" size={20} color={colors.textSecondary} />
-                <Text style={styles.closeTicketButtonText}>Close Ticket</Text>
-              </Pressable>
+              />
             )}
           </View>
         )}
@@ -1703,7 +1544,6 @@ export default function SupportHelpCenterScreen() {
 
       {/* Copy Text Modal */}
       {showCopiedModal ? (
-
         <View style={styles.copyModalOverlay}>
           <View style={styles.copyModalContent}>
             <Text style={styles.copyModalTitle}>Copy this text</Text>
@@ -1715,15 +1555,14 @@ export default function SupportHelpCenterScreen() {
             <Text style={styles.copyModalHint}>
               Long press and select "Copy" to copy the text
             </Text>
-            <Pressable
+            <PillButton
+              label="Done"
+              variant="ink"
+              size="md"
               onPress={() => setShowCopiedModal(false)}
-              style={styles.copyModalButton}
-            >
-              <Text style={styles.copyModalButtonText}>Done</Text>
-            </Pressable>
+            />
           </View>
         </View>
-      
       ) : null}
     </SafeAreaView>
   );
@@ -1736,7 +1575,7 @@ export default function SupportHelpCenterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: palette.bg,
   },
 
   // Toast
@@ -1747,78 +1586,45 @@ const styles = StyleSheet.create({
     right: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: 12,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surface,
     gap: spacing.md,
     zIndex: 1000,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    ...shadow.lifted,
+  },
+  toastIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toastText: {
+    ...fonts.semibold,
     flex: 1,
-    ...typography.bodyMedium,
+    fontSize: 14,
+    color: palette.text,
   },
 
   // Error Banner
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.warningLight,
+    backgroundColor: palette.warningSoft,
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+    borderRadius: radii.pill,
     gap: spacing.sm,
   },
   errorBannerText: {
+    ...fonts.medium,
     flex: 1,
-    ...typography.small,
-    color: colors.warning,
-  },
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.background,
-  },
-  backButton: {
-    marginRight: spacing.md,
-  },
-  backButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    ...typography.title,
-    color: colors.text,
-  },
-  headerSubtitle: {
-    ...typography.small,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  settingsButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    fontSize: 13,
+    color: palette.text,
   },
 
   // Scroll View
@@ -1826,155 +1632,138 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
   },
 
-  // Section
-  section: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
+  // Hero
+  hero: {
+    minHeight: 230,
+    paddingBottom: spacing.xl,
+    overflow: 'hidden',
   },
+  heroText: {
+    maxWidth: '62%',
+  },
+  heroSub: {
+    marginTop: spacing.sm,
+    color: palette.inkSoft,
+  },
+  heroArt: {
+    position: 'absolute',
+    right: -30,
+    bottom: -26,
+  },
+  heroSearch: {
+    marginTop: 'auto',
+    backgroundColor: palette.surface,
+  },
+
+  // Sections
   sectionTitle: {
-    ...typography.sectionHeader,
-    color: colors.text,
+    marginTop: spacing.xxl,
     marginBottom: spacing.md,
   },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
+  sectionHeading: {
+    ...fonts.medium,
+    fontSize: 19,
+    letterSpacing: -0.2,
+    color: palette.text,
   },
-  collapseAllText: {
-    ...typography.smallMedium,
-    color: colors.primary,
+  listCard: {
+    paddingVertical: spacing.xs,
+  },
+  divider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
   },
 
-  // Search Bar
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.md,
+  // Chips
+  chipsScroll: {
+    marginHorizontal: -spacing.xl,
   },
-  searchInput: {
-    flex: 1,
-    ...typography.body,
-    color: colors.text,
-    padding: 0,
-  },
-
-  // Quick Actions
-  quickActionsContainer: {
-    paddingRight: spacing.lg,
+  chipsRow: {
+    paddingHorizontal: spacing.xl,
     gap: spacing.sm,
   },
-  quickActionChip: {
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    height: 42,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surface,
     gap: spacing.sm,
   },
-  quickActionChipSelected: {
-    backgroundColor: colors.primaryLight,
-    borderColor: colors.primary,
+  chipSelected: {
+    backgroundColor: palette.ink,
   },
-  quickActionChipText: {
-    ...typography.smallMedium,
-    color: colors.textSecondary,
+  chipText: {
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
   },
-  quickActionChipTextSelected: {
-    color: colors.primary,
-  },
-  // Tickets Section Header
-  ticketsSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  raiseTicketButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 16,
-    gap: spacing.xs,
-  },
-  raiseTicketButtonText: {
-    ...typography.smallMedium,
-    color: colors.surface,
+  chipTextSelected: {
+    color: palette.textInverse,
   },
 
   // FAQ
   faqContainer: {
     gap: spacing.lg,
   },
-  faqCategoryGroup: {
-    gap: spacing.sm,
-  },
   faqCategoryTitle: {
-    ...typography.smallMedium,
-    color: colors.textSecondary,
+    ...fonts.semibold,
+    fontSize: 12,
+    color: palette.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
+    letterSpacing: 0.6,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
   },
 
   // Accordion
   accordionItem: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: spacing.lg,
   },
   accordionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.lg,
     gap: spacing.md,
   },
   accordionQuestion: {
+    ...fonts.semibold,
     flex: 1,
-    ...typography.bodyMedium,
-    color: colors.text,
+    fontSize: 15,
+    lineHeight: 20,
+    color: palette.text,
+  },
+  chevronCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   accordionContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    marginTop: spacing.md,
   },
   accordionAnswer: {
-    ...typography.body,
-    color: colors.textSecondary,
-    lineHeight: 22,
-    paddingTop: spacing.md,
+    ...fonts.medium,
+    fontSize: 14,
+    lineHeight: 21,
+    color: palette.textMuted,
   },
   helpfulSection: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
   },
   helpfulText: {
-    ...typography.small,
-    color: colors.textSecondary,
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
   },
   helpfulButtons: {
     flexDirection: 'row',
@@ -1983,203 +1772,132 @@ const styles = StyleSheet.create({
   helpfulButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: 34,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 16,
-    backgroundColor: colors.borderLight,
-    gap: spacing.xs,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    gap: 6,
   },
   helpfulButtonActive: {
-    backgroundColor: colors.successLight,
-  },
-  helpfulButtonActiveNo: {
-    backgroundColor: colors.dangerLight,
+    backgroundColor: palette.ink,
   },
   helpfulButtonText: {
-    ...typography.small,
-    color: colors.textSecondary,
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.text,
+  },
+  helpfulButtonTextActive: {
+    color: palette.textInverse,
   },
   feedbackInputContainer: {
     marginTop: spacing.md,
     padding: spacing.md,
-    backgroundColor: colors.borderLight,
-    borderRadius: 8,
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
   },
   feedbackPrompt: {
-    ...typography.small,
-    color: colors.textSecondary,
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
     marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
   },
   feedbackInput: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
+    ...fonts.medium,
+    backgroundColor: palette.surface,
+    borderRadius: radii.md,
     padding: spacing.md,
-    ...typography.small,
-    color: colors.text,
-    minHeight: 60,
+    fontSize: 14,
+    color: palette.text,
+    minHeight: 64,
     textAlignVertical: 'top',
   },
   feedbackSubmitButton: {
     alignSelf: 'flex-end',
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: 16,
     marginTop: spacing.sm,
-  },
-  feedbackSubmitButtonDisabled: {
-    backgroundColor: colors.textMuted,
-  },
-  feedbackSubmitButtonText: {
-    ...typography.smallMedium,
-    color: colors.surface,
   },
 
   // Empty State
-  emptyState: {
-    alignItems: 'center',
-    padding: spacing.xxl,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  emptyStateIconContainer: {
-    marginBottom: spacing.lg,
-  },
-  emptyStateTitle: {
-    ...typography.bodyMedium,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  emptyStateSubtitle: {
-    ...typography.small,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  emptyStateButton: {
-    marginTop: spacing.lg,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: 20,
-  },
-  emptyStateButtonText: {
-    ...typography.bodyMedium,
-    color: colors.surface,
+  emptyCard: {
+    overflow: 'hidden',
   },
 
-  // Segmented Control
-  segmentedControl: {
+  // Tickets
+  ticketsSectionHeader: {
     flexDirection: 'row',
-    backgroundColor: colors.borderLight,
-    borderRadius: 10,
-    padding: 4,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.xxl,
+    marginBottom: spacing.md,
+  },
+  segmented: {
     marginBottom: spacing.lg,
   },
-  segmentedOption: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  segmentedOptionSelected: {
-    backgroundColor: colors.surface,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  segmentedOptionText: {
-    ...typography.smallMedium,
-    color: colors.textSecondary,
-  },
-  segmentedOptionTextSelected: {
-    color: colors.text,
-  },
-
-  // Tickets List
   ticketsList: {
     gap: spacing.md,
   },
-
-  // Ticket Card
   ticketCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: spacing.xl,
   },
-  ticketCardHeader: {
+  ticketCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
-  ticketCardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginBottom: spacing.sm,
+  ticketCardId: {
+    ...fonts.semibold,
+    fontSize: 12,
+    color: palette.textMuted,
+    letterSpacing: 0.4,
   },
   ticketCardTitle: {
-    flex: 1,
-    ...typography.bodyMedium,
-    color: colors.text,
-  },
-  ticketStatusPill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
-  },
-  ticketStatusText: {
-    ...typography.tiny,
+    ...fonts.bold,
+    fontSize: 17,
+    lineHeight: 22,
+    color: palette.text,
   },
   ticketCardMeta: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: spacing.lg,
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
-  ticketCardCategory: {
+  metaPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    height: 30,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    gap: 6,
   },
-  ticketCardCategoryText: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  ticketCardPriority: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
+  metaPillText: {
+    ...fonts.semibold,
+    fontSize: 12.5,
+    color: palette.text,
   },
   priorityDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
   },
-  ticketCardPriorityText: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
   ticketCardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: spacing.md,
     paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
   },
   ticketCardDate: {
-    ...typography.small,
-    color: colors.textMuted,
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
   },
   ticketCardComments: {
     flexDirection: 'row',
@@ -2187,11 +1905,27 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   ticketCardCommentsText: {
-    ...typography.small,
-    color: colors.textMuted,
+    ...fonts.semibold,
+    fontSize: 12,
+    color: palette.textMuted,
   },
 
-  // Modal
+  // Contact
+  contactActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginLeft: spacing.sm,
+  },
+  contactActionButton: {
+    height: 36,
+    paddingHorizontal: 14,
+  },
+  contactActionText: {
+    fontSize: 13,
+  },
+
+  // Bottom sheet
   modalOverlay: {
     // Absolutely positioned rather than flex:1 — no longer inside a
     // <Modal>, which does not present on this build.
@@ -2202,23 +1936,23 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   modalBackdrop: {
     flex: 1,
   },
   modalContent: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
     maxHeight: '85%',
   },
   modalHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: 2,
+    width: 44,
+    height: 5,
+    backgroundColor: palette.line,
+    borderRadius: 3,
     alignSelf: 'center',
     marginTop: spacing.md,
   },
@@ -2226,167 +1960,87 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+    gap: spacing.md,
   },
   modalTitle: {
-    ...typography.sectionHeader,
-    color: colors.text,
-  },
-  modalCloseButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...fonts.semibold,
+    flex: 1,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
   },
   modalBody: {
-    padding: spacing.lg,
-  },
-
-  // Contact Cards
-  contactCardsContainer: {
-    gap: spacing.md,
-  },
-  contactCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.md,
-  },
-  contactCardIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  contactCardContent: {
-    flex: 1,
-  },
-  contactCardTitle: {
-    ...typography.bodyMedium,
-    color: colors.text,
-  },
-  contactCardSubtitle: {
-    ...typography.small,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  contactCardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  contactCardCopyButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  contactCardActionButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: 16,
-  },
-  contactCardActionText: {
-    ...typography.smallMedium,
-    color: colors.surface,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
   },
 
   // Create Ticket Form
   createTicketForm: {
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
   formGroup: {
     marginBottom: spacing.lg,
   },
   formLabel: {
-    ...typography.smallMedium,
-    color: colors.text,
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
     marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
   },
-  formInput: {
-    backgroundColor: colors.borderLight,
-    borderRadius: 12,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    ...typography.body,
-    color: colors.text,
+  textAreaWrap: {
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
     borderWidth: 1.5,
     borderColor: 'transparent',
   },
-  formInputMultiline: {
-    backgroundColor: colors.borderLight,
-    borderRadius: 12,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    ...typography.body,
-    color: colors.text,
+  inputError: {
+    borderColor: palette.danger,
+  },
+  textArea: {
+    ...fonts.medium,
     minHeight: 100,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  formInputError: {
-    borderColor: colors.danger,
+    fontSize: 16,
+    color: palette.text,
+    padding: 0,
+    textAlignVertical: 'top',
   },
   formError: {
-    ...typography.small,
-    color: colors.danger,
+    ...fonts.medium,
+    fontSize: 12.5,
+    color: palette.danger,
     marginTop: spacing.xs,
+    marginLeft: spacing.xs,
   },
   formCharCount: {
-    ...typography.tiny,
-    color: colors.textMuted,
+    ...fonts.medium,
+    fontSize: 11,
+    color: palette.textMuted,
     textAlign: 'right',
     marginTop: spacing.xs,
+    marginRight: spacing.xs,
   },
   categoryPicker: {
     gap: spacing.sm,
     paddingRight: spacing.lg,
   },
-  categoryOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: 20,
-    backgroundColor: colors.borderLight,
-    gap: spacing.sm,
-  },
-  categoryOptionSelected: {
-    backgroundColor: colors.primaryLight,
-  },
-  categoryOptionText: {
-    ...typography.smallMedium,
-    color: colors.textSecondary,
-  },
-  categoryOptionTextSelected: {
-    color: colors.primary,
-  },
   priorityPicker: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   priorityOption: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: 12,
-    backgroundColor: colors.borderLight,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    height: 46,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
     gap: spacing.sm,
   },
   priorityDotLarge: {
@@ -2395,149 +2049,102 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   priorityOptionText: {
-    ...typography.smallMedium,
-    color: colors.textSecondary,
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
   },
   attachmentPlaceholder: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.xl,
-    backgroundColor: colors.borderLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
+    padding: spacing.lg,
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
+    gap: spacing.md,
+  },
+  attachmentIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   attachmentPlaceholderText: {
-    ...typography.small,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.sm,
+    ...fonts.medium,
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: palette.textMuted,
   },
   submitButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  submitButtonText: {
-    ...typography.bodyMedium,
-    color: colors.surface,
+    marginTop: spacing.sm,
   },
 
   // Ticket Details
   ticketDetailsContent: {
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
-  ticketDetailsHeader: {
-    marginBottom: spacing.lg,
+  detailsTag: {
+    alignSelf: 'flex-start',
+    marginBottom: spacing.md,
   },
   ticketDetailsTitle: {
-    ...typography.sectionHeader,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    ...fonts.bold,
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: -0.5,
+    color: palette.text,
   },
-  ticketStatusPillLarge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
-  },
-  ticketStatusTextLarge: {
-    ...typography.smallMedium,
-  },
-  ticketDetailsMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  ticketDetailsMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  ticketDetailsMetaText: {
-    ...typography.small,
-    color: colors.textSecondary,
+  detailsGrid: {
+    marginTop: spacing.lg,
   },
   ticketDetailsDescription: {
-    backgroundColor: colors.borderLight,
-    borderRadius: 12,
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
     padding: spacing.lg,
+    marginTop: spacing.sm,
     marginBottom: spacing.xl,
   },
   ticketDetailsDescriptionText: {
-    ...typography.body,
-    color: colors.text,
+    ...fonts.medium,
+    fontSize: 15,
     lineHeight: 22,
+    color: palette.text,
+  },
+  detailsSectionTitle: {
+    ...fonts.semibold,
+    fontSize: 17,
+    color: palette.text,
+    marginBottom: spacing.md,
   },
 
   // Timeline
   ticketTimeline: {
-    marginBottom: spacing.xl,
-  },
-  ticketTimelineTitle: {
-    ...typography.bodyMedium,
-    color: colors.text,
     marginBottom: spacing.md,
-  },
-  ticketTimelineItem: {
-    flexDirection: 'row',
-    paddingLeft: spacing.sm,
-  },
-  ticketTimelineDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    marginTop: 4,
-  },
-  ticketTimelineLine: {
-    position: 'absolute',
-    left: spacing.sm + 4,
-    top: 14,
-    bottom: -spacing.md,
-    width: 2,
-    backgroundColor: colors.border,
-  },
-  ticketTimelineContent: {
-    flex: 1,
-    marginLeft: spacing.md,
-    paddingBottom: spacing.lg,
-  },
-  ticketTimelineLabel: {
-    ...typography.bodyMedium,
-    color: colors.text,
-  },
-  ticketTimelineDate: {
-    ...typography.small,
-    color: colors.textMuted,
-    marginTop: 2,
   },
 
   // Comments
   ticketComments: {
-    marginBottom: spacing.xl,
-  },
-  ticketCommentsTitle: {
-    ...typography.bodyMedium,
-    color: colors.text,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   ticketCommentItem: {
-    backgroundColor: colors.borderLight,
-    borderRadius: 12,
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
+    borderTopLeftRadius: radii.xs,
     padding: spacing.lg,
     marginBottom: spacing.sm,
+    marginRight: spacing.xxl,
   },
   ticketCommentText: {
-    ...typography.body,
-    color: colors.text,
+    ...fonts.medium,
+    fontSize: 15,
+    lineHeight: 21,
+    color: palette.text,
   },
   ticketCommentDate: {
-    ...typography.small,
-    color: colors.textMuted,
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
     marginTop: spacing.sm,
   },
 
@@ -2549,41 +2156,28 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   addCommentInput: {
+    ...fonts.medium,
     flex: 1,
-    backgroundColor: colors.borderLight,
-    borderRadius: 12,
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    ...typography.body,
-    color: colors.text,
-    minHeight: 44,
+    paddingTop: 13,
+    paddingBottom: 13,
+    fontSize: 15,
+    color: palette.text,
+    minHeight: 48,
     maxHeight: 100,
   },
   addCommentButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primary,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: palette.ink,
     justifyContent: 'center',
     alignItems: 'center',
   },
   addCommentButtonDisabled: {
-    backgroundColor: colors.textMuted,
-  },
-
-  // Close Ticket
-  closeTicketButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.lg,
-    borderRadius: 12,
-    backgroundColor: colors.borderLight,
-    gap: spacing.sm,
-  },
-  closeTicketButtonText: {
-    ...typography.bodyMedium,
-    color: colors.textSecondary,
+    opacity: 0.35,
   },
 
   // Copy Modal
@@ -2597,49 +2191,43 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
   },
   copyModalContent: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    backgroundColor: palette.surface,
+    borderRadius: radii.xxl,
     padding: spacing.xl,
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 340,
   },
   copyModalTitle: {
-    ...typography.sectionHeader,
-    color: colors.text,
+    ...fonts.semibold,
+    fontSize: 20,
+    color: palette.text,
     textAlign: 'center',
     marginBottom: spacing.lg,
   },
   copyModalTextContainer: {
-    backgroundColor: colors.borderLight,
-    borderRadius: 8,
-    padding: spacing.lg,
+    backgroundColor: palette.fill,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
     marginBottom: spacing.md,
   },
   copyModalText: {
-    ...typography.body,
-    color: colors.text,
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
     textAlign: 'center',
   },
   copyModalHint: {
-    ...typography.small,
-    color: colors.textSecondary,
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
     textAlign: 'center',
     marginBottom: spacing.lg,
-  },
-  copyModalButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  copyModalButtonText: {
-    ...typography.bodyMedium,
-    color: colors.surface,
   },
 });

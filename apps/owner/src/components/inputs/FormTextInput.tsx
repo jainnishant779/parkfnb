@@ -10,9 +10,7 @@ import {
   ViewStyle,
   Animated,
 } from 'react-native';
-import { colors } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 
 // ============================================================================
 // TYPES
@@ -43,18 +41,19 @@ export interface FormTextInputProps extends Omit<TextInputProps, 'style'> {
 // ============================================================================
 
 const inputTheme = {
-  background: colors.white,
-  backgroundDisabled: colors.gray[100],
-  border: colors.gray[300],
-  borderFocused: colors.primary[500],
-  borderError: colors.error[500],
-  text: colors.gray[900],
-  textDisabled: colors.gray[400],
-  placeholder: colors.gray[400],
-  label: colors.gray[700],
-  helper: colors.gray[500],
-  error: colors.error[500],
-  required: colors.error[500],
+  background: palette.fill,
+  backgroundFocused: palette.surface,
+  backgroundDisabled: palette.surfaceDim,
+  border: palette.fill,
+  borderFocused: palette.ink,
+  borderError: palette.danger,
+  text: palette.text,
+  textDisabled: palette.textSubtle,
+  placeholder: palette.textSubtle,
+  label: palette.textMuted,
+  helper: palette.textMuted,
+  error: palette.danger,
+  required: palette.danger,
 };
 
 // ============================================================================
@@ -103,8 +102,17 @@ export default function FormTextInput({
   const getBorderColor = () => {
     if (error) return inputTheme.borderError;
     if (isFocused) return inputTheme.borderFocused;
-    return inputTheme.border;
+    return disabled ? inputTheme.backgroundDisabled : inputTheme.border;
   };
+
+  const getBackgroundColor = () => {
+    if (disabled) return inputTheme.backgroundDisabled;
+    if (isFocused || error) return inputTheme.backgroundFocused;
+    return inputTheme.background;
+  };
+
+  // Multiline fields keep a rounded rectangle; single-line fields are pills.
+  const isMultiline = !!textInputProps.multiline;
 
   return (
     <View style={[styles.container, containerStyle]}>
@@ -121,10 +129,9 @@ export default function FormTextInput({
           styles.inputContainer,
           {
             borderColor: getBorderColor(),
-            backgroundColor: disabled
-              ? inputTheme.backgroundDisabled
-              : inputTheme.background,
+            backgroundColor: getBackgroundColor(),
           },
+          isMultiline && styles.inputContainerMultiline,
         ]}
         accessibilityRole="none"
       >
@@ -195,67 +202,65 @@ export default function FormTextInput({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacing[3],
+    marginBottom: 14,
   },
   labelRow: {
     flexDirection: 'row',
-    marginBottom: spacing[1],
+    marginBottom: 8,
+    marginLeft: 4,
   },
   label: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.medium,
+    fontSize: 13,
     color: inputTheme.label,
   },
   required: {
-    fontSize: fontSize.sm,
+    ...fonts.semibold,
+    fontSize: 13,
     color: inputTheme.required,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderRadius: borderRadius.lg,
-    minHeight: 52,
-    paddingHorizontal: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.black,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
+    borderRadius: radii.pill,
+    minHeight: 56,
+    paddingHorizontal: 20,
+  },
+  inputContainerMultiline: {
+    borderRadius: radii.lg,
+    alignItems: 'flex-start',
+    paddingVertical: 6,
   },
   leftIcon: {
-    marginRight: spacing[3],
+    marginRight: 10,
   },
   input: {
+    ...fonts.medium,
     flex: 1,
-    fontSize: fontSize.base,
+    fontSize: 16,
     color: inputTheme.text,
-    paddingVertical: Platform.OS === 'ios' ? spacing[3] : spacing[2],
+    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
   },
   inputWithLeftIcon: {
     // Already handled by flex
   },
   inputWithRightAction: {
-    paddingRight: spacing[2],
+    paddingRight: 8,
   },
   inputDisabled: {
     color: inputTheme.textDisabled,
   },
   rightAction: {
-    padding: spacing[1],
+    padding: 4,
   },
   bottomTextContainer: {
-    marginTop: spacing[1],
-    paddingHorizontal: spacing[1],
+    marginTop: 6,
+    paddingHorizontal: 8,
   },
   bottomText: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12.5,
   },
   helperText: {
     color: inputTheme.helper,

@@ -1,0 +1,829 @@
+// ParkFNB complete database schema
+// Source: services/backend/src/models/*.js
+// Database: MongoDB via Mongoose
+// Paste this file directly into https://dbdiagram.io
+
+Enum user_auth_method {
+  password
+  otp
+}
+
+Enum onboarding_step {
+  auth_complete
+  profile_setup
+  kyc_submitted
+  completed
+}
+
+Enum user_type {
+  user
+  owner
+  admin
+}
+
+Enum owner_type {
+  individual
+  residential_community
+  commercial_property
+  industrial_facility
+  empty_land
+  business
+  property_manager
+}
+
+Enum payout_method {
+  bank_transfer
+  paypal
+  stripe
+  check
+}
+
+Enum kyc_status {
+  not_started
+  draft
+  submitted
+  verified
+  rejected
+}
+
+Enum parking_space_type {
+  outdoor
+  covered
+  garage
+  driveway
+  carport
+  street
+}
+
+Enum vehicle_type {
+  car
+  suv
+  truck
+  van
+  motorcycle
+  bicycle
+  rv
+  trailer
+}
+
+Enum vehicle_size {
+  small
+  medium
+  large
+  extra_large
+}
+
+Enum parking_space_status {
+  active
+  inactive
+  maintenance
+  unavailable
+}
+
+Enum booking_mode {
+  instant
+  request
+  both
+}
+
+Enum booking_status {
+  pending
+  confirmed
+  active
+  completed
+  cancelled
+  rejected
+  no_show
+}
+
+Enum booking_payment_status {
+  pending
+  paid
+  refunded
+  partially_refunded
+  failed
+}
+
+Enum booking_payment_method {
+  cash
+  online
+}
+
+Enum payment_type {
+  credit_card
+  debit_card
+  paypal
+  apple_pay
+  google_pay
+  bank_transfer
+}
+
+Enum payment_provider {
+  stripe
+  paypal
+  square
+  braintree
+}
+
+Enum payment_status {
+  pending
+  processing
+  succeeded
+  failed
+  refunded
+  partially_refunded
+}
+
+Enum refund_status {
+  pending
+  processing
+  completed
+  failed
+  cancelled
+}
+
+Enum card_brand {
+  visa
+  mastercard
+  amex
+  discover
+  diners
+  jcb
+  unionpay
+}
+
+Enum promo_type {
+  percentage
+  fixed_amount
+  free_hours
+}
+
+Enum message_sender_type {
+  User
+  Owner
+}
+
+Enum notification_type {
+  booking_confirmed
+  booking_cancelled
+  payment_received
+  payment_failed
+  refund_processed
+  review_received
+  message_received
+  space_approved
+  space_rejected
+  booking_reminder
+  checkout_reminder
+  promo_code_applied
+}
+
+Enum support_ticket_category {
+  booking_issue
+  payment_issue
+  refund_request
+  property_issue
+  account_issue
+  technical_issue
+  safety_concern
+  general_inquiry
+  other
+}
+
+Enum support_ticket_status {
+  open
+  in_progress
+  waiting_for_customer
+  resolved
+  closed
+}
+
+Enum admin_role {
+  super_admin
+  admin
+  moderator
+  support
+}
+
+Enum device_type {
+  barrier
+  lock
+  gate
+}
+
+Enum device_status {
+  online
+  offline
+  error
+  maintenance
+}
+
+Enum access_user_role {
+  renter
+  owner
+  admin
+  system
+}
+
+Enum access_action {
+  unlock
+  lock
+  stop
+  calibrate
+  fault
+  rejected
+}
+
+Enum otp_channel {
+  sms
+  email
+}
+
+Table users {
+  _id objectid [pk, note: 'MongoDB ObjectId']
+  email varchar [unique, note: 'Sparse unique; optional for phone-only accounts']
+  phone varchar [unique, note: 'Sparse unique; optional for email-only accounts']
+  password_hash varchar [note: 'Excluded from normal Mongoose queries']
+  first_name varchar [default: '']
+  last_name varchar [default: '']
+  legal_name varchar
+  auth_method user_auth_method [default: 'otp']
+  onboarding_step onboarding_step [default: 'auth_complete']
+  notification_booking boolean [default: true]
+  notification_promotion boolean [default: false]
+  preferred_language varchar [default: 'en']
+  alternate_phone varchar
+  date_of_birth datetime
+  address_line1 varchar
+  address_line2 varchar
+  city varchar
+  state varchar
+  postal_code varchar
+  country varchar [default: 'IN']
+  profile_picture_url varchar
+  user_type user_type [default: 'user']
+  location_lat double
+  location_lng double
+  is_verified boolean [default: false]
+  is_active boolean [default: true]
+  verification_token varchar [note: 'Excluded from normal Mongoose queries']
+  verification_token_expiry datetime
+  reset_password_token varchar [note: 'Excluded from normal Mongoose queries']
+  reset_password_expiry datetime
+  last_login datetime
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    email [unique]
+    phone [unique]
+  }
+}
+
+Table owners {
+  _id objectid [pk]
+  user_id objectid [not null, unique]
+  owner_type owner_type [not null, default: 'individual']
+  business_name varchar
+  payout_bank_account varchar
+  payout_method payout_method [default: 'bank_transfer']
+  total_earnings double [default: 0]
+  average_rating double [default: 0, note: 'Range 0-5']
+  is_verified boolean [default: false]
+  terms_accepted_at datetime
+  kyc_status kyc_status [default: 'not_started']
+  kyc_rejection_reason text
+  kyc_personal json [note: 'Mongoose Mixed object']
+  kyc_identity json [note: 'Mongoose Mixed object']
+  kyc_address json [note: 'Mongoose Mixed object']
+  kyc_bank json [note: 'Mongoose Mixed object']
+  role_designation varchar
+  registration_id varchar
+  land_label varchar
+  landmark varchar
+  kyc_document_type varchar
+  kyc_document_number varchar
+  kyc_submitted_at datetime
+  kyc_verified_at datetime
+  kyc_verification_notes text
+  created_at datetime
+
+  indexes {
+    user_id [unique]
+    kyc_status
+    is_verified
+    average_rating
+  }
+}
+
+Table properties {
+  _id objectid [pk]
+  owner_id objectid [not null]
+  property_name varchar [not null]
+  address text [not null]
+  city varchar [not null]
+  state varchar [not null]
+  postal_code varchar [not null]
+  country varchar [default: 'IN']
+  location_lat double [not null]
+  location_lng double [not null]
+  access_instructions text
+  property_images json [not null, note: 'String[]; defaults to []']
+  is_active boolean [default: true]
+  created_at datetime
+
+  indexes {
+    owner_id
+    city
+    state
+    (location_lat, location_lng)
+    (owner_id, is_active)
+  }
+}
+
+Table parking_spaces {
+  _id objectid [pk]
+  property_id objectid [not null]
+  owner_id objectid [not null]
+  space_number varchar [not null]
+  space_type parking_space_type [not null]
+  length_meters double [not null]
+  width_meters double [not null]
+  height_meters double
+  allowed_vehicle_types json [not null, note: 'vehicle_type[]; defaults to []']
+  space_description text
+  space_images json [not null, note: 'String[]; defaults to []']
+  price_per_hour double [not null]
+  price_per_day double
+  price_per_month double
+  hourly_rate double [note: 'Compatibility alias of price_per_hour']
+  daily_rate double [note: 'Compatibility alias of price_per_day']
+  monthly_rate double [note: 'Compatibility alias of price_per_month']
+  status parking_space_status [default: 'active']
+  booking_mode booking_mode [not null, default: 'instant']
+  has_ev_charging boolean [default: false]
+  device_id varchar [note: 'Physical hardware ID; links to devices.device_id']
+  has_smart_barrier boolean [default: false]
+  is_available boolean [default: true]
+  average_rating double [default: 0, note: 'Range 0-5']
+  created_at datetime
+
+  indexes {
+    property_id
+    owner_id
+    device_id
+    (property_id, space_number)
+    (owner_id, is_available)
+    (is_available, price_per_hour)
+    average_rating
+    has_ev_charging
+  }
+}
+
+Table space_availabilities {
+  _id objectid [pk]
+  space_id objectid [not null]
+  day_of_week int [not null, note: '0=Sunday through 6=Saturday']
+  available_from varchar [not null, note: '24-hour HH:MM']
+  available_to varchar [not null, note: '24-hour HH:MM']
+  is_available boolean [default: true]
+
+  indexes {
+    space_id
+    (space_id, day_of_week)
+    (space_id, is_available)
+  }
+}
+
+Table user_vehicles {
+  _id objectid [pk]
+  user_id objectid [not null]
+  vehicle_type vehicle_type [not null]
+  vehicle_size vehicle_size [not null]
+  registration_number varchar [not null]
+  license_plate varchar [note: 'Compatibility alias of registration_number']
+  make varchar [not null]
+  model varchar [not null]
+  vehicle_make varchar [note: 'Compatibility alias of make']
+  vehicle_model varchar [note: 'Compatibility alias of model']
+  vehicle_year int [note: 'Range 1900-2100']
+  is_electric boolean [default: false]
+  is_default boolean [default: false]
+  is_verified boolean [default: false]
+  created_at datetime
+
+  indexes {
+    user_id
+    (user_id, is_default)
+  }
+}
+
+Table bookings {
+  _id objectid [pk]
+  booking_number varchar [not null, unique]
+  user_id objectid [not null]
+  owner_id objectid [not null]
+  space_id objectid [not null]
+  vehicle_id objectid [not null]
+  start_time datetime [not null]
+  end_time datetime [not null]
+  duration_hours double [not null]
+  base_price double [not null]
+  discount_amount double [default: 0]
+  total_amount double [not null]
+  currency varchar [not null, default: 'INR']
+  status booking_status [not null, default: 'pending']
+  payment_status booking_payment_status [not null, default: 'pending']
+  payment_method booking_payment_method [default: 'cash']
+  check_in_time datetime
+  check_out_time datetime
+  extensions json [note: 'Embedded array: old_end_time, new_end_time, extension_price, extended_at']
+  rejection_reason text
+  cancellation_reason text
+  cancelled_at datetime
+  refund_amount double [default: 0]
+  overtime_charge double [default: 0]
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    booking_number [unique]
+    user_id
+    owner_id
+    space_id
+    start_time
+    end_time
+    status
+    payment_status
+    (user_id, status)
+    (owner_id, status)
+    (space_id, start_time, end_time)
+    (start_time, end_time)
+    (status, payment_status)
+  }
+}
+
+Table payments {
+  _id objectid [pk]
+  payment_number varchar [not null, unique]
+  user_id objectid [not null]
+  booking_id objectid [not null]
+  amount double [not null]
+  currency varchar [not null, default: 'INR']
+  payment_method payment_type [not null]
+  payment_provider payment_provider [not null]
+  provider_transaction_id varchar [not null]
+  payment_status payment_status [not null, default: 'pending']
+  paid_at datetime
+  created_at datetime
+
+  indexes {
+    payment_number [unique]
+    user_id
+    booking_id
+    provider_transaction_id
+    payment_status
+    (user_id, payment_status)
+    (booking_id, payment_status)
+    (payment_provider, provider_transaction_id)
+  }
+}
+
+Table refunds {
+  _id objectid [pk]
+  payment_id objectid [not null]
+  booking_id objectid [not null]
+  refund_amount double [not null]
+  refund_reason text [not null]
+  status refund_status [not null, default: 'pending']
+  processed_at datetime
+  created_at datetime
+
+  indexes {
+    payment_id
+    booking_id
+    status
+    (payment_id, status)
+    (booking_id, status)
+  }
+}
+
+Table user_payment_methods {
+  _id objectid [pk]
+  user_id objectid [not null]
+  payment_type payment_type [not null]
+  provider payment_provider [not null]
+  provider_payment_method_id varchar [not null]
+  card_last4 varchar
+  card_brand card_brand
+  is_default boolean [default: false]
+  created_at datetime
+
+  indexes {
+    user_id
+    (user_id, is_default)
+    provider_payment_method_id
+  }
+}
+
+Table promo_codes {
+  _id objectid [pk]
+  code varchar [not null, unique]
+  promo_type promo_type [not null]
+  discount_value double [not null]
+  max_discount_amount double
+  valid_from datetime [not null]
+  valid_to datetime [not null]
+  usage_limit_total int
+  usage_count int [default: 0]
+  is_active boolean [default: true]
+  created_at datetime
+
+  indexes {
+    code [unique]
+    valid_from
+    valid_to
+    is_active
+    (is_active, valid_from, valid_to)
+    (code, is_active)
+  }
+}
+
+Table promo_code_usages {
+  _id objectid [pk]
+  promo_code_id objectid [not null]
+  user_id objectid [not null]
+  booking_id objectid [not null, unique]
+  discount_applied double [not null]
+  created_at datetime
+
+  indexes {
+    promo_code_id
+    user_id
+    (promo_code_id, user_id)
+    (user_id, created_at)
+    booking_id [unique]
+  }
+}
+
+Table reviews {
+  _id objectid [pk]
+  booking_id objectid [not null, unique]
+  user_id objectid [not null]
+  space_id objectid [not null]
+  owner_id objectid [not null]
+  rating int [not null, note: 'Integer range 1-5']
+  review_text text
+  review_images json [not null, note: 'String[]; defaults to []']
+  owner_response text
+  owner_responded_at datetime
+  created_at datetime
+
+  indexes {
+    booking_id [unique]
+    user_id
+    space_id
+    owner_id
+    (space_id, rating)
+    (owner_id, rating)
+    (user_id, created_at)
+  }
+}
+
+Table conversations {
+  _id objectid [pk]
+  user_id objectid [not null]
+  owner_id objectid [not null]
+  booking_id objectid
+  last_message_at datetime
+  created_at datetime
+
+  indexes {
+    user_id
+    owner_id
+    booking_id
+    last_message_at
+    (user_id, owner_id)
+    (user_id, last_message_at)
+    (owner_id, last_message_at)
+  }
+}
+
+Table messages {
+  _id objectid [pk]
+  conversation_id objectid [not null]
+  sender_id objectid [not null, note: 'Polymorphic ref: users._id when sender_type=User; owners._id when sender_type=Owner']
+  sender_type message_sender_type [not null]
+  message_text text [not null]
+  message_attachments json [not null, note: 'String[]; defaults to []']
+  is_read boolean [default: false]
+  created_at datetime
+
+  indexes {
+    conversation_id
+    sender_id
+    is_read
+    (conversation_id, created_at)
+    (conversation_id, is_read)
+  }
+}
+
+Table notifications {
+  _id objectid [pk]
+  user_id objectid [not null]
+  notification_type notification_type [not null]
+  title varchar [not null]
+  message text [not null]
+  reference_id objectid [note: 'Polymorphic reference based on notification_type']
+  is_read boolean [default: false]
+  created_at datetime
+
+  indexes {
+    user_id
+    notification_type
+    reference_id
+    is_read
+    (user_id, is_read)
+    (user_id, created_at)
+    (user_id, notification_type)
+  }
+}
+
+Table support_tickets {
+  _id objectid [pk]
+  ticket_number varchar [not null, unique]
+  user_id objectid
+  owner_id objectid
+  booking_id objectid
+  category support_ticket_category [not null]
+  subject varchar [not null]
+  description text [not null]
+  status support_ticket_status [not null, default: 'open']
+  resolved_at datetime
+  created_at datetime
+
+  indexes {
+    ticket_number [unique]
+    user_id
+    owner_id
+    booking_id
+    category
+    status
+    (user_id, status)
+    (owner_id, status)
+    (status, created_at)
+    (category, status)
+  }
+}
+
+Table ticket_messages {
+  _id objectid [pk]
+  ticket_id objectid [not null]
+  sender_id objectid [not null, note: 'Sender may be a user, owner, or admin; model has no refPath discriminator']
+  message_text text [not null]
+  attachments json [not null, note: 'String[]; defaults to []']
+  created_at datetime
+
+  indexes {
+    ticket_id
+    sender_id
+    (ticket_id, created_at)
+  }
+}
+
+Table admins {
+  _id objectid [pk]
+  user_id objectid [not null, unique]
+  admin_role admin_role [not null, default: 'support']
+  permissions json [not null, note: 'Validated String[]; defaults to []']
+  is_active boolean [default: true]
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    user_id [unique]
+    admin_role
+    is_active
+    (admin_role, is_active)
+  }
+}
+
+Table devices {
+  _id objectid [pk]
+  device_id varchar [not null, unique, note: 'Physical hardware/barrier ID']
+  owner_id objectid [not null]
+  parking_space_id objectid [note: 'Back-reference maintained by the assignment API']
+  name varchar [default: 'Smart Barrier']
+  device_type device_type [default: 'barrier']
+  status device_status [default: 'offline']
+  secret_token varchar [default: 'change-me-to-a-long-random-string']
+  command_counter int [default: 1]
+  last_state json [note: 'Embedded state, angle, target, moving, pwm, rssi, battery_level, fw_version, fault_reason, updated_at']
+  last_seen_at datetime
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    device_id [unique]
+    owner_id
+    parking_space_id
+    status
+    (owner_id, status)
+  }
+}
+
+Table access_audit_logs {
+  _id objectid [pk]
+  device_id varchar [not null, note: 'Physical ID; logical reference to devices.device_id']
+  parking_space_id objectid
+  booking_id objectid
+  user_id objectid [not null]
+  user_role access_user_role [not null]
+  action access_action [not null]
+  command_n int [default: 0]
+  success boolean [default: true]
+  error_message text
+  ip_address varchar
+  created_at datetime
+
+  indexes {
+    device_id
+    parking_space_id
+    booking_id
+    user_id
+    (device_id, created_at)
+  }
+}
+
+Table otp_codes {
+  _id objectid [pk]
+  identifier varchar [not null, note: 'Phone number or email address']
+  code_hash varchar [not null, note: 'Excluded from normal Mongoose queries']
+  channel otp_channel [not null, default: 'sms']
+  attempts int [default: 0]
+  sends int [default: 1]
+  consumed_at datetime
+  req_id varchar
+  expires_at datetime [not null, note: 'MongoDB TTL deletes record at this time']
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    identifier
+    expires_at [note: 'TTL index, expireAfterSeconds=0']
+    (identifier, created_at)
+  }
+}
+
+Table platform_settings {
+  _id objectid [pk]
+  setting_key varchar [not null, unique]
+  setting_value json [not null, note: 'Mongoose Mixed value']
+  description text
+  updated_at datetime
+
+  indexes {
+    setting_key [unique]
+  }
+}
+
+// Explicit Mongoose ObjectId references
+Ref: owners.user_id - users._id
+Ref: properties.owner_id > owners._id
+Ref: parking_spaces.property_id > properties._id
+Ref: parking_spaces.owner_id > owners._id
+Ref: space_availabilities.space_id > parking_spaces._id
+Ref: user_vehicles.user_id > users._id
+Ref: bookings.user_id > users._id
+Ref: bookings.owner_id > owners._id
+Ref: bookings.space_id > parking_spaces._id
+Ref: bookings.vehicle_id > user_vehicles._id
+Ref: payments.user_id > users._id
+Ref: payments.booking_id > bookings._id
+Ref: refunds.payment_id > payments._id
+Ref: refunds.booking_id > bookings._id
+Ref: user_payment_methods.user_id > users._id
+Ref: promo_code_usages.promo_code_id > promo_codes._id
+Ref: promo_code_usages.user_id > users._id
+Ref: promo_code_usages.booking_id - bookings._id
+Ref: reviews.booking_id - bookings._id
+Ref: reviews.user_id > users._id
+Ref: reviews.space_id > parking_spaces._id
+Ref: reviews.owner_id > owners._id
+Ref: conversations.user_id > users._id
+Ref: conversations.owner_id > owners._id
+Ref: conversations.booking_id > bookings._id
+Ref: messages.conversation_id > conversations._id
+Ref: notifications.user_id > users._id
+Ref: support_tickets.user_id > users._id
+Ref: support_tickets.owner_id > owners._id
+Ref: support_tickets.booking_id > bookings._id
+Ref: ticket_messages.ticket_id > support_tickets._id
+Ref: admins.user_id - users._id
+Ref: devices.owner_id > users._id
+Ref: devices.parking_space_id - parking_spaces._id
+Ref: parking_spaces.device_id - devices.device_id
+Ref: access_audit_logs.device_id > devices.device_id
+Ref: access_audit_logs.parking_space_id > parking_spaces._id
+Ref: access_audit_logs.booking_id > bookings._id
+Ref: access_audit_logs.user_id > users._id

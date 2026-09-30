@@ -1,9 +1,9 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, Pressable, RefreshControl,
-  ActivityIndicator, Modal, StatusBar, Image,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl,
+  ActivityIndicator, StatusBar, Image, ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -12,6 +12,18 @@ import { ApiRequestError } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import type { ApiProperty } from '../../types/api';
 import { resolveImageUri } from '../../utils/imageUri';
+import { palette, radii, fonts } from '../../theme/kit';
+import {
+  IconCircle, SearchPill, Chip, StatusTag, IsoBlock, EmptyState, ListRow, PillButton,
+} from '../../components/ui';
+
+type ListFilter = 'all' | 'published' | 'draft';
+
+const FILTERS: { id: ListFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'published', label: 'Published' },
+  { id: 'draft', label: 'Drafts' },
+];
 
 export default function MyListingsScreen() {
   const navigation = useNavigation<any>();
@@ -23,6 +35,22 @@ export default function MyListingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorText, setErrorText] = useState('');
   const [menuProperty, setMenuProperty] = useState<ApiProperty | null>(null);
+  const insets = useSafeAreaInsets();
+  // Client-side search + status filter over the loaded list (visual only).
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<ListFilter>('all');
+
+  const visibleProperties = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return properties.filter((p) => {
+      if (filter === 'draft' && p.status !== 'draft') return false;
+      if (filter === 'published' && p.status === 'draft') return false;
+      if (!q) return true;
+      return [p.propertyName, p.address, p.city]
+        .filter(Boolean)
+        .some((v) => v.toLowerCase().includes(q));
+    });
+  }, [properties, query, filter]);
 
   const loadData = useCallback(async () => {
     if (!ownerId) {
@@ -92,247 +120,319 @@ export default function MyListingsScreen() {
     );
   };
 
-  const renderProperty = ({ item }: { item: ApiProperty }) => {
+  const renderProperty = ({ item, index }: { item: ApiProperty; index: number }) => {
     const total = item.totalSpaces ?? 0;
     const pending = user?.isVerified === false; // badge shown until KYC verified
     const isDraft = item.status === 'draft';
+    const tone = index % 2 === 0 ? 'peach' : 'blue';
+    const hasPhoto = !!(item.propertyImages && item.propertyImages.length > 0);
     return (
-      <Pressable
-        style={styles.card}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        style={[
+          styles.card,
+          { backgroundColor: tone === 'peach' ? palette.peachSoft : palette.blueSoft },
+        ]}
         onPress={() => navigation.navigate('PropertySpaces', { propertyId: item.id })}
       >
-        <View style={styles.cardHeader}>
-          <View style={[styles.thumb, { overflow: 'hidden' }]}>
-            {item.propertyImages && item.propertyImages.length > 0 ? (
-              <Image
-                source={{ uri: resolveImageUri(item.propertyImages[0]) }}
-                style={StyleSheet.absoluteFillObject}
-                resizeMode="cover"
-              />
-            ) : (
-              <Ionicons name="business-outline" size={24} color="#0D7377" />
-            )}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title} numberOfLines={1}>{item.propertyName}</Text>
-            <Text style={styles.address} numberOfLines={1}>
-              {item.address}, {item.city}
-            </Text>
-          </View>
-          <Pressable onPress={() => setMenuProperty(item)} style={styles.menuBtn} hitSlop={8}>
-            <Ionicons name="ellipsis-vertical" size={18} color="#6B7280" />
-          </Pressable>
+        <View style={styles.cardArt} pointerEvents="none">
+          {hasPhoto ? (
+            <Image
+              source={{ uri: resolveImageUri(item.propertyImages[0]) }}
+              style={styles.cardPhoto}
+              resizeMode="cover"
+            />
+          ) : (
+            <IsoBlock size={150} tone={tone} />
+          )}
         </View>
 
-        <View style={styles.cardFooter}>
-          <View style={styles.stat}>
-            <Ionicons name="car-outline" size={14} color="#6B7280" />
-            <Text style={styles.statText}>{total} space{total === 1 ? '' : 's'}</Text>
+        <View style={styles.cardTop}>
+          <View style={styles.tagRow}>
+            <StatusTag
+              label={isDraft ? 'Draft' : item.isActive ? 'Live' : 'Paused'}
+              tone={isDraft ? 'white' : item.isActive ? 'ink' : 'grey'}
+            />
+            {pending ? (
+              <StatusTag label="Pending KYC" tone="warning" style={styles.tagGap} />
+            ) : null}
           </View>
-          {isDraft ? (
-            <View style={[styles.pill, { backgroundColor: '#E0E7FF', marginRight: 6 }]}>
-              <Text style={[styles.pillText, { color: '#3730A3' }]}>Draft</Text>
-            </View>
-          ) : null}
-          {pending ? (
-            <View style={[styles.pill, { backgroundColor: '#FEF3C7' }]}>
-              <Text style={[styles.pillText, { color: '#92400E' }]}>Pending KYC</Text>
-            </View>
-          ) : null}
-          <Ionicons name="chevron-forward" size={18} color="#9CA3AF" style={{ marginLeft: 'auto' }} />
+          <TouchableOpacity
+            onPress={() => setMenuProperty(item)}
+            style={styles.menuBtn}
+            hitSlop={8}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="ellipsis-horizontal" size={17} color={palette.text} />
+          </TouchableOpacity>
         </View>
-      </Pressable>
+
+        <View style={styles.cardBody}>
+          <Text style={styles.title} numberOfLines={1}>{item.propertyName}</Text>
+          <Text style={styles.address} numberOfLines={1}>
+            {item.address}, {item.city}
+          </Text>
+          <View style={styles.metaRow}>
+            <View style={styles.metaCol}>
+              <Text style={styles.metaTitle}>{total} space{total === 1 ? '' : 's'}</Text>
+              <Text style={styles.metaSub}>Parking</Text>
+            </View>
+            <View style={styles.metaCol}>
+              <Text style={styles.metaTitle} numberOfLines={1}>{item.city || '—'}</Text>
+              <Text style={styles.metaSub}>City</Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
     );
   };
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <View style={styles.safe}>
         <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#0D7377" />
+          <ActivityIndicator size="large" color={palette.ink} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <View style={[styles.safe, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Properties</Text>
-        <Text style={styles.headerSubtitle}>
-          {properties.length} {properties.length === 1 ? 'property' : 'properties'}
-        </Text>
+        <View style={styles.flex}>
+          <Text style={styles.headerTitle}>My properties</Text>
+          <Text style={styles.headerSubtitle}>
+            {properties.length} {properties.length === 1 ? 'property' : 'properties'}
+          </Text>
+        </View>
+        {properties.length > 0 ? (
+          <IconCircle icon="plus" variant="ink" size={50} onPress={handleAddMore} />
+        ) : null}
       </View>
+
+      {properties.length > 0 ? (
+        <View style={styles.searchWrap}>
+          <SearchPill
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search properties"
+            right={
+              query.length > 0 ? (
+                <TouchableOpacity onPress={() => setQuery('')} hitSlop={10}>
+                  <Ionicons name="close" size={18} color={palette.textMuted} />
+                </TouchableOpacity>
+              ) : null
+            }
+          />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+          >
+            {FILTERS.map((f) => (
+              <Chip
+                key={f.id}
+                label={f.label}
+                selected={filter === f.id}
+                onPress={() => setFilter(f.id)}
+                style={styles.chip}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
 
       {errorText ? (
         <View style={styles.errorBanner}>
+          <Ionicons name="alert-circle" size={16} color={palette.danger} />
           <Text style={styles.errorText}>{errorText}</Text>
         </View>
       ) : null}
 
       <FlatList
-        data={properties}
+        data={visibleProperties}
         keyExtractor={(p) => p.id}
         renderItem={renderProperty}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 120 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.ink} />
+        }
         ListEmptyComponent={
           !errorText ? (
-            <View style={styles.empty}>
-              <Ionicons name="business-outline" size={56} color="#9CA3AF" />
-              <Text style={styles.emptyTitle}>No properties yet</Text>
-              <Text style={styles.emptySub}>
-                Add your first property to start listing parking spaces.
-              </Text>
-              <Pressable style={styles.emptyCta} onPress={handleAddFirst}>
-                <Ionicons name="add" size={18} color="#FFFFFF" />
-                <Text style={styles.emptyCtaText}>Add your first property</Text>
-              </Pressable>
-            </View>
+            properties.length === 0 ? (
+              <EmptyState
+                title="No properties yet"
+                subtitle="Add your first property to start listing parking spaces."
+                action="Add your first property"
+                onAction={handleAddFirst}
+              />
+            ) : (
+              <EmptyState
+                title="No matches"
+                subtitle="Try a different search or filter."
+                action="Clear filters"
+                onAction={() => {
+                  setQuery('');
+                  setFilter('all');
+                }}
+                tone="blue"
+              />
+            )
           ) : null
         }
       />
 
-      {properties.length > 0 ? (
-        <Pressable style={styles.fab} onPress={handleAddMore}>
-          <Ionicons name="add" size={28} color="#FFFFFF" />
-        </Pressable>
-      ) : null}
-
-      {!!menuProperty ? (
-
-        <Pressable style={styles.modalOverlay} onPress={() => setMenuProperty(null)}>
-          <View style={styles.menuSheet}>
+      {menuProperty ? (
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setMenuProperty(null)}
+          />
+          <View style={[styles.menuSheet, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.grabber} />
             <Text style={styles.menuTitle} numberOfLines={1}>{menuProperty?.propertyName}</Text>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                const p = menuProperty!;
-                setMenuProperty(null);
-                navigation.navigate('PropertySpaces', { propertyId: p.id });
-              }}
-            >
-              <Ionicons name="car-outline" size={20} color="#1F2937" />
-              <Text style={styles.menuItemText}>View spaces</Text>
-            </Pressable>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                const p = menuProperty!;
-                setMenuProperty(null);
-                navigation.navigate('PropertyWizard', { editPropertyId: p.id });
-              }}
-            >
-              <Ionicons name="create-outline" size={20} color="#1F2937" />
-              <Text style={styles.menuItemText}>Edit property</Text>
-            </Pressable>
-            <Pressable style={styles.menuItem} onPress={() => handleDelete(menuProperty!)}>
-              <Ionicons name="trash-outline" size={20} color="#EF4444" />
-              <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Delete</Text>
-            </Pressable>
+            <View style={styles.menuCard}>
+              <ListRow
+                icon="grid"
+                title="View spaces"
+                onPress={() => {
+                  const p = menuProperty!;
+                  setMenuProperty(null);
+                  navigation.navigate('PropertySpaces', { propertyId: p.id });
+                }}
+              />
+              <ListRow
+                icon="edit-2"
+                title="Edit property"
+                onPress={() => {
+                  const p = menuProperty!;
+                  setMenuProperty(null);
+                  navigation.navigate('PropertyWizard', { editPropertyId: p.id });
+                }}
+              />
+              <ListRow
+                icon="trash-2"
+                title="Delete"
+                danger
+                isLast
+                onPress={() => handleDelete(menuProperty!)}
+              />
+            </View>
+            <PillButton
+              label="Cancel"
+              variant="grey"
+              onPress={() => setMenuProperty(null)}
+              style={styles.menuCancel}
+            />
           </View>
-        </Pressable>
-      
+        </View>
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F9FAFB' },
+  safe: { flex: 1, backgroundColor: palette.bg },
+  flex: { flex: 1 },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  headerTitle: { fontSize: 22, fontWeight: '700', color: '#1F2937' },
-  headerSubtitle: { fontSize: 13, color: '#6B7280', marginTop: 2 },
-  errorBanner: { padding: 10, backgroundColor: '#FEE2E2' },
-  errorText: { color: '#991B1B', fontSize: 13, textAlign: 'center' },
-  list: { padding: 12, paddingBottom: 80, flexGrow: 1 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  cardHeader: { flexDirection: 'row', alignItems: 'center' },
-  thumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#E8F5F4',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  title: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-  address: { fontSize: 13, color: '#6B7280', marginTop: 2 },
-  menuBtn: { padding: 6 },
-  cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
-  stat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statText: { fontSize: 13, color: '#6B7280' },
-  pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  pillText: { fontSize: 11, fontWeight: '600' },
-  empty: { paddingVertical: 80, alignItems: 'center', paddingHorizontal: 40 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1F2937', marginTop: 16 },
-  emptySub: { fontSize: 14, color: '#6B7280', marginTop: 6, textAlign: 'center' },
-  emptyCta: {
+  headerTitle: { ...fonts.semibold, fontSize: 32, letterSpacing: -0.8, color: palette.text },
+  headerSubtitle: { ...fonts.medium, fontSize: 15, color: palette.textMuted, marginTop: 2 },
+  searchWrap: { paddingHorizontal: 16 },
+  chipsRow: { paddingVertical: 12 },
+  chip: { marginRight: 8 },
+  errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0D7377',
-    paddingHorizontal: 18,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 24,
-    gap: 6,
+    borderRadius: radii.lg,
+    backgroundColor: palette.dangerSoft,
   },
-  emptyCtaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
-  fab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#0D7377',
-    justifyContent: 'center',
+  errorText: { ...fonts.medium, color: palette.danger, fontSize: 13, marginLeft: 8, flex: 1 },
+  list: { paddingHorizontal: 16, paddingTop: 4, flexGrow: 1 },
+  card: {
+    borderRadius: radii.xl,
+    padding: 18,
+    marginBottom: 12,
+    minHeight: 170,
+    overflow: 'hidden',
+  },
+  cardArt: { position: 'absolute', right: -30, bottom: -26 },
+  cardPhoto: {
+    width: 130,
+    height: 130,
+    borderRadius: radii.xl,
+    marginRight: 44,
+    marginBottom: 40,
+  },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tagRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
+  tagGap: { marginLeft: 6 },
+  menuBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.75)',
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+    justifyContent: 'center',
   },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  cardBody: { width: '62%' },
+  title: {
+    ...fonts.bold,
+    fontSize: 22,
+    letterSpacing: -0.5,
+    color: palette.text,
+    marginTop: 12,
+  },
+  address: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginTop: 3 },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 },
+  metaCol: { maxWidth: '55%' },
+  metaTitle: { ...fonts.semibold, fontSize: 13.5, color: palette.text },
+  metaSub: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 2 },
+  modalOverlay: {
+    // Absolutely positioned overlay rather than a <Modal>, which does not
+    // present on this build.
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9999,
+    elevation: 24,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
   menuSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 16,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  grabber: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   menuTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
     marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
-  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 14 },
-  menuItemText: { fontSize: 16, color: '#1F2937', marginLeft: 4 },
+  menuCard: { marginBottom: 8 },
+  menuCancel: { marginTop: 8 },
 });

@@ -12,13 +12,13 @@ import {
   SectionList,
   Pressable,
   TextInput,
+  TouchableOpacity,
   RefreshControl,
   Platform,
   Keyboard,
   StatusBar,
-  Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';
 import { useNavigation } from '@react-navigation/native';
 import Animated, {
@@ -30,9 +30,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { DateField } from '../../components/inputs/DateField';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
+import { PillButton, IconCircle, SearchPill, Segmented, Chip, SectionTitle, EmptyState } from '../../components/ui';
 import {
   EarningsSummaryCard,
   TransactionItem,
@@ -66,6 +65,9 @@ import { bookingService } from '../../services/bookingService';
 import type { ApiBooking } from '../../types/api';
 import { ROUTES } from '../../constants/routes';
 
+const formatAmount = (amount: number, currency: string = 'INR'): string =>
+  currency === 'INR' ? `₹${amount.toLocaleString('en-IN')}` : `${currency} ${amount.toLocaleString()}`;
+
 // Range options
 const RANGE_OPTIONS: { key: EarningsRangeOption; label: string }[] = [
   { key: 'today', label: 'Today' },
@@ -76,8 +78,8 @@ const RANGE_OPTIONS: { key: EarningsRangeOption; label: string }[] = [
 
 // View mode options
 const VIEW_MODES: { key: EarningsViewMode; label: string; icon: string }[] = [
-  { key: 'overview',      label: 'Overview',      icon: 'grid-outline' },
-  { key: 'transactions',  label: 'Transactions',  icon: 'list-outline' },
+  { key: 'overview',      label: 'Overview',      icon: 'grid' },
+  { key: 'transactions',  label: 'Transactions',  icon: 'list' },
 ];
 
 const getRangeLabel = (range: EarningsRangeOption, custom?: EarningsCustomRange): string => {
@@ -167,7 +169,7 @@ const initialSummary: EarningsSummary = {
 };
 
 export default function EarningsScreen() {
-  const theme     = useMemo(() => getTheme(false), []);
+  const insets    = useSafeAreaInsets();
   const navigation = useNavigation();
   const { owner } = useAuth();
   const searchInputRef = useRef<TextInput>(null);
@@ -412,14 +414,14 @@ export default function EarningsScreen() {
 
   const renderSectionHeader = useCallback(
     ({ section }: { section: TransactionSection }) => (
-      <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>{section.title}</Text>
-        <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{section.title}</Text>
+        <Text style={styles.sectionSubtitle}>
           {section.data.length} transaction{section.data.length !== 1 ? 's' : ''}
         </Text>
       </View>
     ),
-    [theme],
+    [],
   );
 
   const renderTransactionItem = useCallback(
@@ -443,55 +445,112 @@ export default function EarningsScreen() {
     const hasFilters = hasActiveFilters(state.uiState.filters) || !!state.uiState.searchText;
     return (
       <Animated.View entering={FadeIn.duration(300)} style={styles.emptyContainer}>
-        <View style={[styles.emptyIcon, { backgroundColor: theme.borderLight }]}>
-          <Ionicons
-            name={hasFilters ? 'filter-outline' : 'wallet-outline'}
-            size={48}
-            color={theme.textMuted}
-          />
-        </View>
-        <Text style={[styles.emptyTitle, { color: theme.text }]}>
-          {hasFilters ? 'No matching transactions' : 'No transactions yet'}
-        </Text>
-        <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
-          {hasFilters
-            ? 'Try adjusting your filters or search terms'
-            : 'Your earnings will appear here once you receive bookings'}
-        </Text>
-        {hasFilters && (
-          <Pressable
-            style={[styles.clearFiltersButton, { backgroundColor: theme.primary }]}
-            onPress={() => {
-              applyFiltersInMemory({
-                filters:    { status: [], payoutStatus: [], types: [], listingIds: [] },
-                searchText: '',
-              });
-              setLocalSearchText('');
-            }}
-          >
-            <Text style={styles.clearFiltersText}>Clear Filters</Text>
-          </Pressable>
-        )}
+        <EmptyState
+          tone={hasFilters ? 'blue' : 'peach'}
+          title={hasFilters ? 'No matching transactions' : 'No transactions yet'}
+          subtitle={
+            hasFilters
+              ? 'Try adjusting your filters or search terms'
+              : 'Your earnings will appear here once you receive bookings'
+          }
+          action={hasFilters ? 'Clear Filters' : undefined}
+          onAction={() => {
+            applyFiltersInMemory({
+              filters:    { status: [], payoutStatus: [], types: [], listingIds: [] },
+              searchText: '',
+            });
+            setLocalSearchText('');
+          }}
+        />
       </Animated.View>
     );
-  }, [state.isLoading, state.uiState.filters, state.uiState.searchText, theme, applyFiltersInMemory]);
+  }, [state.isLoading, state.uiState.filters, state.uiState.searchText, applyFiltersInMemory]);
 
   const renderErrorState = useCallback(() => (
     <View style={styles.errorContainer}>
-      <View style={[styles.errorIcon, { backgroundColor: theme.dangerLight }]}>
-        <Ionicons name="alert-circle-outline" size={48} color={theme.danger} />
-      </View>
-      <Text style={[styles.errorTitle, { color: theme.text }]}>Something went wrong</Text>
-      <Text style={[styles.errorSubtitle, { color: theme.textSecondary }]}>{state.error}</Text>
-      <Pressable
-        style={[styles.retryButton, { backgroundColor: theme.primary }]}
-        onPress={() => fetchEarningsData(state.uiState.selectedRange, state.uiState.customRange)}
-      >
-        <Ionicons name="refresh-outline" size={18} color="#FFFFFF" />
-        <Text style={styles.retryText}>Try Again</Text>
-      </Pressable>
+      <EmptyState
+        tone="grey"
+        title="Something went wrong"
+        subtitle={state.error}
+        action="Try Again"
+        onAction={() => fetchEarningsData(state.uiState.selectedRange, state.uiState.customRange)}
+      />
     </View>
-  ), [state.error, state.uiState, theme, fetchEarningsData]);
+  ), [state.error, state.uiState, fetchEarningsData]);
+
+  const canGoBack = navigation.canGoBack();
+  const bottomPad = insets.bottom + 120;
+
+  const renderTopBar = () => (
+    <View style={styles.header}>
+      {canGoBack ? (
+        <IconCircle
+          icon="arrow-left"
+          size={46}
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        />
+      ) : null}
+      <Text style={styles.headerTitle}>Earnings</Text>
+      <View>
+        <IconCircle icon="sliders" size={46} onPress={handleFilterPress} />
+        {activeFilterCount > 0 && (
+          <Animated.View style={[styles.filterBadge, filterBadgeStyle]} pointerEvents="none">
+            <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+          </Animated.View>
+        )}
+      </View>
+    </View>
+  );
+
+  const listHeader = (
+    <View>
+      {/* Balance block */}
+      <View style={styles.balance}>
+        <Text style={styles.balanceLabel}>
+          Net earnings · {getRangeLabel(state.uiState.selectedRange, state.uiState.customRange)}
+        </Text>
+        <View style={styles.balanceRow}>
+          <Text style={styles.balanceValue} numberOfLines={1} adjustsFontSizeToFit>
+            {formatAmount(state.summary.net, state.summary.currency)}
+          </Text>
+          <PillButton
+            label="Payouts"
+            icon="arrow-up-right"
+            variant="white"
+            size="md"
+            onPress={() => (navigation as any).navigate(ROUTES.PAYOUTS)}
+          />
+        </View>
+        {state.summary.pending > 0 ? (
+          <Text style={styles.balanceSub}>
+            {formatAmount(state.summary.pending, state.summary.currency)} pending payout
+          </Text>
+        ) : null}
+      </View>
+
+      {/* Range */}
+      <Segmented
+        options={RANGE_OPTIONS.map(o => ({ id: o.key, label: o.label }))}
+        value={state.uiState.selectedRange}
+        onChange={(id: EarningsRangeOption) => handleRangeChange(id)}
+        style={styles.segmented}
+      />
+
+      {/* View mode */}
+      <View style={styles.viewModeRow}>
+        {VIEW_MODES.map(mode => (
+          <Chip
+            key={mode.key}
+            label={mode.label}
+            icon={mode.icon}
+            selected={state.uiState.viewMode === mode.key}
+            onPress={() => handleViewModeChange(mode.key)}
+          />
+        ))}
+      </View>
+    </View>
+  );
 
   // ──────────────────────────────────────────────────────────────────
   // Render
@@ -499,8 +558,9 @@ export default function EarningsScreen() {
 
   if (state.isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-        <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
+        {renderTopBar()}
         <EarningsSkeleton />
       </SafeAreaView>
     );
@@ -508,107 +568,20 @@ export default function EarningsScreen() {
 
   if (state.error && !state.isRefreshing) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-        <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
+        {renderTopBar()}
         {renderErrorState()}
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
 
       {/* Header */}
-      <View style={styles.header}>
-        {navigation.canGoBack() ? (
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={[styles.filterButton, { backgroundColor: theme.surface, marginRight: 8 }]}
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="arrow-back" size={20} color={theme.text} />
-          </Pressable>
-        ) : null}
-        <Text style={[styles.headerTitle, { color: theme.text, flex: 1 }]}>Earnings</Text>
-        <Pressable
-          style={[styles.filterButton, { backgroundColor: theme.surface }]}
-          onPress={handleFilterPress}
-        >
-          <Ionicons name="options-outline" size={20} color={theme.text} />
-          {activeFilterCount > 0 && (
-            <Animated.View
-              style={[
-                styles.filterBadge,
-                { backgroundColor: theme.primary },
-                filterBadgeStyle,
-              ]}
-            >
-              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-            </Animated.View>
-          )}
-        </Pressable>
-      </View>
-
-      {/* Range Selector */}
-      <View style={styles.rangeContainer}>
-        <View style={[styles.rangeSelector, { backgroundColor: theme.surface }]}>
-          {RANGE_OPTIONS.map((option) => {
-            const isSelected = state.uiState.selectedRange === option.key;
-            return (
-              <Pressable
-                key={option.key}
-                style={[
-                  styles.rangeOption,
-                  isSelected && [styles.rangeOptionSelected, { backgroundColor: theme.primary }],
-                ]}
-                onPress={() => handleRangeChange(option.key)}
-              >
-                <Text
-                  style={[
-                    styles.rangeOptionText,
-                    { color: isSelected ? '#FFFFFF' : theme.textSecondary },
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* View Mode Toggle */}
-      <View style={styles.viewModeContainer}>
-        {VIEW_MODES.map((mode) => {
-          const isSelected = state.uiState.viewMode === mode.key;
-          return (
-            <Pressable
-              key={mode.key}
-              style={[
-                styles.viewModeButton,
-                { borderColor: isSelected ? theme.primary : theme.border },
-                isSelected && { backgroundColor: theme.primaryLight },
-              ]}
-              onPress={() => handleViewModeChange(mode.key)}
-            >
-              <Ionicons
-                name={mode.icon as any}
-                size={16}
-                color={isSelected ? theme.primary : theme.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.viewModeText,
-                  { color: isSelected ? theme.primary : theme.textSecondary },
-                ]}
-              >
-                {mode.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {renderTopBar()}
 
       {/* Content */}
       {state.uiState.viewMode === 'overview' ? (
@@ -616,98 +589,95 @@ export default function EarningsScreen() {
           sections={[{ title: 'Recent', dateKey: 'recent', data: recentTransactions }]}
           keyExtractor={keyExtractor}
           renderItem={renderTransactionItem}
-          renderSectionHeader={({ section }) =>
+          renderSectionHeader={() =>
             recentTransactions.length > 0 ? (
-              <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                  Recent Transactions
-                </Text>
-                <Pressable onPress={() => handleViewModeChange('transactions')}>
-                  <Text style={[styles.viewAllText, { color: theme.primary }]}>View All</Text>
-                </Pressable>
-              </View>
+              <SectionTitle
+                title="Recent transactions"
+                action="View all"
+                onAction={() => handleViewModeChange('transactions')}
+                style={styles.recentHeader}
+              />
             ) : null
           }
           ListHeaderComponent={
             <View>
+              {listHeader}
+              {state.dailyEarnings.length > 0 && (
+                <EarningsChart dailyEarnings={state.dailyEarnings} title="Daily Earnings" />
+              )}
               <EarningsSummaryCard
                 summary={state.summary}
                 rangeLabel={getRangeLabel(state.uiState.selectedRange, state.uiState.customRange)}
                 testID="earnings-summary"
               />
-              {state.dailyEarnings.length > 0 && (
-                <EarningsChart dailyEarnings={state.dailyEarnings} title="Daily Earnings" />
-              )}
             </View>
           }
           ListEmptyComponent={
             <View style={styles.emptyRecentContainer}>
-              <Text style={[styles.emptyRecentText, { color: theme.textMuted }]}>
-                No recent transactions
-              </Text>
+              <Text style={styles.emptyRecentText}>No recent transactions</Text>
             </View>
           }
           refreshControl={
             <RefreshControl
               refreshing={state.isRefreshing}
               onRefresh={handleRefresh}
-              colors={[theme.primary]}
-              tintColor={theme.primary}
+              colors={[palette.ink]}
+              tintColor={palette.ink}
             />
           }
           stickySectionHeadersEnabled={false}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={{ paddingBottom: bottomPad }}
         />
       ) : (
-        <>
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <View style={[styles.searchBar, { backgroundColor: theme.surface }]}>
-              <Ionicons name="search-outline" size={18} color={theme.textMuted} />
-              <TextInput
-                ref={searchInputRef}
-                style={[styles.searchInput, { color: theme.text }]}
-                placeholder="Search transactions..."
-                placeholderTextColor={theme.textMuted}
-                value={localSearchText}
-                onChangeText={handleSearchChange}
-                returnKeyType="search"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {localSearchText.length > 0 && (
-                <Pressable onPress={handleClearSearch} hitSlop={8}>
-                  <Ionicons name="close-circle" size={18} color={theme.textMuted} />
-                </Pressable>
-              )}
+        <SectionList
+          sections={state.sections}
+          keyExtractor={keyExtractor}
+          renderItem={renderTransactionItem}
+          renderSectionHeader={renderSectionHeader}
+          ListHeaderComponent={
+            <View>
+              {listHeader}
+              {/* Search Bar */}
+              <View style={styles.searchContainer}>
+                <SearchPill
+                  ref={searchInputRef}
+                  placeholder="Search transactions"
+                  value={localSearchText}
+                  onChangeText={handleSearchChange}
+                  returnKeyType="search"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={styles.searchPill}
+                  right={
+                    localSearchText.length > 0 ? (
+                      <Pressable onPress={handleClearSearch} hitSlop={8}>
+                        <Ionicons name="close-circle" size={18} color={palette.textMuted} />
+                      </Pressable>
+                    ) : null
+                  }
+                />
+              </View>
             </View>
-          </View>
-
-          {/* Transaction List */}
-          <SectionList
-            sections={state.sections}
-            keyExtractor={keyExtractor}
-            renderItem={renderTransactionItem}
-            renderSectionHeader={renderSectionHeader}
-            ListEmptyComponent={renderEmptyState}
-            refreshControl={
-              <RefreshControl
-                refreshing={state.isRefreshing}
-                onRefresh={handleRefresh}
-                colors={[theme.primary]}
-                tintColor={theme.primary}
-              />
-            }
-            stickySectionHeadersEnabled
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[
-              styles.listContent,
-              state.sections.length === 0 && styles.emptyListContent,
-            ]}
-            onScrollBeginDrag={Keyboard.dismiss}
-          />
-        </>
+          }
+          ListEmptyComponent={renderEmptyState}
+          refreshControl={
+            <RefreshControl
+              refreshing={state.isRefreshing}
+              onRefresh={handleRefresh}
+              colors={[palette.ink]}
+              tintColor={palette.ink}
+            />
+          }
+          stickySectionHeadersEnabled={false}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[
+            { paddingBottom: bottomPad },
+            state.sections.length === 0 && styles.emptyListContent,
+          ]}
+          onScrollBeginDrag={Keyboard.dismiss}
+        />
       )}
 
       {/* Filter Bottom Sheet */}
@@ -720,29 +690,25 @@ export default function EarningsScreen() {
             applyFiltersInMemory({ filters, sortOption });
             setShowFilterSheet(false);
           }}
-          theme={theme}
         />
       )}
 
       {/* Custom Date Range Modal */}
       {showDatePicker ? (
-
         <Pressable
           style={styles.sheetOverlay}
           onPress={() => setShowDatePicker(false)}
         >
           <Pressable
-            style={[styles.sheetContainer, { backgroundColor: theme.surface }]}
+            style={styles.sheetContainer}
             onPress={e => e.stopPropagation()}
           >
-            <View style={styles.sheetHandle}>
-              <View style={[styles.handleBar, { backgroundColor: theme.border }]} />
-            </View>
-            <Text style={[styles.sheetTitle, { color: theme.text, paddingHorizontal: spacing[4], marginBottom: spacing[4] }]}>
-              Custom Date Range
+            <View style={styles.handleBar} />
+            <Text style={[styles.sheetTitle, styles.sheetTitleSpaced]}>
+              Custom date range
             </Text>
 
-            <View style={{ paddingHorizontal: spacing[4] }}>
+            <View style={styles.sheetBody}>
               <DateField
                 label="From"
                 value={customFromInput}
@@ -760,22 +726,29 @@ export default function EarningsScreen() {
               />
             </View>
 
-            <Pressable
-              style={[styles.applyButton, { backgroundColor: theme.primary, margin: spacing[4] }]}
-              onPress={handleApplyCustomRange}
-            >
-              <Text style={styles.applyButtonText}>Apply</Text>
-            </Pressable>
+            <View style={styles.sheetActions}>
+              <PillButton
+                label="Cancel"
+                variant="grey"
+                onPress={() => setShowDatePicker(false)}
+                style={styles.sheetActionBtn}
+              />
+              <PillButton
+                label="Apply"
+                variant="ink"
+                onPress={handleApplyCustomRange}
+                style={styles.sheetActionBtn}
+              />
+            </View>
           </Pressable>
         </Pressable>
-      
       ) : null}
     </SafeAreaView>
   );
 }
 
 // ──────────────────────────────────────────────────────────────────
-// Filter Bottom Sheet Component (unchanged from original)
+// Filter Bottom Sheet Component
 // ──────────────────────────────────────────────────────────────────
 
 interface FilterBottomSheetProps {
@@ -783,10 +756,9 @@ interface FilterBottomSheetProps {
   sortOption: EarningsUIState['sortOption'];
   onClose: () => void;
   onApply: (filters: EarningsUIState['filters'], sortOption: EarningsUIState['sortOption']) => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
-function FilterBottomSheet({ filters, sortOption, onClose, onApply, theme }: FilterBottomSheetProps) {
+function FilterBottomSheet({ filters, sortOption, onClose, onApply }: FilterBottomSheetProps) {
   const [localFilters, setLocalFilters]       = useState(filters);
   const [localSortOption, setLocalSortOption] = useState(sortOption);
 
@@ -836,125 +808,89 @@ function FilterBottomSheet({ filters, sortOption, onClose, onApply, theme }: Fil
       <Animated.View
         entering={FadeIn.duration(200)}
         exiting={FadeOut.duration(200)}
-        style={[styles.sheetContainer, { backgroundColor: theme.surface }]}
+        style={styles.sheetContainer}
       >
         <Pressable onPress={e => e.stopPropagation()}>
-          <View style={styles.sheetHandle}>
-            <View style={[styles.handleBar, { backgroundColor: theme.border }]} />
-          </View>
+          <View style={styles.handleBar} />
           <View style={styles.sheetHeader}>
-            <Text style={[styles.sheetTitle, { color: theme.text }]}>Filters & Sort</Text>
-            <Pressable onPress={clearAll}>
-              <Text style={[styles.clearAllText, { color: theme.primary }]}>Clear All</Text>
-            </Pressable>
+            <Text style={styles.sheetTitle}>Filters & sort</Text>
+            <TouchableOpacity onPress={clearAll} hitSlop={8} activeOpacity={0.7}>
+              <Text style={styles.clearAllText}>Clear all</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Sort */}
           <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: theme.textSecondary }]}>Sort By</Text>
+            <Text style={styles.filterSectionTitle}>Sort by</Text>
             <View style={styles.chipContainer}>
-              {sortOptions.map(option => {
-                const isSelected = localSortOption === option.key;
-                return (
-                  <Pressable
-                    key={option.key}
-                    style={[
-                      styles.chip,
-                      { borderColor: isSelected ? theme.primary : theme.border },
-                      isSelected && { backgroundColor: theme.primaryLight },
-                    ]}
-                    onPress={() => setLocalSortOption(option.key)}
-                  >
-                    <Text style={[styles.chipText, { color: isSelected ? theme.primary : theme.textSecondary }]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {sortOptions.map(option => (
+                <Chip
+                  key={option.key}
+                  label={option.label}
+                  selected={localSortOption === option.key}
+                  onPress={() => setLocalSortOption(option.key)}
+                  style={styles.sheetChip}
+                />
+              ))}
             </View>
           </View>
 
           {/* Status */}
           <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: theme.textSecondary }]}>Transaction Status</Text>
+            <Text style={styles.filterSectionTitle}>Transaction status</Text>
             <View style={styles.chipContainer}>
-              {statusOptions.map(option => {
-                const isSelected = localFilters.status.includes(option.key);
-                return (
-                  <Pressable
-                    key={option.key}
-                    style={[
-                      styles.chip,
-                      { borderColor: isSelected ? theme.primary : theme.border },
-                      isSelected && { backgroundColor: theme.primaryLight },
-                    ]}
-                    onPress={() => toggleFilter('status', option.key)}
-                  >
-                    <Text style={[styles.chipText, { color: isSelected ? theme.primary : theme.textSecondary }]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {statusOptions.map(option => (
+                <Chip
+                  key={option.key}
+                  label={option.label}
+                  selected={localFilters.status.includes(option.key)}
+                  onPress={() => toggleFilter('status', option.key)}
+                  style={styles.sheetChip}
+                />
+              ))}
             </View>
           </View>
 
           {/* Payout */}
           <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: theme.textSecondary }]}>Payout Status</Text>
+            <Text style={styles.filterSectionTitle}>Payout status</Text>
             <View style={styles.chipContainer}>
-              {payoutOptions.map(option => {
-                const isSelected = localFilters.payoutStatus.includes(option.key);
-                return (
-                  <Pressable
-                    key={option.key}
-                    style={[
-                      styles.chip,
-                      { borderColor: isSelected ? theme.primary : theme.border },
-                      isSelected && { backgroundColor: theme.primaryLight },
-                    ]}
-                    onPress={() => toggleFilter('payoutStatus', option.key)}
-                  >
-                    <Text style={[styles.chipText, { color: isSelected ? theme.primary : theme.textSecondary }]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {payoutOptions.map(option => (
+                <Chip
+                  key={option.key}
+                  label={option.label}
+                  selected={localFilters.payoutStatus.includes(option.key)}
+                  onPress={() => toggleFilter('payoutStatus', option.key)}
+                  style={styles.sheetChip}
+                />
+              ))}
             </View>
           </View>
 
           {/* Type */}
           <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: theme.textSecondary }]}>Transaction Type</Text>
+            <Text style={styles.filterSectionTitle}>Transaction type</Text>
             <View style={styles.chipContainer}>
-              {typeOptions.map(option => {
-                const isSelected = localFilters.types.includes(option.key);
-                return (
-                  <Pressable
-                    key={option.key}
-                    style={[
-                      styles.chip,
-                      { borderColor: isSelected ? theme.primary : theme.border },
-                      isSelected && { backgroundColor: theme.primaryLight },
-                    ]}
-                    onPress={() => toggleFilter('types', option.key)}
-                  >
-                    <Text style={[styles.chipText, { color: isSelected ? theme.primary : theme.textSecondary }]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {typeOptions.map(option => (
+                <Chip
+                  key={option.key}
+                  label={option.label}
+                  selected={localFilters.types.includes(option.key)}
+                  onPress={() => toggleFilter('types', option.key)}
+                  style={styles.sheetChip}
+                />
+              ))}
             </View>
           </View>
 
-          <Pressable
-            style={[styles.applyButton, { backgroundColor: theme.primary }]}
-            onPress={() => onApply(localFilters, localSortOption)}
-          >
-            <Text style={styles.applyButtonText}>Apply Filters</Text>
-          </Pressable>
+          <View style={styles.sheetActions}>
+            <PillButton
+              label="Apply filters"
+              variant="ink"
+              onPress={() => onApply(localFilters, localSortOption)}
+              style={styles.sheetActionBtn}
+            />
+          </View>
         </Pressable>
       </Animated.View>
     </Pressable>
@@ -962,60 +898,47 @@ function FilterBottomSheet({ filters, sortOption, onClose, onApply, theme }: Fil
 }
 
 const styles = StyleSheet.create({
-  container:          { flex: 1 },
-  header:             { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing[4], paddingTop: spacing[2], paddingBottom: spacing[3] },
-  headerTitle:        { fontSize: fontSize['2xl'], fontWeight: fontWeight.bold as any },
-  filterButton:       { width: 40, height: 40, borderRadius: borderRadius.lg, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  filterBadge:        { position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  filterBadgeText:    { color: '#FFFFFF', fontSize: 10, fontWeight: fontWeight.bold as any },
-  rangeContainer:     { paddingHorizontal: spacing[4], marginBottom: spacing[3] },
-  rangeSelector:      { flexDirection: 'row', borderRadius: borderRadius.lg, padding: spacing[1] },
-  rangeOption:        { flex: 1, paddingVertical: spacing[2], alignItems: 'center', borderRadius: borderRadius.md },
-  rangeOptionSelected: {},
-  rangeOptionText:    { fontSize: fontSize.sm, fontWeight: fontWeight.medium as any },
-  viewModeContainer:  { flexDirection: 'row', paddingHorizontal: spacing[4], marginBottom: spacing[3], gap: spacing[2] },
-  viewModeButton:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing[2], borderRadius: borderRadius.lg, borderWidth: 1, gap: spacing[1] },
-  viewModeText:       { fontSize: fontSize.sm, fontWeight: fontWeight.medium as any },
-  searchContainer:    { paddingHorizontal: spacing[4], marginBottom: spacing[2] },
-  searchBar:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: borderRadius.lg, gap: spacing[2] },
-  searchInput:        { flex: 1, fontSize: fontSize.sm, padding: 0 },
-  listContent:        { paddingBottom: spacing[6] },
-  emptyListContent:   { flex: 1 },
-  sectionHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing[4], paddingVertical: spacing[2] },
-  sectionTitle:       { fontSize: fontSize.sm, fontWeight: fontWeight.semibold as any },
-  sectionSubtitle:    { fontSize: fontSize.xs },
-  viewAllText:        { fontSize: fontSize.sm, fontWeight: fontWeight.medium as any },
-  emptyContainer:     { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[6], paddingVertical: spacing[12] },
-  emptyIcon:          { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center', marginBottom: spacing[4] },
-  emptyTitle:         { fontSize: fontSize.lg, fontWeight: fontWeight.semibold as any, textAlign: 'center', marginBottom: spacing[2] },
-  emptySubtitle:      { fontSize: fontSize.sm, textAlign: 'center', lineHeight: 20 },
-  clearFiltersButton: { marginTop: spacing[4], paddingHorizontal: spacing[4], paddingVertical: spacing[2], borderRadius: borderRadius.full },
-  clearFiltersText:   { color: '#FFFFFF', fontSize: fontSize.sm, fontWeight: fontWeight.medium as any },
-  emptyRecentContainer: { padding: spacing[6], alignItems: 'center' },
-  emptyRecentText:    { fontSize: fontSize.sm },
-  errorContainer:     { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[6] },
-  errorIcon:          { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center', marginBottom: spacing[4] },
-  errorTitle:         { fontSize: fontSize.lg, fontWeight: fontWeight.semibold as any, textAlign: 'center', marginBottom: spacing[2] },
-  errorSubtitle:      { fontSize: fontSize.sm, textAlign: 'center', marginBottom: spacing[4] },
-  retryButton:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing[4], paddingVertical: spacing[2], borderRadius: borderRadius.full, gap: spacing[1] },
-  retryText:          { color: '#FFFFFF', fontSize: fontSize.sm, fontWeight: fontWeight.medium as any },
+  container:          { flex: 1, backgroundColor: palette.bg },
+  header:             { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 8 },
+  backButton:         { marginRight: 12 },
+  headerTitle:        { ...fonts.semibold, flex: 1, fontSize: 28, letterSpacing: -0.6, color: palette.text },
+  filterBadge:        { position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, backgroundColor: palette.ink, borderWidth: 2, borderColor: palette.bg },
+  filterBadgeText:    { ...fonts.bold, color: palette.textInverse, fontSize: 10 },
+
+  balance:            { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 18 },
+  balanceLabel:       { ...fonts.medium, fontSize: 15, color: palette.text },
+  balanceRow:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, gap: 12 },
+  balanceValue:       { ...fonts.semibold, flex: 1, fontSize: 40, letterSpacing: -1, color: palette.text },
+  balanceSub:         { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginTop: 4 },
+
+  segmented:          { marginHorizontal: 16, marginBottom: 12, backgroundColor: palette.bgSoft },
+  viewModeRow:        { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 16 },
+
+  searchContainer:    { paddingHorizontal: 16, marginBottom: 8 },
+  searchPill:         { backgroundColor: palette.surface },
+  emptyListContent:   { flexGrow: 1 },
+  sectionHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10 },
+  sectionTitle:       { ...fonts.semibold, fontSize: 16, color: palette.text },
+  sectionSubtitle:    { ...fonts.medium, fontSize: 12, color: palette.textMuted },
+  recentHeader:       { paddingHorizontal: 20, marginTop: 4, marginBottom: 12 },
+  emptyContainer:     { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 32 },
+  emptyRecentContainer: { marginHorizontal: 16, padding: 24, alignItems: 'center', borderRadius: radii.xl, backgroundColor: palette.surface },
+  emptyRecentText:    { ...fonts.medium, fontSize: 14, color: palette.textMuted },
+  errorContainer:     { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+
   // Sheet / Modal
-  sheetOverlay:       { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  sheetContainer:     { borderTopLeftRadius: borderRadius.xl, borderTopRightRadius: borderRadius.xl, paddingBottom: Platform.OS === 'ios' ? 34 : spacing[4], maxHeight: '80%' },
-  sheetHandle:        { alignItems: 'center', paddingVertical: spacing[3] },
-  handleBar:          { width: 40, height: 4, borderRadius: 2 },
-  sheetHeader:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing[4], marginBottom: spacing[4] },
-  sheetTitle:         { fontSize: fontSize.lg, fontWeight: fontWeight.semibold as any },
-  clearAllText:       { fontSize: fontSize.sm, fontWeight: fontWeight.medium as any },
-  filterSection:      { paddingHorizontal: spacing[4], marginBottom: spacing[4] },
-  filterSectionTitle: { fontSize: fontSize.xs, fontWeight: fontWeight.medium as any, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing[2] },
-  chipContainer:      { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  chip:               { paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: borderRadius.full, borderWidth: 1 },
-  chipText:           { fontSize: fontSize.sm, fontWeight: fontWeight.medium as any },
-  applyButton:        { marginHorizontal: spacing[4], marginTop: spacing[2], paddingVertical: spacing[3], borderRadius: borderRadius.lg, alignItems: 'center' },
-  applyButtonText:    { color: '#FFFFFF', fontSize: fontSize.base, fontWeight: fontWeight.semibold as any },
-  // Date input
-  dateInputRow:       { paddingHorizontal: spacing[4], flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  dateInputLabel:     { fontSize: fontSize.sm, fontWeight: fontWeight.medium as any, width: 40 },
-  dateInput:          { flex: 1, borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2], fontSize: fontSize.sm },
+  sheetOverlay:       { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheetContainer:     { backgroundColor: palette.surface, borderTopLeftRadius: radii.xxl, borderTopRightRadius: radii.xxl, paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? 34 : 16, maxHeight: '85%' },
+  handleBar:          { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: palette.line, marginBottom: 18 },
+  sheetHeader:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 18 },
+  sheetTitle:         { ...fonts.semibold, fontSize: 22, letterSpacing: -0.4, color: palette.text },
+  sheetTitleSpaced:   { paddingHorizontal: 20, marginBottom: 16 },
+  sheetBody:          { paddingHorizontal: 20 },
+  clearAllText:       { ...fonts.semibold, fontSize: 14, color: palette.textMuted },
+  filterSection:      { paddingHorizontal: 20, marginBottom: 18 },
+  filterSectionTitle: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginBottom: 10 },
+  chipContainer:      { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
+  sheetChip:          { backgroundColor: palette.fill },
+  sheetActions:       { flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginTop: 8 },
+  sheetActionBtn:     { flex: 1 },
 });

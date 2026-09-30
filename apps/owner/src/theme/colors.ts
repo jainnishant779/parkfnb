@@ -1,16 +1,16 @@
 export const colors = {
   // Primary
   primary: {
-    50: '#EFF6FF',
-    100: '#DBEAFE',
-    200: '#BFDBFE',
-    300: '#93C5FD',
-    400: '#60A5FA',
-    500: '#3B82F6',
-    600: '#2563EB',
-    700: '#1D4ED8',
-    800: '#1E40AF',
-    900: '#1E3A8A',
+    50: '#F6F6F6',
+    100: '#EFEFEF',
+    200: '#E2E2E2',
+    300: '#C9C9C9',
+    400: '#8A8A8A',
+    500: '#141414',
+    600: '#0A0A0A',
+    700: '#000000',
+    800: '#000000',
+    900: '#000000',
   },
 
   // Neutral / Gray
@@ -80,29 +80,29 @@ export type SemanticTheme = {
   overlay: string;
 };
 
-// Teal, not blue: the two apps are one product and the consumer app has
-// always been teal (#0D7377). Every screen reads these semantic tokens, so
-// changing them here re-skins the whole app.
+// Shared look with the consumer app: light-grey canvas, white cards, ink
+// (near-black) primary actions, peach accent. Every screen reads these
+// semantic tokens, so changing them here re-skins the whole app.
 export const lightTheme: SemanticTheme = {
-  background: '#EAF3F1',
+  background: '#F3F3F3',
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
-  text: '#1A1A2E',
-  textSecondary: '#5C6970',
-  textMuted: '#9BA6AC',
-  border: '#DCE8E5',
-  borderLight: '#EEF5F3',
-  primary: '#0D7377',
-  primaryLight: '#E8F5F4',
-  success: '#10B981',
-  successLight: '#ECFDF5',
-  warning: '#F59E0B',
-  warningLight: '#FFFBEB',
-  danger: '#EF4444',
-  dangerLight: '#FEF2F2',
-  info: '#3B82F6',
-  infoLight: '#EFF6FF',
-  overlay: 'rgba(0, 0, 0, 0.5)',
+  text: '#161616',
+  textSecondary: '#6E6E6E',
+  textMuted: '#9A9A9A',
+  border: '#E9E9E9',
+  borderLight: '#F1F1F1',
+  primary: '#141414',
+  primaryLight: '#F1F1F1',
+  success: '#2FA66A',
+  successLight: '#E3F4EA',
+  warning: '#E9A23B',
+  warningLight: '#FCF0DA',
+  danger: '#EF4B3F',
+  dangerLight: '#FDE6E4',
+  info: '#6F97E8',
+  infoLight: '#EEF3FD',
+  overlay: 'rgba(0, 0, 0, 0.45)',
 };
 
 export const darkTheme: SemanticTheme = {
@@ -127,6 +127,8 @@ export const darkTheme: SemanticTheme = {
   overlay: 'rgba(0, 0, 0, 0.7)',
 };
 
-export const getTheme = (isDark: boolean): SemanticTheme => {
-  return isDark ? darkTheme : lightTheme;
+// The design is light-only (matches the consumer app), so dark mode maps to
+// the light theme too. darkTheme is kept for reference.
+export const getTheme = (_isDark: boolean): SemanticTheme => {
+  return lightTheme;
 };

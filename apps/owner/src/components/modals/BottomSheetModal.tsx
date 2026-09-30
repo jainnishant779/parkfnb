@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Modal,
   Pressable,
+  TouchableOpacity,
   Animated,
   PanResponder,
   Dimensions,
@@ -14,8 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 
 // ============================================================================
 // TYPES
@@ -153,7 +153,7 @@ export default function BottomSheetModal({
             styles.sheet,
             {
               maxHeight: computedMaxHeight,
-              paddingBottom: insets.bottom + spacing[4],
+              paddingBottom: insets.bottom + 16,
               transform: [{ translateY }],
             },
           ]}
@@ -181,15 +181,16 @@ export default function BottomSheetModal({
                 )}
               </View>
               {showCloseButton && (
-                <Pressable
+                <TouchableOpacity
                   onPress={handleClose}
                   style={styles.closeButton}
+                  activeOpacity={0.7}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
                   accessibilityLabel="Close"
                 >
-                  <Ionicons name="close" size={24} color="#64748B" />
-                </Pressable>
+                  <Ionicons name="close" size={20} color={palette.text} />
+                </TouchableOpacity>
               )}
             </View>
           )}
@@ -220,7 +221,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   backdropPressable: {
     flex: 1,
@@ -230,15 +231,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.12,
+        shadowRadius: 20,
       },
       android: {
         elevation: 24,
@@ -247,44 +248,44 @@ const styles = StyleSheet.create({
   },
   handleContainer: {
     alignItems: 'center',
-    paddingTop: spacing[3],
-    paddingBottom: spacing[2],
+    paddingTop: 10,
+    paddingBottom: 8,
   },
   handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#D1D5DB',
-    borderRadius: 2,
+    width: 44,
+    height: 5,
+    backgroundColor: palette.line,
+    borderRadius: 3,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[2],
-    paddingBottom: spacing[4],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 6,
   },
   headerText: {
     flex: 1,
-    marginRight: spacing[3],
+    marginRight: 12,
   },
   title: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    color: '#1E293B',
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
   },
   subtitle: {
-    fontSize: fontSize.sm,
-    color: '#64748B',
+    ...fonts.medium,
+    fontSize: 13.5,
+    color: palette.textMuted,
     marginTop: 2,
   },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: palette.fill,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -292,8 +293,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[2],
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
 });

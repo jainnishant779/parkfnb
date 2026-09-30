@@ -6,6 +6,7 @@ import "./global.css";
 import React, { useState } from 'react';
 import { LogBox, StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import KeyboardInset from './user/components/KeyboardInset';
 import Splash from './user/screens/onboarding/Splash';
 import { palette } from './user/theme';
 
@@ -26,9 +27,11 @@ import SignIn from './user/screens/auth/SignIn';
 import OTPVerification from './user/screens/auth/OTPVerification';
 import BottomTabNavigator from './user/navigation/BottomTabNavigator';
 import ParkingDetailsPage from './user/screens/parking/ParkingDetailsPage';
+import BookingSchedulePage from './user/screens/parking/BookingSchedulePage';
 import SubscriptionPage from './user/screens/premium/SubscriptionPage';
 import HelpSupportPage from './user/screens/support/HelpSupportPage';
 import AboutPage from './user/screens/about/AboutPage';
+import EditProfilePage from './user/screens/profile/EditProfilePage';
 
 // Auth
 import { AuthProvider, useAuth } from './user/context/AuthContext';
@@ -128,7 +131,7 @@ function RootNavigator() {
   if (needsConsumerOnboarding) {
     return (
       <>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
         <Stack.Navigator screenOptions={screenOptions}>
           <Stack.Screen name="UserOnboarding" component={UserOnboarding} />
         </Stack.Navigator>
@@ -138,16 +141,18 @@ function RootNavigator() {
 
   return (
     <>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
       <Stack.Navigator screenOptions={screenOptions}>
         {/* Main app with bottom tabs */}
         <Stack.Screen name="MainApp" component={BottomTabNavigator} />
 
         {/* Modal / detail screens accessible from main app */}
         <Stack.Screen name="ParkingDetails" component={ParkingDetailsPage} />
+        <Stack.Screen name="BookingSchedule" component={BookingSchedulePage} />
         <Stack.Screen name="Subscription" component={SubscriptionPage} />
         <Stack.Screen name="HelpSupport" component={HelpSupportPage} />
         <Stack.Screen name="About" component={AboutPage} />
+        <Stack.Screen name="EditProfile" component={EditProfilePage} />
       </Stack.Navigator>
     </>
   );
@@ -158,6 +163,7 @@ import { OtaUpdateBanner } from './user/components/OtaUpdateBanner';
 function App() {
   return (
     <SafeAreaProvider style={{ backgroundColor: palette.bg }}>
+      <KeyboardInset>
       <AppAlertProvider>
         <AuthProvider>
           <NavigationContainer theme={navigationTheme}>
@@ -166,6 +172,7 @@ function App() {
           </NavigationContainer>
         </AuthProvider>
       </AppAlertProvider>
+      </KeyboardInset>
     </SafeAreaProvider>
   );
 }

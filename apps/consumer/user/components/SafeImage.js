@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Image, View, StyleSheet } from 'react-native';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { resolveImageUri } from '../utils/imageUri';
+import { palette } from '../theme';
 
 export default function SafeImage({
   uri,
@@ -9,7 +10,7 @@ export default function SafeImage({
   resizeMode = 'cover',
   placeholderIcon = 'parking',
   placeholderSize = 28,
-  placeholderColor = '#1A73E8',
+  placeholderColor = palette.text,
   placeholderStyle,
   children,
   ...props
@@ -41,7 +42,7 @@ export default function SafeImage({
 
 const styles = StyleSheet.create({
   placeholder: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: palette.peachSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

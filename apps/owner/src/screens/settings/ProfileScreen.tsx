@@ -6,11 +6,11 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  TouchableOpacity,
   Platform,
   TextInput,
   KeyboardAvoidingView,
   ActivityIndicator,
-  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppAlert } from '../../components/common/AppAlert';
@@ -25,10 +25,8 @@ import Animated, {
   FadeIn,
   FadeInDown,
 } from 'react-native-reanimated';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
-import AppHeader from '../../components/headers/AppHeader';
+import { palette, radii, fonts } from '../../theme/kit';
+import { ScreenHeader, Avatar, StatusTag, PillButton, EmptyState } from '../../components/ui';
 import MediaPickerSheet from '../../components/common/MediaPickerSheet';
 import { pickAndUploadImage, handleMediaUploadError, type PickSource } from '../../utils/mediaUpload';
 import FormPickerInput from '../../components/inputs/FormPickerInput';
@@ -95,39 +93,41 @@ const DEFAULT_PROFILE: ProfileData = {
 
 // Country codes for phone input
 const COUNTRY_CODES = [
-  { code: '+91', country: 'IN', flag: '🇮🇳' },
-  { code: '+1', country: 'US', flag: '🇺🇸' },
-  { code: '+44', country: 'UK', flag: '🇬🇧' },
-  { code: '+61', country: 'AU', flag: '🇦🇺' },
-  { code: '+971', country: 'AE', flag: '🇦🇪' },
+  { code: '+91', country: 'IN' },
+  { code: '+1', country: 'US' },
+  { code: '+44', country: 'UK' },
+  { code: '+61', country: 'AU' },
+  { code: '+971', country: 'AE' },
 ];
 
 // Section header component
 interface SectionHeaderProps {
   title: string;
   icon: string;
-  theme: ReturnType<typeof getTheme>;
   rightAction?: {
     label: string;
     onPress: () => void;
   };
 }
 
-function SectionHeader({ title, icon, theme, rightAction }: SectionHeaderProps) {
+function SectionHeader({ title, icon, rightAction }: SectionHeaderProps) {
   return (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionHeaderLeft}>
-        <View style={[styles.sectionIcon, { backgroundColor: theme.primaryLight }]}>
-          <Ionicons name={icon} size={18} color={theme.primary} />
+        <View style={styles.sectionIcon}>
+          <Ionicons name={icon} size={18} color={palette.text} />
         </View>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>{title}</Text>
+        <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {rightAction && (
-        <Pressable onPress={rightAction.onPress} accessibilityLabel={rightAction.label}>
-          <Text style={[styles.sectionAction, { color: theme.primary }]}>
-            {rightAction.label}
-          </Text>
-        </Pressable>
+        <TouchableOpacity
+          onPress={rightAction.onPress}
+          activeOpacity={0.75}
+          style={styles.sectionActionPill}
+          accessibilityLabel={rightAction.label}
+        >
+          <Text style={styles.sectionAction}>{rightAction.label}</Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -143,7 +143,6 @@ interface FormInputProps {
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   editable?: boolean;
   error?: string;
-  theme: ReturnType<typeof getTheme>;
   maxLength?: number;
   secureTextEntry?: boolean;
   multiline?: boolean;
@@ -159,7 +158,6 @@ function FormInput({
   autoCapitalize = 'sentences',
   editable = true,
   error,
-  theme,
   maxLength,
   secureTextEntry,
   multiline,
@@ -167,36 +165,33 @@ function FormInput({
 }: FormInputProps) {
   const [isFocused, setIsFocused] = useState(false);
   const borderColor = error
-    ? theme.danger
+    ? palette.danger
     : isFocused
-      ? theme.primary
-      : theme.border;
+      ? palette.ink
+      : 'transparent';
 
   return (
     <View style={styles.formInputContainer}>
-      <Text style={[styles.formInputLabel, { color: theme.textSecondary }]}>
-        {label}
-      </Text>
+      <Text style={styles.formInputLabel}>{label}</Text>
       <View
         style={[
           styles.formInputWrapper,
-          {
-            borderColor,
-            backgroundColor: editable ? theme.surface : theme.borderLight,
-          },
+          multiline && styles.formInputWrapperMultiline,
+          { borderColor },
+          !editable && styles.formInputWrapperReadOnly,
         ]}
       >
         <TextInput
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={theme.textMuted}
+          placeholderTextColor={palette.textSubtle}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
           editable={editable}
           style={[
             styles.formInput,
-            { color: editable ? theme.text : theme.textMuted },
+            !editable && styles.formInputReadOnly,
             multiline && { height: (numberOfLines || 3) * 24, textAlignVertical: 'top' },
           ]}
           onFocus={() => setIsFocused(true)}
@@ -207,9 +202,7 @@ function FormInput({
           numberOfLines={numberOfLines}
         />
       </View>
-      {error && (
-        <Text style={[styles.formInputError, { color: theme.danger }]}>{error}</Text>
-      )}
+      {error && <Text style={styles.formInputError}>{error}</Text>}
     </View>
   );
 }
@@ -218,10 +211,9 @@ function FormInput({
 interface CountryCodeSelectorProps {
   value: string;
   onSelect: (code: string) => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
-function CountryCodeSelector({ value, onSelect, theme }: CountryCodeSelectorProps) {
+function CountryCodeSelector({ value, onSelect }: CountryCodeSelectorProps) {
   const [showPicker, setShowPicker] = useState(false);
   const selectedCountry = COUNTRY_CODES.find(c => c.code === value) || COUNTRY_CODES[0];
 
@@ -229,14 +221,14 @@ function CountryCodeSelector({ value, onSelect, theme }: CountryCodeSelectorProp
     <>
       <Pressable
         onPress={() => setShowPicker(!showPicker)}
-        style={[styles.countryCodeButton, { borderRightColor: theme.border }]}
+        style={styles.countryCodeButton}
       >
-        <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
-        <Text style={[styles.countryCode, { color: theme.text }]}>{value}</Text>
-        <Ionicons name="chevron-down" size={14} color={theme.textMuted} />
+        <Text style={styles.countryName}>{selectedCountry.country}</Text>
+        <Text style={styles.countryCode}>{value}</Text>
+        <Ionicons name="chevron-down" size={14} color={palette.textMuted} />
       </Pressable>
       {showPicker && (
-        <View style={[styles.countryPicker, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <View style={styles.countryPicker}>
           {COUNTRY_CODES.map(country => (
             <Pressable
               key={country.code}
@@ -246,13 +238,11 @@ function CountryCodeSelector({ value, onSelect, theme }: CountryCodeSelectorProp
               }}
               style={[
                 styles.countryOption,
-                value === country.code && { backgroundColor: theme.primaryLight },
+                value === country.code && styles.countryOptionSelected,
               ]}
             >
-              <Text style={styles.countryFlag}>{country.flag}</Text>
-              <Text style={[styles.countryOptionText, { color: theme.text }]}>
-                {country.code}
-              </Text>
+              <Text style={styles.countryName}>{country.country}</Text>
+              <Text style={styles.countryOptionText}>{country.code}</Text>
             </Pressable>
           ))}
         </View>
@@ -264,59 +254,36 @@ function CountryCodeSelector({ value, onSelect, theme }: CountryCodeSelectorProp
 // KYC Status badge component
 interface KycBadgeProps {
   status: ProfileData['kycStatus'];
-  theme: ReturnType<typeof getTheme>;
   onPress: () => void;
 }
 
-function KycBadge({ status, theme, onPress }: KycBadgeProps) {
+function KycBadge({ status, onPress }: KycBadgeProps) {
   const getStatusConfig = () => {
     switch (status) {
       case 'verified':
-        return {
-          label: 'Verified',
-          icon: 'checkmark-circle',
-          bgColor: theme.successLight,
-          textColor: theme.success,
-        };
+        return { label: 'Verified', tone: 'success' };
       case 'pending':
-        return {
-          label: 'Pending Verification',
-          icon: 'time',
-          bgColor: theme.warningLight,
-          textColor: theme.warning,
-        };
+        return { label: 'Pending Verification', tone: 'warning' };
       case 'rejected':
-        return {
-          label: 'Verification Failed',
-          icon: 'close-circle',
-          bgColor: theme.dangerLight,
-          textColor: theme.danger,
-        };
+        return { label: 'Verification Failed', tone: 'danger' };
       default:
-        return {
-          label: 'Start KYC',
-          icon: 'shield-outline',
-          bgColor: theme.borderLight,
-          textColor: theme.textMuted,
-        };
+        return { label: 'Start KYC', tone: 'ink' };
     }
   };
 
   const config = getStatusConfig();
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
-      style={[styles.kycBadge, { backgroundColor: config.bgColor }]}
+      activeOpacity={0.75}
+      style={styles.kycBadge}
       accessibilityLabel={`KYC status: ${config.label}`}
       accessibilityRole="button"
     >
-      <Ionicons name={config.icon} size={16} color={config.textColor} />
-      <Text style={[styles.kycBadgeText, { color: config.textColor }]}>
-        {config.label}
-      </Text>
-      <Ionicons name="chevron-forward" size={14} color={config.textColor} />
-    </Pressable>
+      <StatusTag label={config.label} tone={config.tone} />
+      <Ionicons name="chevron-forward" size={14} color={palette.textMuted} />
+    </TouchableOpacity>
   );
 }
 
@@ -324,64 +291,37 @@ function KycBadge({ status, theme, onPress }: KycBadgeProps) {
 interface AccountTypeSelectorProps {
   value: 'checking' | 'savings';
   onChange: (type: 'checking' | 'savings') => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
-function AccountTypeSelector({ value, onChange, theme }: AccountTypeSelectorProps) {
+function AccountTypeSelector({ value, onChange }: AccountTypeSelectorProps) {
+  const options: { key: 'savings' | 'checking'; label: string }[] = [
+    { key: 'savings', label: 'Savings' },
+    { key: 'checking', label: 'Current/Checking' },
+  ];
   return (
     <View style={styles.accountTypeContainer}>
-      <Text style={[styles.formInputLabel, { color: theme.textSecondary }]}>
-        Account Type
-      </Text>
+      <Text style={styles.formInputLabel}>Account Type</Text>
       <View style={styles.accountTypeRow}>
-        <Pressable
-          onPress={() => onChange('savings')}
-          style={[
-            styles.accountTypeOption,
-            {
-              backgroundColor: value === 'savings' ? theme.primaryLight : theme.surface,
-              borderColor: value === 'savings' ? theme.primary : theme.border,
-            },
-          ]}
-        >
-          <Ionicons
-            name={value === 'savings' ? 'radio-button-on' : 'radio-button-off'}
-            size={20}
-            color={value === 'savings' ? theme.primary : theme.textMuted}
-          />
-          <Text
-            style={[
-              styles.accountTypeText,
-              { color: value === 'savings' ? theme.primary : theme.text },
-            ]}
-          >
-            Savings
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => onChange('checking')}
-          style={[
-            styles.accountTypeOption,
-            {
-              backgroundColor: value === 'checking' ? theme.primaryLight : theme.surface,
-              borderColor: value === 'checking' ? theme.primary : theme.border,
-            },
-          ]}
-        >
-          <Ionicons
-            name={value === 'checking' ? 'radio-button-on' : 'radio-button-off'}
-            size={20}
-            color={value === 'checking' ? theme.primary : theme.textMuted}
-          />
-          <Text
-            style={[
-              styles.accountTypeText,
-              { color: value === 'checking' ? theme.primary : theme.text },
-            ]}
-          >
-            Current/Checking
-          </Text>
-        </Pressable>
+        {options.map(option => {
+          const selected = value === option.key;
+          return (
+            <TouchableOpacity
+              key={option.key}
+              onPress={() => onChange(option.key)}
+              activeOpacity={0.8}
+              style={[styles.accountTypeOption, selected && styles.accountTypeOptionSelected]}
+            >
+              <Ionicons
+                name={selected ? 'radio-button-on' : 'radio-button-off'}
+                size={18}
+                color={selected ? palette.textInverse : palette.textMuted}
+              />
+              <Text style={[styles.accountTypeText, selected && styles.accountTypeTextSelected]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -393,10 +333,10 @@ interface SnackbarProps {
   message: string;
   variant: 'success' | 'error' | 'info';
   onDismiss: () => void;
-  theme: ReturnType<typeof getTheme>;
+  bottom: number;
 }
 
-function ProfileSnackbar({ visible, message, variant, onDismiss, theme }: SnackbarProps) {
+function ProfileSnackbar({ visible, message, variant, onDismiss, bottom }: SnackbarProps) {
   const translateY = useSharedValue(100);
 
   useEffect(() => {
@@ -413,16 +353,16 @@ function ProfileSnackbar({ visible, message, variant, onDismiss, theme }: Snackb
     transform: [{ translateY: translateY.value }],
   }));
 
-  const bgColor = variant === 'success' ? theme.success : variant === 'error' ? theme.danger : theme.primary;
+  const iconColor = variant === 'success' ? palette.success : variant === 'error' ? palette.danger : palette.peach;
 
   if (!visible) return null;
 
   return (
-    <Animated.View style={[styles.snackbar, { backgroundColor: bgColor }, animatedStyle]}>
+    <Animated.View style={[styles.snackbar, { bottom }, animatedStyle]}>
       <Ionicons
         name={variant === 'success' ? 'checkmark-circle' : variant === 'error' ? 'alert-circle' : 'information-circle'}
         size={20}
-        color="#FFFFFF"
+        color={iconColor}
       />
       <Text style={styles.snackbarText}>{message}</Text>
     </Animated.View>
@@ -433,7 +373,6 @@ function ProfileSnackbar({ visible, message, variant, onDismiss, theme }: Snackb
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const theme = useMemo(() => getTheme(false), []);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Owner type is now sourced from the AuthContext owner record (which the
@@ -647,63 +586,43 @@ export default function ProfileScreen() {
     return `${first}${last}`.toUpperCase();
   };
 
+  const header = (
+    <ScreenHeader
+      title="Profile"
+      onBack={() => navigation.goBack()}
+      right={
+        <TouchableOpacity
+          onPress={handleDeleteAccount}
+          activeOpacity={0.75}
+          hitSlop={8}
+          style={styles.deleteButton}
+          accessibilityLabel="Delete account"
+          accessibilityRole="button"
+        >
+          <Ionicons name="trash-outline" size={18} color={palette.danger} />
+        </TouchableOpacity>
+      }
+    />
+  );
+
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <AppHeader
-          variant="standard"
-          title="Profile"
-          leftAction={{
-            icon: 'back',
-            label: 'Back',
-            onPress: () => navigation.goBack(),
-            showBackground: true,
-          }}
-          showDivider={false}
-        />
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {header}
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={[styles.loadingText, { color: theme.textMuted }]}>
-            Loading profile...
-          </Text>
+          <ActivityIndicator size="large" color={palette.ink} />
+          <Text style={styles.loadingText}>Loading profile...</Text>
         </View>
       </View>
     );
   }
 
+  const fullName = `${profile.firstName} ${profile.lastName}`.trim();
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
-      <AppHeader
-        variant="standard"
-        title="Profile"
-        subtitle="Manage your account"
-        leftAction={{
-          icon: 'back',
-          label: 'Back',
-          onPress: () => navigation.goBack(),
-          showBackground: true,
-        }}
-        rightActions={[
-          ...(hasChanges
-            ? [
-                {
-                  icon: 'refresh' as const,
-                  label: 'Save changes',
-                  onPress: saveProfile,
-                },
-              ]
-            : []),
-          {
-            icon: 'trash' as const,
-            label: 'Delete account',
-            onPress: handleDeleteAccount,
-            variant: 'danger' as const,
-            size: 'small' as const,
-          },
-        ]}
-        showDivider={false}
-      />
+      {header}
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
@@ -715,56 +634,48 @@ export default function ProfileScreen() {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: insets.bottom + spacing[6] },
+            { paddingBottom: insets.bottom + 32 },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Profile Header Card */}
+          {/* Profile Header */}
           <Animated.View
             entering={FadeInDown.delay(100).duration(400)}
-            style={[styles.profileCard, { backgroundColor: theme.surface }]}
+            style={styles.profileCard}
           >
-            {/* Profile Image */}
-            <View style={styles.profileImageContainer}>
-              <Pressable onPress={handleEditProfileImage} style={styles.profileImageWrapper}>
-                {profile.profileImage ? (
-                  <Image
-                    source={{ uri: resolveImageUri(profile.profileImage) }}
-                    style={styles.profileImage}
-                  />
-                ) : (
-                  <View style={[styles.profileImagePlaceholder, { backgroundColor: theme.primary }]}>
-                    <Text style={styles.profileInitials}>{getInitials()}</Text>
-                  </View>
-                )}
-                <View style={[styles.editImageButton, { backgroundColor: theme.primary }]}>
-                  <Ionicons name="pencil" size={14} color="#FFFFFF" />
+            <View style={styles.profileRow}>
+              <TouchableOpacity
+                onPress={handleEditProfileImage}
+                activeOpacity={0.8}
+                accessibilityLabel="Edit profile photo"
+              >
+                <Avatar
+                  name={fullName || getInitials()}
+                  uri={profile.profileImage ? resolveImageUri(profile.profileImage) : undefined}
+                  size={72}
+                />
+                <View style={styles.editImageButton}>
+                  <Ionicons name="pencil" size={12} color={palette.textInverse} />
                 </View>
-              </Pressable>
+              </TouchableOpacity>
+              <View style={styles.profileText}>
+                <Text style={styles.profileName} numberOfLines={1}>
+                  {fullName || 'Your name'}
+                </Text>
+                <Text style={styles.profileEmail} numberOfLines={1}>
+                  {profile.email}
+                </Text>
+              </View>
             </View>
 
-            {/* Name and Email */}
-            <Text style={[styles.profileName, { color: theme.text }]}>
-              {profile.firstName} {profile.lastName}
-            </Text>
-            <Text style={[styles.profileEmail, { color: theme.textSecondary }]}>
-              {profile.email}
-            </Text>
-
-            {/* Owner Type Badge */}
-            <View style={[styles.ownerTypeBadge, { backgroundColor: theme.primaryLight }]}>
-              <Ionicons name="business-outline" size={14} color={theme.primary} />
-              <Text style={[styles.ownerTypeText, { color: theme.primary }]}>
-                {OWNER_TYPE_LABELS[ownerType] || 'Owner'}
-              </Text>
+            <View style={styles.profileMetaRow}>
+              <StatusTag label={OWNER_TYPE_LABELS[ownerType] || 'Owner'} tone="white" />
+              <KycBadge status={profile.kycStatus} onPress={handleKycPress} />
             </View>
-
-            {/* KYC Status */}
-            <KycBadge status={profile.kycStatus} theme={theme} onPress={handleKycPress} />
 
             {/* Member Since */}
-            <Text style={[styles.memberSince, { color: theme.textMuted }]}>
+            <Text style={styles.memberSince}>
               Member since {new Date(profile.createdAt).toLocaleDateString('en-IN', {
                 month: 'long',
                 year: 'numeric',
@@ -775,12 +686,11 @@ export default function ProfileScreen() {
           {/* Personal Information Section */}
           <Animated.View
             entering={FadeInDown.delay(200).duration(400)}
-            style={[styles.sectionCard, { backgroundColor: theme.surface }]}
+            style={styles.sectionCard}
           >
             <SectionHeader
-              title="Personal Information"
+              title="Personal information"
               icon="person-outline"
-              theme={theme}
               rightAction={{
                 label: isEditingPersonal ? 'Done' : 'Edit',
                 onPress: () => {
@@ -804,7 +714,6 @@ export default function ProfileScreen() {
                     autoCapitalize="words"
                     editable={isEditingPersonal}
                     error={errors.firstName}
-                    theme={theme}
                   />
                 </View>
                 <View style={styles.formHalf}>
@@ -816,7 +725,6 @@ export default function ProfileScreen() {
                     autoCapitalize="words"
                     editable={isEditingPersonal}
                     error={errors.lastName}
-                    theme={theme}
                   />
                 </View>
               </View>
@@ -830,38 +738,29 @@ export default function ProfileScreen() {
                 autoCapitalize="none"
                 editable={isEditingPersonal}
                 error={errors.email}
-                theme={theme}
               />
 
               <View style={styles.formInputContainer}>
-                <Text style={[styles.formInputLabel, { color: theme.textSecondary }]}>
-                  Phone Number
-                </Text>
+                <Text style={styles.formInputLabel}>Phone Number</Text>
                 {/* Always read-only: this is the number signed in with via OTP,
                     and /api/owners/me/profile has no way to change it. Letting
                     it look editable saved a new number locally that the
                     server ignored and the next login silently overwrote. */}
-                <View
-                  style={[
-                    styles.phoneInputWrapper,
-                    { borderColor: theme.border, backgroundColor: theme.borderLight },
-                  ]}
-                >
+                <View style={[styles.phoneInputWrapper, styles.formInputWrapperReadOnly]}>
                   <CountryCodeSelector
                     value={profile.countryCode}
                     onSelect={() => {}}
-                    theme={theme}
                   />
                   <TextInput
                     value={profile.phone}
                     editable={false}
                     placeholder="Phone number"
-                    placeholderTextColor={theme.textMuted}
-                    style={[styles.phoneInput, { color: theme.textMuted }]}
+                    placeholderTextColor={palette.textSubtle}
+                    style={[styles.phoneInput, styles.formInputReadOnly]}
                     maxLength={10}
                   />
                 </View>
-                <Text style={[styles.formInputHint, { color: theme.textMuted }]}>
+                <Text style={styles.formInputHint}>
                   This is the number you signed in with and can't be changed here.
                 </Text>
               </View>
@@ -871,12 +770,11 @@ export default function ProfileScreen() {
           {/* Address Section */}
           <Animated.View
             entering={FadeInDown.delay(300).duration(400)}
-            style={[styles.sectionCard, { backgroundColor: theme.surface }]}
+            style={styles.sectionCard}
           >
             <SectionHeader
               title="Address"
               icon="location-outline"
-              theme={theme}
               rightAction={{
                 label: isEditingAddress ? 'Done' : 'Edit',
                 onPress: () => {
@@ -896,7 +794,6 @@ export default function ProfileScreen() {
                 onChangeText={(text) => updateField('address', text)}
                 placeholder="Enter street address"
                 editable={isEditingAddress}
-                theme={theme}
                 multiline
                 numberOfLines={2}
               />
@@ -910,7 +807,6 @@ export default function ProfileScreen() {
                     placeholder="Enter city"
                     autoCapitalize="words"
                     editable={isEditingAddress}
-                    theme={theme}
                   />
                 </View>
                 <View style={styles.formHalf}>
@@ -932,7 +828,6 @@ export default function ProfileScreen() {
                 placeholder="Enter PIN code"
                 keyboardType="numeric"
                 editable={isEditingAddress}
-                theme={theme}
                 maxLength={6}
               />
             </View>
@@ -941,12 +836,11 @@ export default function ProfileScreen() {
           {/* Bank Account Section */}
           <Animated.View
             entering={FadeInDown.delay(400).duration(400)}
-            style={[styles.sectionCard, { backgroundColor: theme.surface }]}
+            style={styles.sectionCard}
           >
             <SectionHeader
-              title="Bank Account"
+              title="Bank account"
               icon="card-outline"
-              theme={theme}
               rightAction={{
                 label: isEditingBank ? 'Done' : 'Edit',
                 onPress: () => {
@@ -960,24 +854,13 @@ export default function ProfileScreen() {
             />
 
             {!profile.bankName && !isEditingBank ? (
-              <View style={styles.emptyBankSection}>
-                <View style={[styles.emptyBankIcon, { backgroundColor: theme.borderLight }]}>
-                  <Ionicons name="wallet-outline" size={32} color={theme.textMuted} />
-                </View>
-                <Text style={[styles.emptyBankTitle, { color: theme.text }]}>
-                  No Bank Account Added
-                </Text>
-                <Text style={[styles.emptyBankSubtitle, { color: theme.textSecondary }]}>
-                  Add your bank account to receive payouts
-                </Text>
-                <Pressable
-                  onPress={() => setIsEditingBank(true)}
-                  style={[styles.addBankButton, { backgroundColor: theme.primary }]}
-                >
-                  <Ionicons name="add" size={20} color="#FFFFFF" />
-                  <Text style={styles.addBankButtonText}>Add Bank Account</Text>
-                </Pressable>
-              </View>
+              <EmptyState
+                tone="blue"
+                title="No bank account added"
+                subtitle="Add your bank account to receive payouts"
+                action="Add bank account"
+                onAction={() => setIsEditingBank(true)}
+              />
             ) : (
               <View style={styles.formSection}>
                 <FormInput
@@ -987,7 +870,6 @@ export default function ProfileScreen() {
                   placeholder="Enter bank name"
                   autoCapitalize="words"
                   editable={isEditingBank}
-                  theme={theme}
                 />
 
                 <FormInput
@@ -997,7 +879,6 @@ export default function ProfileScreen() {
                   placeholder="Enter account holder name"
                   autoCapitalize="words"
                   editable={isEditingBank}
-                  theme={theme}
                 />
 
                 <FormInput
@@ -1008,7 +889,6 @@ export default function ProfileScreen() {
                   keyboardType="numeric"
                   editable={isEditingBank}
                   error={errors.accountNumber}
-                  theme={theme}
                   secureTextEntry={!isEditingBank}
                 />
 
@@ -1020,14 +900,12 @@ export default function ProfileScreen() {
                   autoCapitalize="characters"
                   editable={isEditingBank}
                   error={errors.ifscCode}
-                  theme={theme}
                   maxLength={11}
                 />
 
                 <AccountTypeSelector
                   value={profile.accountType}
                   onChange={(type) => updateField('accountType', type)}
-                  theme={theme}
                 />
               </View>
             )}
@@ -1035,30 +913,17 @@ export default function ProfileScreen() {
 
           {/* Save Button (when editing) */}
           {hasChanges && (
-            <Animated.View entering={FadeIn.duration(300)}>
-              <Pressable
+            <Animated.View entering={FadeIn.duration(300)} accessibilityLabel="Save changes">
+              <PillButton
+                label="Save Changes"
+                icon="check"
+                variant="ink"
                 onPress={saveProfile}
+                loading={isSaving}
                 disabled={isSaving}
-                style={[
-                  styles.saveButton,
-                  { backgroundColor: theme.primary },
-                  isSaving && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Save changes"
-                accessibilityRole="button"
-              >
-                {isSaving ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-                    <Text style={styles.saveButtonText}>Save Changes</Text>
-                  </>
-                )}
-              </Pressable>
+              />
             </Animated.View>
           )}
-
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1068,7 +933,7 @@ export default function ProfileScreen() {
         message={snackbar.message}
         variant={snackbar.variant}
         onDismiss={hideSnackbar}
-        theme={theme}
+        bottom={insets.bottom + 24}
       />
 
       <MediaPickerSheet
@@ -1089,386 +954,313 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: palette.bg,
   },
-  keyboardAvoid: {
-    flex: 1,
+  deleteButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.dangerSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[3],
+    gap: 12,
   },
   loadingText: {
-    fontSize: fontSize.base,
+    ...fonts.medium,
+    fontSize: 15,
+    color: palette.textMuted,
+  },
+  keyboardAvoid: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
-  // Profile Card
+
+  // Profile card
   profileCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing[5],
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 20,
+    marginBottom: 14,
+  },
+  profileRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  profileImageContainer: {
-    marginBottom: spacing[4],
-  },
-  profileImageWrapper: {
-    position: 'relative',
-  },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  profileImagePlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileInitials: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
   editImageButton: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    right: -2,
+    bottom: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: palette.ink,
+    borderWidth: 2,
+    borderColor: palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+  },
+  profileText: {
+    flex: 1,
+    marginLeft: 16,
   },
   profileName: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold as any,
-    marginBottom: spacing[1],
+    ...fonts.semibold,
+    fontSize: 22,
+    letterSpacing: -0.4,
+    color: palette.text,
   },
   profileEmail: {
-    fontSize: fontSize.sm,
-    marginBottom: spacing[3],
+    ...fonts.medium,
+    fontSize: 15,
+    color: palette.textMuted,
+    marginTop: 3,
   },
-  ownerTypeBadge: {
+  profileMetaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: spacing[1],
-    paddingVertical: spacing[1],
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.full,
-    marginBottom: spacing[3],
-  },
-  ownerTypeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    gap: 8,
+    marginTop: 18,
   },
   kycBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[3],
-  },
-  kycBadgeText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    gap: 2,
   },
   memberSince: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 14,
   },
-  // Section Card
+
+  // Sections
   sectionCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    marginBottom: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 18,
+    marginBottom: 14,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing[4],
+    marginBottom: 16,
   },
   sectionHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
+    gap: 12,
+    flex: 1,
   },
   sectionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.peachSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 17,
+    color: palette.text,
+  },
+  sectionActionPill: {
+    height: 34,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionAction: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.text,
   },
   formSection: {
-    gap: spacing[3],
+    gap: 14,
   },
   formRow: {
     flexDirection: 'row',
-    gap: spacing[3],
+    gap: 10,
   },
   formHalf: {
     flex: 1,
   },
-  // Form Input
-  formInputContainer: {
-    gap: spacing[1],
-  },
+
+  // Inputs
+  formInputContainer: {},
   formInputLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    marginBottom: spacing[1],
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginBottom: 8,
+    marginLeft: 4,
   },
   formInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
+    minHeight: 52,
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    backgroundColor: palette.fill,
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+  },
+  formInputWrapperMultiline: {
+    borderRadius: radii.md,
+    paddingVertical: 10,
+  },
+  formInputWrapperReadOnly: {
+    backgroundColor: palette.surfaceDim,
   },
   formInput: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-    fontSize: fontSize.base,
+    ...fonts.medium,
+    fontSize: 15,
+    color: palette.text,
+    paddingVertical: 12,
+  },
+  formInputReadOnly: {
+    color: palette.textMuted,
   },
   formInputError: {
-    fontSize: fontSize.xs,
-    marginTop: spacing[1],
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.danger,
+    marginTop: 6,
+    marginLeft: 4,
   },
   formInputHint: {
-    fontSize: fontSize.xs,
-    marginTop: spacing[1],
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
+    marginTop: 6,
+    marginLeft: 4,
   },
-  // Phone Input
+
+  // Phone
   phoneInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    overflow: 'visible',
+    minHeight: 52,
+    borderRadius: radii.pill,
+    paddingLeft: 6,
+    paddingRight: 18,
   },
-  phoneInput: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-    fontSize: fontSize.base,
-  },
-  // Country Code
   countryCodeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-    borderRightWidth: 1,
+    gap: 6,
+    height: 40,
+    paddingHorizontal: 12,
+    marginRight: 10,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surface,
   },
-  countryFlag: {
-    fontSize: 18,
+  countryName: {
+    ...fonts.bold,
+    fontSize: 12,
+    color: palette.textMuted,
   },
   countryCode: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
+  },
+  phoneInput: {
+    ...fonts.medium,
+    flex: 1,
+    fontSize: 15,
+    paddingVertical: 12,
   },
   countryPicker: {
     position: 'absolute',
-    top: '100%',
+    top: 56,
     left: 0,
-    zIndex: 1000,
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    marginTop: spacing[1],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    zIndex: 10,
+    minWidth: 130,
+    padding: 6,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
   },
   countryOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[3],
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radii.sm,
+  },
+  countryOptionSelected: {
+    backgroundColor: palette.fill,
   },
   countryOptionText: {
-    fontSize: fontSize.base,
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
   },
-  // Account Type
-  accountTypeContainer: {
-    gap: spacing[1],
-  },
+
+  // Account type
+  accountTypeContainer: {},
   accountTypeRow: {
     flexDirection: 'row',
-    gap: spacing[3],
+    gap: 10,
   },
   accountTypeOption: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+  },
+  accountTypeOptionSelected: {
+    backgroundColor: palette.ink,
   },
   accountTypeText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
   },
-  // Empty Bank
-  emptyBankSection: {
-    alignItems: 'center',
-    paddingVertical: spacing[4],
+  accountTypeTextSelected: {
+    color: palette.textInverse,
   },
-  emptyBankIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[3],
-  },
-  emptyBankTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[1],
-  },
-  emptyBankSubtitle: {
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-    marginBottom: spacing[4],
-  },
-  addBankButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    borderRadius: borderRadius.lg,
-  },
-  addBankButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-  },
-  // Save Button
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[4],
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-  // Danger Zone
-  dangerZone: {
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    marginTop: spacing[2],
-  },
-  dangerZoneTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[3],
-  },
-  dangerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-  },
-  dangerButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
+
   // Snackbar
   snackbar: {
     position: 'absolute',
-    bottom: 24,
-    left: spacing[4],
-    right: spacing[4],
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    borderRadius: borderRadius.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: radii.pill,
+    backgroundColor: palette.ink,
   },
   snackbarText: {
+    ...fonts.medium,
     flex: 1,
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    fontSize: 14,
+    color: palette.textInverse,
   },
 });

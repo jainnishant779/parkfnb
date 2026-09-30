@@ -4,6 +4,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import DatePickerModal from './DatePickerModal';
 import TimePickerModal from './TimePickerModal';
 import DateTimePickerModalCmp from './DateTimePickerModal';
+import { palette, radii, fonts } from '../../theme/kit';
 
 // ============================================================================
 // FormTextInput-styled trigger components that pair a tappable input-like
@@ -16,15 +17,17 @@ import DateTimePickerModalCmp from './DateTimePickerModal';
 // ============================================================================
 
 const theme = {
-  background: '#FFFFFF',
-  border: '#D1D5DB',
-  borderError: '#EF4444',
-  text: '#1F2937',
-  placeholder: '#9CA3AF',
-  label: '#374151',
-  helper: '#6B7280',
-  error: '#EF4444',
-  required: '#EF4444',
+  background: palette.fill,
+  backgroundDisabled: palette.surfaceDim,
+  border: palette.fill,
+  borderFocused: palette.ink,
+  borderError: palette.danger,
+  text: palette.text,
+  placeholder: palette.textSubtle,
+  label: palette.textMuted,
+  helper: palette.textMuted,
+  error: palette.danger,
+  required: palette.danger,
 };
 
 interface BaseFieldProps {
@@ -117,7 +120,7 @@ function FieldTrigger({
   containerStyle, placeholder, display, iconName, onPress,
 }: TriggerProps) {
   const [isFocused, setIsFocused] = useState(false);
-  const borderColor = error ? theme.borderError : isFocused ? '#0D7377' : theme.border;
+  const borderColor = error ? theme.borderError : isFocused ? theme.borderFocused : theme.border;
   return (
     <View style={[styles.container, containerStyle]}>
       <View style={styles.labelRow}>
@@ -133,12 +136,12 @@ function FieldTrigger({
         onPressOut={() => setIsFocused(false)}
         style={[
           styles.trigger,
-          { borderColor, backgroundColor: disabled ? '#F3F4F6' : theme.background },
+          { borderColor, backgroundColor: disabled ? theme.backgroundDisabled : theme.background },
         ]}
         accessibilityRole="button"
         accessibilityLabel={`${label}${required ? ', required' : ''}`}
       >
-        <Ionicons name={iconName as any} size={18} color={disabled ? theme.placeholder : '#6B7280'} style={styles.icon} />
+        <Ionicons name={iconName as any} size={18} color={disabled ? theme.placeholder : palette.textMuted} style={styles.icon} />
         <Text
           style={[
             styles.value,
@@ -273,21 +276,21 @@ export function DateTimeField({
 // ---------- styles ----------
 
 const styles = StyleSheet.create({
-  container: { marginBottom: 16 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  label: { fontSize: 13, fontWeight: '500', color: theme.label },
-  required: { fontSize: 13, fontWeight: '500', color: theme.required },
+  container: { marginBottom: 14 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginLeft: 4 },
+  label: { ...fonts.medium, fontSize: 13, color: theme.label },
+  required: { ...fonts.semibold, fontSize: 13, color: theme.required },
   trigger: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingVertical: 12,
-    borderRadius: 8, borderWidth: 1,
-    minHeight: 48,
+    paddingHorizontal: 20,
+    borderRadius: radii.pill, borderWidth: 1.5,
+    minHeight: 56,
   },
-  icon: { marginRight: 8 },
-  value: { flex: 1, fontSize: 15, color: theme.text },
+  icon: { marginRight: 10 },
+  value: { ...fonts.medium, flex: 1, fontSize: 16, color: theme.text },
   valuePlaceholder: { color: theme.placeholder },
   valueDisabled: { color: theme.placeholder },
-  bottomText: { fontSize: 12, marginTop: 6 },
+  bottomText: { ...fonts.medium, fontSize: 12.5, marginTop: 6, marginLeft: 8 },
   errorText: { color: theme.error },
   helperText: { color: theme.helper },
 });

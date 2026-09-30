@@ -13,8 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, radii, fonts } from '../../theme/kit';
 import type { VehicleType, ListingSortOption } from '../../types/models';
 
 // Vehicle type configuration
@@ -74,24 +73,21 @@ const Chip = memo(({ label, icon, isSelected, onPress }: ChipProps) => {
         onPressOut={handlePressOut}
         style={[
           styles.chip,
-          {
-            backgroundColor: isSelected ? theme.primary : theme.surface,
-            borderColor: isSelected ? theme.primary : theme.border,
-          },
+          { backgroundColor: isSelected ? palette.ink : theme.surface },
         ]}
       >
         {icon && (
           <Ionicons
             name={icon}
             size={14}
-            color={isSelected ? '#FFFFFF' : theme.textSecondary}
+            color={isSelected ? palette.textInverse : theme.text}
             style={styles.chipIcon}
           />
         )}
         <Text
           style={[
             styles.chipText,
-            { color: isSelected ? '#FFFFFF' : theme.textSecondary },
+            { color: isSelected ? palette.textInverse : theme.text },
           ]}
         >
           {label}
@@ -100,7 +96,7 @@ const Chip = memo(({ label, icon, isSelected, onPress }: ChipProps) => {
           <Ionicons
             name="checkmark"
             size={14}
-            color="#FFFFFF"
+            color={palette.textInverse}
             style={styles.checkIcon}
           />
         )}
@@ -169,7 +165,7 @@ function FilterChipsRow({
         {hasActiveFilters && (
           <Pressable
             onPress={onClearFilters}
-            style={[styles.clearButton, { borderColor: theme.danger }]}
+            style={[styles.clearButton, { backgroundColor: palette.dangerSoft }]}
           >
             <Ionicons name="close-circle-outline" size={16} color={theme.danger} />
             <Text style={[styles.clearText, { color: theme.danger }]}>Clear</Text>
@@ -182,73 +178,70 @@ function FilterChipsRow({
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: spacing[2],
+    paddingVertical: 8,
   },
   scrollContent: {
-    paddingHorizontal: spacing[4],
+    paddingHorizontal: 16,
     alignItems: 'flex-start',
   },
   sortContainer: {
-    marginRight: spacing[3],
+    marginRight: 12,
   },
   filterContainer: {
-    marginLeft: spacing[3],
+    marginLeft: 12,
   },
   sectionLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-    marginBottom: spacing[2],
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    ...fonts.semibold,
+    fontSize: 12,
+    marginBottom: 8,
+    marginLeft: 4,
   },
   sortChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing[2],
+    gap: 8,
   },
   filterChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing[2],
+    gap: 8,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    height: 40,
+    borderRadius: radii.pill,
   },
   chipIcon: {
-    marginRight: spacing[1],
+    marginRight: 6,
   },
   chipText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 14,
   },
   checkIcon: {
-    marginLeft: spacing[1],
+    marginLeft: 6,
   },
   verticalDivider: {
     width: 1,
     height: 48,
     alignSelf: 'center',
-    marginHorizontal: spacing[2],
+    marginHorizontal: 8,
   },
   clearButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    marginLeft: spacing[3],
-    alignSelf: 'center',
+    paddingHorizontal: 16,
+    height: 40,
+    borderRadius: radii.pill,
+    marginLeft: 12,
+    alignSelf: 'flex-end',
   },
   clearText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    marginLeft: spacing[1],
+    ...fonts.semibold,
+    fontSize: 14,
+    marginLeft: 4,
   },
 });
 

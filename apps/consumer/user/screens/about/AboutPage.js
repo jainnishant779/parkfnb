@@ -10,8 +10,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { palette, fontStacks } from '../../theme';
+import { palette, radii, spacing, fonts, typography } from '../../theme';
+import {
+  T,
+  Card,
+  ScreenHeader,
+  SectionTitle,
+  ListRow,
+  TimelineItem,
+  Segmented,
+  IsoBlock,
+} from '../../components/ui';
 
 // Benefits data for drivers
 const driverBenefits = [
@@ -51,7 +60,7 @@ const driverBenefits = [
 const ownerBenefits = [
   {
     id: '1',
-    icon: 'dollar-sign',
+    icon: 'trending-up',
     title: 'Monetize Your Space',
     description: 'Turn your unused parking into a steady income stream.',
   },
@@ -187,54 +196,16 @@ const trustFeatures = [
 ];
 
 // App description
-const appDescription = `ParkEase is a revolutionary parking platform that bridges the gap between drivers seeking convenient parking and space owners looking to monetize their unused spots.
+const appDescription = `Parkfnb is a revolutionary parking platform that bridges the gap between drivers seeking convenient parking and space owners looking to monetize their unused spots.
 
-Whether you're a daily commuter struggling to find parking near your office, a weekend traveler looking for safe overnight parking, or a property owner with an empty driveway, ParkEase has you covered.
+Whether you're a daily commuter struggling to find parking near your office, a weekend traveler looking for safe overnight parking, or a property owner with an empty driveway, Parkfnb has you covered.
 
 Our mission is to make parking stress-free while helping communities utilize space more efficiently. With real-time availability, transparent pricing, and a trusted community of users, we're transforming how people think about parking.`;
 
-// Segmented Control Component
-const SegmentedControl = ({ segments, activeIndex, onPress }) => {
-  const translateX = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.spring(translateX, {
-      toValue: activeIndex * 100,
-      useNativeDriver: true,
-      friction: 8,
-    }).start();
-  }, [activeIndex]);
-
-  return (
-    <View style={styles.segmentedContainer}>
-      <Animated.View
-        style={[
-          styles.segmentedIndicator,
-          {
-            transform: [{ translateX: Animated.multiply(translateX, 1.55) }],
-          },
-        ]}
-      />
-      {segments.map((segment, index) => (
-        <TouchableOpacity
-          key={segment}
-          style={styles.segmentButton}
-          onPress={() => onPress(index)}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={[
-              styles.segmentText,
-              activeIndex === index && styles.segmentTextActive,
-            ]}
-          >
-            {segment}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-};
+const SEGMENTS = [
+  { id: 0, label: 'For Drivers' },
+  { id: 1, label: 'For Owners' },
+];
 
 // Benefit Card Component
 const BenefitCard = ({ icon, title, description, index }) => {
@@ -256,7 +227,7 @@ const BenefitCard = ({ icon, title, description, index }) => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, index, translateY]);
 
   return (
     <Animated.View
@@ -268,8 +239,8 @@ const BenefitCard = ({ icon, title, description, index }) => {
         },
       ]}
     >
-      <View style={styles.benefitIconContainer}>
-        <Icon name={icon} size={20} color="#1A73E8" />
+      <View style={styles.iconCircle}>
+        <Icon name={icon} size={19} color={palette.text} />
       </View>
       <View style={styles.benefitContent}>
         <Text style={styles.benefitTitle}>{title}</Text>
@@ -279,26 +250,8 @@ const BenefitCard = ({ icon, title, description, index }) => {
   );
 };
 
-// Timeline Step Component
-const TimelineStep = ({ step, title, description, isLast }) => {
-  return (
-    <View style={styles.timelineItem}>
-      <View style={styles.timelineLeft}>
-        <View style={styles.timelineNumber}>
-          <Text style={styles.timelineNumberText}>{step}</Text>
-        </View>
-        {!isLast && <View style={styles.timelineLine} />}
-      </View>
-      <View style={styles.timelineContent}>
-        <Text style={styles.timelineTitle}>{title}</Text>
-        <Text style={styles.timelineDescription}>{description}</Text>
-      </View>
-    </View>
-  );
-};
-
 // FAQ Item Component
-const FaqItem = ({ question, answer, isExpanded, onToggle }) => {
+const FaqItem = ({ question, answer, isExpanded, onToggle, isLast }) => {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const heightAnim = useRef(new Animated.Value(0)).current;
 
@@ -315,7 +268,7 @@ const FaqItem = ({ question, answer, isExpanded, onToggle }) => {
         useNativeDriver: false,
       }),
     ]).start();
-  }, [isExpanded]);
+  }, [isExpanded, heightAnim, rotateAnim]);
 
   const rotate = rotateAnim.interpolate({
     inputRange: [0, 1],
@@ -324,7 +277,7 @@ const FaqItem = ({ question, answer, isExpanded, onToggle }) => {
 
   return (
     <TouchableOpacity
-      style={styles.faqItem}
+      style={[styles.faqItem, !isLast && styles.faqDivider]}
       onPress={onToggle}
       activeOpacity={0.7}
       accessibilityRole="button"
@@ -333,8 +286,8 @@ const FaqItem = ({ question, answer, isExpanded, onToggle }) => {
     >
       <View style={styles.faqHeader}>
         <Text style={styles.faqQuestion}>{question}</Text>
-        <Animated.View style={{ transform: [{ rotate }] }}>
-          <Icon name="chevron-down" size={20} color="#A1A1AA" />
+        <Animated.View style={[styles.faqChevron, { transform: [{ rotate }] }]}>
+          <Icon name="chevron-down" size={18} color={palette.text} />
         </Animated.View>
       </View>
       {isExpanded && (
@@ -350,8 +303,8 @@ const FaqItem = ({ question, answer, isExpanded, onToggle }) => {
 const TrustCard = ({ icon, title, description }) => {
   return (
     <View style={styles.trustCard}>
-      <View style={styles.trustIconContainer}>
-        <Icon name={icon} size={18} color="#1A73E8" />
+      <View style={[styles.iconCircle, styles.trustIcon]}>
+        <Icon name={icon} size={18} color={palette.text} />
       </View>
       <Text style={styles.trustTitle}>{title}</Text>
       <Text style={styles.trustDescription}>{description}</Text>
@@ -369,18 +322,18 @@ const InfoBanner = ({ onDismiss }) => {
       duration: 500,
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [fadeAnim]);
 
   return (
     <Animated.View style={[styles.infoBanner, { opacity: fadeAnim }]}>
-      <View style={styles.infoBannerContent}>
-        <Icon name="info" size={18} color="#1A73E8" />
-        <Text style={styles.infoBannerText}>
-          New here? Learn what makes ParkEase different.
-        </Text>
+      <View style={styles.infoBannerIcon}>
+        <Icon name="info" size={16} color={palette.textInverse} />
       </View>
-      <TouchableOpacity onPress={onDismiss} style={styles.infoBannerClose}>
-        <Icon name="x" size={16} color="#A1A1AA" />
+      <Text style={styles.infoBannerText}>
+        New here? Learn what makes Parkfnb different.
+      </Text>
+      <TouchableOpacity onPress={onDismiss} style={styles.infoBannerClose} hitSlop={8}>
+        <Icon name="x" size={16} color={palette.textMuted} />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -411,7 +364,7 @@ const AboutPage = ({ navigation }) => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   const handleSegmentChange = useCallback((index) => {
     setActiveSegment(index);
@@ -440,19 +393,7 @@ const AboutPage = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Icon name="arrow-left" size={20} color={palette.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>About</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <ScreenHeader title="About" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.content}
@@ -462,34 +403,36 @@ const AboutPage = ({ navigation }) => {
         {/* Info Banner */}
         {showBanner && <InfoBanner onDismiss={handleDismissBanner} />}
 
-        {/* Brand Section */}
+        {/* Brand hero */}
         <Animated.View
-          style={[
-            styles.brandSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+          style={{
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }}
         >
-          <View style={styles.logoContainer}>
-            <MaterialIcon name="parking" size={40} color="#FFFFFF" />
-          </View>
-          <Text style={styles.appName}>ParkEase</Text>
-          <Text style={styles.tagline}>
-            Your parking, simplified. Anywhere, anytime.
-          </Text>
+          <Card tone="blue" style={styles.hero}>
+            <View style={styles.heroText}>
+              <Text style={styles.wordmark}>parkfnb.</Text>
+              <T variant="body" style={styles.tagline}>
+                Your parking, simplified. Anywhere, anytime.
+              </T>
+            </View>
+            <View style={styles.heroArt} pointerEvents="none">
+              <IsoBlock size={150} tone="blue" />
+            </View>
+          </Card>
         </Animated.View>
 
         {/* App Summary */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>What is ParkEase?</Text>
+        <Card style={styles.cardGap}>
+          <T variant="h3" style={styles.cardTitle}>What is Parkfnb?</T>
           <Text style={styles.descriptionText}>
             {showFullDescription ? appDescription : truncatedDescription}
           </Text>
           <TouchableOpacity
             onPress={() => setShowFullDescription(!showFullDescription)}
             style={styles.readMoreButton}
+            activeOpacity={0.7}
           >
             <Text style={styles.readMoreText}>
               {showFullDescription ? 'Read less' : 'Read more'}
@@ -497,143 +440,104 @@ const AboutPage = ({ navigation }) => {
             <Icon
               name={showFullDescription ? 'chevron-up' : 'chevron-down'}
               size={16}
-              color="#1A73E8"
+              color={palette.text}
             />
           </TouchableOpacity>
-        </View>
+        </Card>
 
-        {/* Segmented Control */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Explore Benefits</Text>
-          <SegmentedControl
-            segments={['For Drivers', 'For Owners']}
-            activeIndex={activeSegment}
-            onPress={handleSegmentChange}
-          />
-
-          {/* Benefits */}
-          <View style={styles.benefitsContainer} key={activeSegment}>
-            {currentBenefits.map((benefit, index) => (
-              <BenefitCard
-                key={benefit.id}
-                icon={benefit.icon}
-                title={benefit.title}
-                description={benefit.description}
-                index={index}
-              />
-            ))}
-          </View>
+        {/* Benefits */}
+        <SectionTitle title="Explore benefits" style={styles.sectionTitle} />
+        <Segmented
+          options={SEGMENTS}
+          value={activeSegment}
+          onChange={handleSegmentChange}
+          style={styles.segmented}
+        />
+        <View style={styles.benefitsContainer} key={activeSegment}>
+          {currentBenefits.map((benefit, index) => (
+            <BenefitCard
+              key={benefit.id}
+              icon={benefit.icon}
+              title={benefit.title}
+              description={benefit.description}
+              index={index}
+            />
+          ))}
         </View>
 
         {/* How it Works */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>How It Works</Text>
-          <View style={styles.timelineContainer}>
-            {currentSteps.map((step, index) => (
-              <TimelineStep
-                key={step.id}
-                step={step.id}
-                title={step.title}
-                description={step.description}
-                isLast={index === currentSteps.length - 1}
-              />
-            ))}
-          </View>
-        </View>
+        <SectionTitle title="How it works" style={styles.sectionTitle} />
+        <Card>
+          {currentSteps.map((step, index) => (
+            <TimelineItem
+              key={step.id}
+              title={step.title}
+              subtitle={step.description}
+              date={`Step ${step.id}`}
+              active={index === 0}
+              isLast={index === currentSteps.length - 1}
+            />
+          ))}
+        </Card>
 
         {/* Trust & Safety */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Trust & Safety</Text>
-          <View style={styles.trustGrid}>
-            {trustFeatures.map((feature) => (
-              <TrustCard
-                key={feature.id}
-                icon={feature.icon}
-                title={feature.title}
-                description={feature.description}
-              />
-            ))}
-          </View>
+        <SectionTitle title="Trust & safety" style={styles.sectionTitle} />
+        <View style={styles.trustGrid}>
+          {trustFeatures.map((feature) => (
+            <TrustCard
+              key={feature.id}
+              icon={feature.icon}
+              title={feature.title}
+              description={feature.description}
+            />
+          ))}
         </View>
 
         {/* FAQ Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
-          {faqData.map((faq) => (
+        <SectionTitle title="Frequently asked" style={styles.sectionTitle} />
+        <Card style={styles.listCard}>
+          {faqData.map((faq, index) => (
             <FaqItem
               key={faq.id}
               question={faq.question}
               answer={faq.answer}
               isExpanded={expandedFaq === faq.id}
               onToggle={() => handleFaqToggle(faq.id)}
+              isLast={index === faqData.length - 1}
             />
           ))}
-        </View>
+        </Card>
 
         {/* Contact & Support */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Need Help?</Text>
-          <View style={styles.contactContainer}>
-            <TouchableOpacity
-              style={styles.contactOption}
-              onPress={handleContactSupport}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.contactIconContainer, { backgroundColor: '#3B82F615' }]}>
-                <Icon name="mail" size={20} color="#3B82F6" />
-              </View>
-              <View style={styles.contactTextContainer}>
-                <Text style={styles.contactTitle}>Contact Support</Text>
-                <Text style={styles.contactSubtitle}>support@parkease.com</Text>
-              </View>
-              <Icon name="chevron-right" size={20} color="#6B7280" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.contactOption}
-              onPress={() => navigation.navigate('HelpSupport')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.contactIconContainer, { backgroundColor: '#8B5CF615' }]}>
-                <Icon name="help-circle" size={20} color="#8B5CF6" />
-              </View>
-              <View style={styles.contactTextContainer}>
-                <Text style={styles.contactTitle}>Help Center</Text>
-                <Text style={styles.contactSubtitle}>FAQs & guides</Text>
-              </View>
-              <Icon name="chevron-right" size={20} color="#6B7280" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.contactOption}
-              onPress={handleViewPrivacy}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.contactIconContainer, { backgroundColor: '#10B98115' }]}>
-                <Icon name="shield" size={20} color="#10B981" />
-              </View>
-              <View style={styles.contactTextContainer}>
-                <Text style={styles.contactTitle}>Privacy Policy</Text>
-                <Text style={styles.contactSubtitle}>How we protect your data</Text>
-              </View>
-              <Icon name="chevron-right" size={20} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-        </View>
+        <SectionTitle title="Need help?" style={styles.sectionTitle} />
+        <Card style={styles.listCard}>
+          <ListRow
+            icon="mail"
+            title="Contact Support"
+            subtitle="support@parkease.com"
+            onPress={handleContactSupport}
+          />
+          <ListRow
+            icon="help-circle"
+            title="Help Center"
+            subtitle="FAQs & guides"
+            onPress={() => navigation.navigate('HelpSupport')}
+          />
+          <ListRow
+            icon="shield"
+            title="Privacy Policy"
+            subtitle="How we protect your data"
+            onPress={handleViewPrivacy}
+            isLast
+          />
+        </Card>
 
         {/* App Version & Meta */}
         <View style={styles.metaSection}>
-          <View style={styles.metaLogoSmall}>
-            <MaterialIcon name="parking" size={20} color="#1A73E8" />
-          </View>
-          <Text style={styles.metaAppName}>ParkEase</Text>
+          <Text style={styles.metaAppName}>parkfnb.</Text>
           <Text style={styles.metaVersion}>Version 1.0.0 (Stable)</Text>
-          <Text style={styles.metaCopyright}>
-            © 2024 ParkEase. All rights reserved.
-          </Text>
-          <Text style={styles.metaTagline}>
-            Made with care for drivers & space owners
-          </Text>
+          <Text style={styles.metaCopyright}>© 2024 Parkfnb. All rights reserved.</Text>
+          <Text style={styles.metaTagline}>Made with care for drivers & space owners</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -645,300 +549,181 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: palette.bg,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'transparent',
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: palette.surface,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontFamily: fontStacks.medium,
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    color: palette.text,
-  },
-  headerRight: {
-    width: 36,
-  },
   content: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
   },
 
   // Info Banner
   infoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,46,64,0.12)',
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 12,
+    backgroundColor: palette.surface,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.sm,
+    paddingLeft: spacing.sm,
+    paddingRight: spacing.md,
+    marginBottom: spacing.md,
   },
-  infoBannerContent: {
-    flexDirection: 'row',
+  infoBannerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: palette.ink,
     alignItems: 'center',
-    flex: 1,
-    gap: 10,
+    justifyContent: 'center',
+    marginRight: spacing.md,
   },
   infoBannerText: {
-    fontSize: 13,
-    color: '#FF2E40',
-    fontWeight: '500',
+    ...fonts.medium,
     flex: 1,
+    fontSize: 13,
+    color: palette.text,
   },
   infoBannerClose: {
     padding: 4,
+    marginLeft: spacing.sm,
   },
 
-  // Brand Section
-  brandSection: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-  },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    backgroundColor: '#FF2E40',
+  // Hero
+  hero: {
+    minHeight: 190,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#FF2E40',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
-  appName: {
-    fontSize: 28,
-    fontWeight: '800',
+  heroText: {
+    maxWidth: '62%',
+  },
+  wordmark: {
+    ...fonts.bold,
+    fontSize: 40,
+    letterSpacing: -1.2,
+    lineHeight: 46,
     color: palette.text,
-    marginBottom: 8,
   },
   tagline: {
-    fontSize: 15,
-    color: '#A1A1AA',
-    textAlign: 'center',
+    marginTop: spacing.sm,
+    color: palette.inkSoft,
+  },
+  heroArt: {
+    position: 'absolute',
+    right: -30,
+    bottom: -26,
   },
 
-  // Section
-  section: {
-    backgroundColor: palette.surface,
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+  cardGap: {
+    marginTop: spacing.lg,
+  },
+  cardTitle: {
+    marginBottom: spacing.md,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: palette.text,
-    marginBottom: 16,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.md,
+  },
+  listCard: {
+    paddingVertical: spacing.xs,
   },
 
   // Description
   descriptionText: {
+    ...typography.bodySmall,
     fontSize: 14,
-    color: '#A1A1AA',
-    lineHeight: 22,
+    lineHeight: 21,
   },
   readMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
+    alignSelf: 'flex-start',
+    marginTop: spacing.md,
     gap: 4,
   },
   readMoreText: {
+    ...fonts.semibold,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#FF2E40',
+    color: palette.text,
   },
 
-  // Segmented Control
-  segmentedContainer: {
-    flexDirection: 'row',
-    backgroundColor: palette.surface,
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 20,
-    position: 'relative',
+  // Segmented
+  segmented: {
+    backgroundColor: palette.bgSoft,
+    marginBottom: spacing.md,
   },
-  segmentedIndicator: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    width: '48%',
-    height: '100%',
-    backgroundColor: palette.surface,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 12,
+
+  // Shared grey icon circle
+  iconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: palette.fill,
     alignItems: 'center',
-    zIndex: 1,
-  },
-  segmentText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#A1A1AA',
-  },
-  segmentTextActive: {
-    color: '#FF2E40',
+    justifyContent: 'center',
   },
 
   // Benefits
   benefitsContainer: {
-    gap: 12,
+    gap: spacing.sm,
   },
   benefitCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: palette.surface,
-    padding: 14,
-    borderRadius: 12,
-  },
-  benefitIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,46,64,0.12)',
-    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: palette.surface,
+    padding: spacing.lg,
+    borderRadius: radii.xl,
   },
   benefitContent: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 14,
   },
   benefitTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...fonts.semibold,
+    fontSize: 15.5,
     color: palette.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   benefitDescription: {
-    fontSize: 13,
-    color: '#A1A1AA',
-    lineHeight: 18,
-  },
-
-  // Timeline
-  timelineContainer: {
-    marginTop: 8,
-  },
-  timelineItem: {
-    flexDirection: 'row',
-  },
-  timelineLeft: {
-    alignItems: 'center',
-    width: 40,
-  },
-  timelineNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FF2E40',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timelineNumberText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: palette.text,
-  },
-  timelineLine: {
-    width: 2,
-    flex: 1,
-    backgroundColor: palette.surface,
-    marginVertical: 4,
-  },
-  timelineContent: {
-    flex: 1,
-    paddingLeft: 12,
-    paddingBottom: 24,
-  },
-  timelineTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: palette.text,
-    marginBottom: 4,
-  },
-  timelineDescription: {
-    fontSize: 13,
-    color: '#A1A1AA',
-    lineHeight: 18,
+    ...typography.bodySmall,
   },
 
   // Trust
   trustGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
+    rowGap: spacing.md,
   },
   trustCard: {
-    width: '47%',
+    width: '48.5%',
     backgroundColor: palette.surface,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
+    padding: spacing.lg,
+    borderRadius: radii.xl,
   },
-  trustIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,46,64,0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
+  trustIcon: {
+    marginBottom: spacing.md,
   },
   trustTitle: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...fonts.semibold,
+    fontSize: 14.5,
     color: palette.text,
-    textAlign: 'center',
     marginBottom: 4,
   },
   trustDescription: {
-    fontSize: 11,
-    color: '#A1A1AA',
-    textAlign: 'center',
+    ...fonts.medium,
+    fontSize: 12,
     lineHeight: 16,
+    color: palette.textMuted,
   },
 
   // FAQ
   faqItem: {
-    backgroundColor: palette.surface,
-    borderRadius: 12,
-    marginBottom: 10,
-    padding: 16,
+    paddingVertical: spacing.lg,
+  },
+  faqDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
   },
   faqHeader: {
     flexDirection: 'row',
@@ -946,92 +731,59 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   faqQuestion: {
+    ...fonts.semibold,
     flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    lineHeight: 20,
     color: palette.text,
-    marginRight: 12,
+    marginRight: spacing.md,
+  },
+  faqChevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   faqAnswerContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: palette.surface,
+    marginTop: spacing.md,
   },
   faqAnswer: {
-    fontSize: 13,
-    color: '#A1A1AA',
-    lineHeight: 20,
+    ...typography.bodySmall,
+    fontSize: 14,
+    lineHeight: 21,
   },
 
-  // Contact
-  contactContainer: {
-    gap: 12,
-  },
-  contactOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.surface,
-    padding: 14,
-    borderRadius: 12,
-  },
-  contactIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  contactTextContainer: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  contactTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: palette.text,
-  },
-  contactSubtitle: {
-    fontSize: 13,
-    color: '#A1A1AA',
-    marginTop: 2,
-  },
-
-  // Meta Section
+  // Meta
   metaSection: {
     alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-  },
-  metaLogoSmall: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,46,64,0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
+    paddingTop: spacing.xxxl,
+    paddingBottom: spacing.lg,
   },
   metaAppName: {
-    fontSize: 16,
-    fontWeight: '700',
+    ...fonts.bold,
+    fontSize: 22,
+    letterSpacing: -0.5,
     color: palette.text,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   metaVersion: {
+    ...fonts.medium,
     fontSize: 13,
-    color: '#A1A1AA',
+    color: palette.textMuted,
     marginBottom: 4,
   },
   metaCopyright: {
+    ...fonts.medium,
     fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 8,
+    color: palette.textMuted,
+    marginBottom: spacing.sm,
   },
   metaTagline: {
+    ...fonts.medium,
     fontSize: 12,
-    color: '#6B7280',
-    fontStyle: 'italic',
+    color: palette.textSubtle,
   },
 });
 

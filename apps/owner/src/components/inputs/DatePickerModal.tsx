@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { palette, radii, fonts } from '../../theme/kit';
 
 // ============================================================================
 // Shared date picker modal — pure JS, no native module dependency.
@@ -202,10 +203,11 @@ function DatePickerModalImpl({
         <Pressable style={styles.backdropPressable} onPress={onClose} />
 
         <View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={styles.grabber} />
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={22} color="#64748B" />
+              <Ionicons name="close" size={20} color={palette.text} />
             </Pressable>
           </View>
 
@@ -213,14 +215,14 @@ function DatePickerModalImpl({
             <>
               <View style={styles.nav}>
                 <Pressable onPress={handlePrevMonth} style={styles.navBtn}>
-                  <Ionicons name="chevron-back" size={22} color="#1E293B" />
+                  <Ionicons name="chevron-back" size={22} color={palette.text} />
                 </Pressable>
                 <Pressable onPress={() => setYearMode(true)} style={styles.headerBtn}>
                   <Text style={styles.headerBtnText}>{MONTHS[viewMonth]} {viewYear}</Text>
-                  <Ionicons name="chevron-down" size={16} color="#1E293B" />
+                  <Ionicons name="chevron-down" size={16} color={palette.text} />
                 </Pressable>
                 <Pressable onPress={handleNextMonth} style={styles.navBtn}>
-                  <Ionicons name="chevron-forward" size={22} color="#1E293B" />
+                  <Ionicons name="chevron-forward" size={22} color={palette.text} />
                 </Pressable>
               </View>
 
@@ -291,7 +293,7 @@ function DatePickerModalImpl({
               <Pressable onPress={handleToday} style={styles.todayBtn}>
                 <Text style={styles.todayBtnText}>Today</Text>
               </Pressable>
-            ) : <View />}
+            ) : null}
             <View style={styles.confirmRow}>
               <Pressable onPress={onClose} style={styles.cancelBtn}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -326,92 +328,103 @@ const styles = StyleSheet.create({
   },
   backdropTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   backdropPressable: { flex: 1 },
   container: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 16,
-    maxHeight: '85%',
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingTop: 10,
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 16 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.12, shadowRadius: 20 },
       android: { elevation: 24 },
     }),
   },
+  grabber: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    marginBottom: 12,
+  },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 20, paddingBottom: 8,
   },
-  title: { fontSize: 16, fontWeight: '600', color: '#1E293B' },
+  title: { ...fonts.semibold, fontSize: 20, letterSpacing: -0.3, color: palette.text },
   closeBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9',
+    width: 40, height: 40, borderRadius: 20, backgroundColor: palette.fill,
     justifyContent: 'center', alignItems: 'center',
   },
   nav: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
+    paddingHorizontal: 16, paddingVertical: 10,
   },
   navBtn: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9',
+    width: 40, height: 40, borderRadius: 20, backgroundColor: palette.fill,
     justifyContent: 'center', alignItems: 'center',
   },
   headerBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+    paddingHorizontal: 14, height: 36, borderRadius: radii.pill,
+    backgroundColor: palette.fill,
   },
-  headerBtnText: { fontSize: 15, fontWeight: '600', color: '#1E293B', marginRight: 4 },
+  headerBtnText: { ...fonts.semibold, fontSize: 15, color: palette.text, marginRight: 4 },
   weekdayRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 4 },
   weekdayCell: { flex: 1, alignItems: 'center' },
-  weekdayText: { fontSize: 11, fontWeight: '500', color: '#94A3B8' },
+  weekdayText: { ...fonts.semibold, fontSize: 11.5, color: palette.textMuted },
   grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, paddingBottom: 8 },
   cell: { width: `${100 / 7}%`, aspectRatio: 1, padding: 3 },
   cellInner: {
     flex: 1, justifyContent: 'center', alignItems: 'center',
     borderRadius: 999,
   },
-  cellSelected: { backgroundColor: '#0D7377' },
-  cellToday: { borderWidth: 1, borderColor: '#0D7377' },
+  cellSelected: { backgroundColor: palette.ink },
+  cellToday: { backgroundColor: palette.peachSoft },
   cellDisabled: { opacity: 0.3 },
-  cellText: { fontSize: 14, color: '#1E293B' },
-  cellTextSelected: { color: '#FFFFFF', fontWeight: '600' },
-  cellTextToday: { color: '#0D7377', fontWeight: '500' },
-  cellTextDisabled: { color: '#94A3B8' },
+  cellText: { ...fonts.medium, fontSize: 15, color: palette.text },
+  cellTextSelected: { ...fonts.bold, color: palette.textInverse },
+  cellTextToday: { ...fonts.bold, color: palette.text },
+  cellTextDisabled: { color: palette.textSubtle },
   yearScroll: { maxHeight: 320 },
   yearGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, paddingBottom: 12 },
   yearCell: { width: '25%', padding: 4 },
   yearInner: {
-    paddingVertical: 14, borderRadius: 8,
-    backgroundColor: '#F8FAFC', alignItems: 'center',
+    height: 46, borderRadius: radii.pill,
+    backgroundColor: palette.fill, alignItems: 'center', justifyContent: 'center',
   },
-  yearSelected: { backgroundColor: '#0D7377' },
-  yearText: { fontSize: 14, color: '#1E293B', fontWeight: '500' },
-  yearTextSelected: { color: '#FFFFFF', fontWeight: '600' },
+  yearSelected: { backgroundColor: palette.ink },
+  yearText: { ...fonts.semibold, fontSize: 14, color: palette.text },
+  yearTextSelected: { color: palette.textInverse },
   selectedBar: {
-    paddingHorizontal: 20, paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E2E8F0',
+    marginHorizontal: 20, marginTop: 4,
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderRadius: radii.lg, backgroundColor: palette.peachWash,
   },
-  selectedLabel: { fontSize: 11, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.4 },
-  selectedValue: { fontSize: 14, color: '#1E293B', fontWeight: '500', marginTop: 2 },
+  selectedLabel: { ...fonts.medium, fontSize: 12, color: palette.textMuted },
+  selectedValue: { ...fonts.semibold, fontSize: 16, color: palette.text, marginTop: 2 },
   actions: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: 12,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 14, gap: 8,
   },
-  todayBtn: { paddingHorizontal: 12, paddingVertical: 8 },
-  todayBtnText: { fontSize: 14, color: '#0D7377', fontWeight: '500' },
-  confirmRow: { flexDirection: 'row', gap: 8 },
+  todayBtn: {
+    paddingHorizontal: 16, height: 52, borderRadius: radii.pill,
+    borderWidth: 1.5, borderColor: palette.line, justifyContent: 'center',
+  },
+  todayBtnText: { ...fonts.semibold, fontSize: 15, color: palette.text },
+  confirmRow: { flex: 1, flexDirection: 'row', gap: 8 },
   cancelBtn: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8,
-    backgroundColor: '#F1F5F9', minHeight: 40, justifyContent: 'center',
+    flex: 1, height: 52, borderRadius: radii.pill,
+    backgroundColor: palette.fill, alignItems: 'center', justifyContent: 'center',
   },
-  cancelBtnText: { fontSize: 14, fontWeight: '500', color: '#64748B' },
+  cancelBtnText: { ...fonts.semibold, fontSize: 15, color: palette.text },
   confirmBtn: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8,
-    backgroundColor: '#0D7377', minHeight: 40, justifyContent: 'center',
+    flex: 1, height: 52, borderRadius: radii.pill,
+    backgroundColor: palette.ink, alignItems: 'center', justifyContent: 'center',
   },
-  confirmBtnText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
+  confirmBtnText: { ...fonts.semibold, fontSize: 15, color: palette.textInverse },
 });
 
 export default memo(DatePickerModalImpl);

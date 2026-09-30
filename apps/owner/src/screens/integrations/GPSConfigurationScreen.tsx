@@ -1,27 +1,36 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
-  Platform,
+  TouchableOpacity,
   Switch,
+  type TextStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  FadeIn,
-} from 'react-native-reanimated';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
-import AppHeader from '../../components/headers/AppHeader';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import * as Kit from '../../theme/kit';
+import * as UI from '../../components/ui';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const {
+  T,
+  Card,
+  PillButton,
+  IconCircle,
+  ScreenHeader,
+  StatusTag,
+  ListRow,
+  IsoBlock,
+} = UI as unknown as Record<string, React.ComponentType<any>>;
+const { palette } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
+
+// Ink toggle colours shared by every Switch on this screen.
+const SWITCH_TRACK = { false: palette.bgSoft, true: palette.ink };
 
 // Configuration options
 interface ConfigOption {
@@ -35,53 +44,37 @@ interface ConfigOption {
 interface SettingItemProps {
   option: ConfigOption;
   onToggle: (id: string) => void;
-  theme: ReturnType<typeof getTheme>;
+  isLast: boolean;
 }
 
-function SettingItem({ option, onToggle, theme }: SettingItemProps) {
-  const scale = useSharedValue(1);
-
-  const handlePressIn = useCallback(() => {
-    scale.value = withSpring(0.98, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const handlePressOut = useCallback(() => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
+function SettingItem({ option, onToggle, isLast }: SettingItemProps) {
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={() => onToggle(option.id)}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+      activeOpacity={0.7}
       accessibilityLabel={`${option.title}, ${option.enabled ? 'enabled' : 'disabled'}`}
       accessibilityRole="switch"
     >
       <Animated.View
         entering={FadeIn.duration(200)}
-        style={[styles.settingItem, { backgroundColor: theme.surface }, animatedStyle]}
+        style={[styles.row, !isLast && styles.rowDivider]}
       >
-        <View style={[styles.settingIcon, { backgroundColor: theme.primaryLight }]}>
-          <MaterialCommunityIcons name={option.icon as any} size={22} color={theme.primary} />
+        <View style={styles.iconCircle}>
+          <MaterialCommunityIcons name={option.icon as any} size={20} color={palette.text} />
         </View>
-        <View style={styles.settingContent}>
-          <Text style={[styles.settingTitle, { color: theme.text }]}>{option.title}</Text>
-          <Text style={[styles.settingDescription, { color: theme.textMuted }]}>
-            {option.description}
-          </Text>
+        <View style={styles.rowContent}>
+          <Text style={styles.rowTitle}>{option.title}</Text>
+          <Text style={styles.rowSubtitle}>{option.description}</Text>
         </View>
         <Switch
           value={option.enabled}
           onValueChange={() => onToggle(option.id)}
-          trackColor={{ false: theme.borderLight, true: theme.primary + '40' }}
-          thumbColor={option.enabled ? theme.primary : theme.textMuted}
+          trackColor={SWITCH_TRACK}
+          thumbColor={palette.surface}
+          ios_backgroundColor={palette.bgSoft}
         />
       </Animated.View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -97,10 +90,10 @@ interface GeofenceZone {
 interface GeofenceItemProps {
   zone: GeofenceZone;
   onToggle: (id: string) => void;
-  theme: ReturnType<typeof getTheme>;
+  isLast: boolean;
 }
 
-function GeofenceItem({ zone, onToggle, theme }: GeofenceItemProps) {
+function GeofenceItem({ zone, onToggle, isLast }: GeofenceItemProps) {
   const getTypeLabel = () => {
     switch (zone.type) {
       case 'entry':
@@ -112,36 +105,35 @@ function GeofenceItem({ zone, onToggle, theme }: GeofenceItemProps) {
     }
   };
 
-  const getTypeColor = () => {
+  const getTypeTone = () => {
     switch (zone.type) {
       case 'entry':
-        return theme.success;
+        return 'success';
       case 'exit':
-        return theme.warning;
+        return 'warning';
       default:
-        return theme.primary;
+        return 'ink';
     }
   };
 
   return (
-    <View style={[styles.geofenceItem, { backgroundColor: theme.surface }]}>
-      <View style={[styles.geofenceIcon, { backgroundColor: getTypeColor() + '20' }]}>
-        <MaterialCommunityIcons name="map-marker-radius" size={20} color={getTypeColor()} />
+    <View style={[styles.row, !isLast && styles.rowDivider]}>
+      <View style={styles.iconCircle}>
+        <MaterialCommunityIcons name="map-marker-radius" size={20} color={palette.text} />
       </View>
-      <View style={styles.geofenceContent}>
-        <Text style={[styles.geofenceTitle, { color: theme.text }]}>{zone.name}</Text>
+      <View style={styles.rowContent}>
+        <Text style={styles.rowTitle}>{zone.name}</Text>
         <View style={styles.geofenceMeta}>
-          <Text style={[styles.geofenceType, { color: getTypeColor() }]}>{getTypeLabel()}</Text>
-          <Text style={[styles.geofenceRadius, { color: theme.textMuted }]}>
-            {zone.radius}m radius
-          </Text>
+          <StatusTag label={getTypeLabel()} tone={getTypeTone()} />
+          <Text style={styles.rowSubtitle}>{zone.radius}m radius</Text>
         </View>
       </View>
       <Switch
         value={zone.active}
         onValueChange={() => onToggle(zone.id)}
-        trackColor={{ false: theme.borderLight, true: theme.primary + '40' }}
-        thumbColor={zone.active ? theme.primary : theme.textMuted}
+        trackColor={SWITCH_TRACK}
+        thumbColor={palette.surface}
+        ios_backgroundColor={palette.bgSoft}
       />
     </View>
   );
@@ -150,7 +142,6 @@ function GeofenceItem({ zone, onToggle, theme }: GeofenceItemProps) {
 export default function GPSConfigurationScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const theme = useMemo(() => getTheme(false), []);
 
   // Configuration options state
   const [configOptions, setConfigOptions] = useState<ConfigOption[]>([
@@ -222,376 +213,214 @@ export default function GPSConfigurationScreen() {
   const enabledFeaturesCount = configOptions.filter(o => o.enabled).length;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <AppHeader
-        variant="standard"
-        title="GPS Configuration"
-        leftAction={{
-          icon: 'back',
-          label: 'Back',
-          onPress: () => navigation.goBack(),
-          showBackground: true,
-        }}
-        showDivider={false}
-      />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScreenHeader title="GPS Configuration" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + spacing[6] },
+          { paddingBottom: insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Status Summary */}
-        <View style={[styles.summaryCard, { backgroundColor: theme.surface }]}>
-          <View style={[styles.summaryIcon, { backgroundColor: theme.successLight }]}>
-            <MaterialCommunityIcons name="satellite-variant" size={28} color={theme.success} />
+        <Card tone="blue" style={styles.hero}>
+          <StatusTag label="Online" tone="success" style={styles.heroTag} />
+          <T variant="h2" style={styles.heroTitle}>GPS System{'\n'}Active</T>
+          <View style={styles.heroStats}>
+            <View>
+              <Text style={styles.heroStatValue}>{enabledFeaturesCount}</Text>
+              <Text style={styles.heroStatLabel}>features enabled</Text>
+            </View>
+            <View>
+              <Text style={styles.heroStatValue}>{activeZonesCount}</Text>
+              <Text style={styles.heroStatLabel}>zones active</Text>
+            </View>
           </View>
-          <View style={styles.summaryContent}>
-            <Text style={[styles.summaryTitle, { color: theme.text }]}>GPS System Active</Text>
-            <Text style={[styles.summarySubtitle, { color: theme.textMuted }]}>
-              {enabledFeaturesCount} features enabled • {activeZonesCount} zones active
-            </Text>
+          <View style={styles.heroArt} pointerEvents="none">
+            <IsoBlock size={140} tone="blue" />
           </View>
-          <View style={[styles.summaryBadge, { backgroundColor: theme.successLight }]}>
-            <Text style={[styles.summaryBadgeText, { color: theme.success }]}>Online</Text>
-          </View>
-        </View>
+        </Card>
 
         {/* Tracking Settings */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Tracking Settings</Text>
-          <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
-            Configure GPS tracking behavior and alerts
-          </Text>
-          <View style={styles.settingsList}>
-            {configOptions.map(option => (
-              <SettingItem
-                key={option.id}
-                option={option}
-                onToggle={handleToggleConfig}
-                theme={theme}
-              />
-            ))}
-          </View>
-        </View>
+        <Text style={styles.sectionTitle}>Tracking settings</Text>
+        <Text style={styles.sectionSubtitle}>Configure GPS tracking behavior and alerts</Text>
+        <Card style={styles.listCard}>
+          {configOptions.map((option, index) => (
+            <SettingItem
+              key={option.id}
+              option={option}
+              onToggle={handleToggleConfig}
+              isLast={index === configOptions.length - 1}
+            />
+          ))}
+        </Card>
 
         {/* Geofence Zones */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>Geofence Zones</Text>
-              <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
-                Define areas for automatic tracking events
-              </Text>
-            </View>
-            <Pressable
-              style={[styles.addZoneButton, { backgroundColor: theme.primaryLight }]}
-              accessibilityLabel="Add new geofence zone"
-              accessibilityRole="button"
-            >
-              <Ionicons name="add" size={20} color={theme.primary} />
-            </Pressable>
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionHeaderText}>
+            <Text style={[styles.sectionTitle, styles.sectionTitleFlush]}>Geofence zones</Text>
+            <Text style={styles.sectionSubtitle}>Define areas for automatic tracking events</Text>
           </View>
-          <View style={styles.geofenceList}>
-            {geofenceZones.map(zone => (
-              <GeofenceItem
-                key={zone.id}
-                zone={zone}
-                onToggle={handleToggleGeofence}
-                theme={theme}
-              />
-            ))}
-          </View>
+          <IconCircle icon="plus" variant="ink" size={40} />
         </View>
+        <Card style={styles.listCard}>
+          {geofenceZones.map((zone, index) => (
+            <GeofenceItem
+              key={zone.id}
+              zone={zone}
+              onToggle={handleToggleGeofence}
+              isLast={index === geofenceZones.length - 1}
+            />
+          ))}
+        </Card>
 
         {/* Advanced Settings */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Advanced Settings</Text>
-          <View style={[styles.advancedCard, { backgroundColor: theme.surface }]}>
-            <Pressable style={styles.advancedItem}>
-              <View style={[styles.advancedIcon, { backgroundColor: theme.infoLight }]}>
-                <Ionicons name="refresh" size={20} color={theme.info} />
-              </View>
-              <View style={styles.advancedContent}>
-                <Text style={[styles.advancedTitle, { color: theme.text }]}>Update Interval</Text>
-                <Text style={[styles.advancedValue, { color: theme.textMuted }]}>
-                  Every 30 seconds
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={theme.textMuted} />
-            </Pressable>
-
-            <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
-
-            <Pressable style={styles.advancedItem}>
-              <View style={[styles.advancedIcon, { backgroundColor: theme.warningLight }]}>
-                <Ionicons name="battery-half" size={20} color={theme.warning} />
-              </View>
-              <View style={styles.advancedContent}>
-                <Text style={[styles.advancedTitle, { color: theme.text }]}>Power Mode</Text>
-                <Text style={[styles.advancedValue, { color: theme.textMuted }]}>Balanced</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={theme.textMuted} />
-            </Pressable>
-
-            <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
-
-            <Pressable style={styles.advancedItem}>
-              <View style={[styles.advancedIcon, { backgroundColor: theme.primaryLight }]}>
-                <Ionicons name="cloud-upload" size={20} color={theme.primary} />
-              </View>
-              <View style={styles.advancedContent}>
-                <Text style={[styles.advancedTitle, { color: theme.text }]}>Data Sync</Text>
-                <Text style={[styles.advancedValue, { color: theme.textMuted }]}>
-                  Last synced: 2 min ago
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={theme.textMuted} />
-            </Pressable>
-          </View>
-        </View>
+        <Text style={[styles.sectionTitle, styles.sectionTitleGap]}>Advanced settings</Text>
+        <Card style={styles.listCard}>
+          <ListRow icon="refresh-cw" title="Update Interval" subtitle="Every 30 seconds" />
+          <ListRow icon="battery-charging" title="Power Mode" subtitle="Balanced" />
+          <ListRow icon="upload-cloud" title="Data Sync" subtitle="Last synced: 2 min ago" isLast />
+        </Card>
 
         {/* Save Button */}
-        <Pressable
-          style={[styles.saveButton, { backgroundColor: theme.primary }]}
-          accessibilityLabel="Save configuration"
-          accessibilityRole="button"
-        >
-          <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-          <Text style={styles.saveButtonText}>Save Configuration</Text>
-        </Pressable>
+        <PillButton
+          label="Save Configuration"
+          icon="check"
+          variant="ink"
+          style={styles.saveButton}
+        />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: palette.bg,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
-  summaryCard: {
+
+  // Hero
+  hero: {
+    minHeight: 220,
+    overflow: 'hidden',
+  },
+  heroTag: {
+    alignSelf: 'flex-start',
+  },
+  heroTitle: {
+    marginTop: 12,
+    maxWidth: '62%',
+  },
+  heroStats: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing[4],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[5],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    gap: 28,
+    marginTop: 'auto',
+    paddingTop: 18,
   },
-  summaryIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: 'center',
-    alignItems: 'center',
+  heroStatValue: {
+    ...fonts.semibold,
+    fontSize: 34,
+    letterSpacing: -1,
+    color: palette.text,
   },
-  summaryContent: {
-    flex: 1,
-    marginLeft: spacing[3],
+  heroStatLabel: {
+    ...fonts.medium,
+    fontSize: 12.5,
+    color: palette.inkSoft,
   },
-  summaryTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
+  heroArt: {
+    position: 'absolute',
+    right: -30,
+    bottom: -26,
   },
-  summarySubtitle: {
-    fontSize: fontSize.sm,
+
+  // Sections
+  sectionTitle: {
+    ...fonts.medium,
+    fontSize: 19,
+    letterSpacing: -0.2,
+    color: palette.text,
+    marginTop: 28,
+  },
+  sectionTitleFlush: {
+    marginTop: 0,
+  },
+  sectionTitleGap: {
+    marginBottom: 12,
+  },
+  sectionSubtitle: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
     marginTop: 2,
-  },
-  summaryBadge: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-  },
-  summaryBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-  },
-  section: {
-    marginBottom: spacing[5],
+    marginBottom: 12,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing[3],
+    alignItems: 'center',
+    marginTop: 28,
   },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[1],
+  sectionHeaderText: {
+    flex: 1,
+    marginRight: 12,
   },
-  sectionSubtitle: {
-    fontSize: fontSize.sm,
-    marginBottom: spacing[3],
+  listCard: {
+    paddingVertical: 4,
   },
-  settingsList: {
-    gap: spacing[3],
-  },
-  settingItem: {
+
+  // Rows
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing[4],
-    borderRadius: borderRadius.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
+    paddingVertical: 14,
   },
-  settingIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  rowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
+  },
+  iconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: palette.fill,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  settingContent: {
+  rowContent: {
     flex: 1,
-    marginHorizontal: spacing[3],
+    marginHorizontal: 12,
   },
-  settingTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
+  rowTitle: {
+    ...fonts.semibold,
+    fontSize: 15.5,
+    color: palette.text,
   },
-  settingDescription: {
-    fontSize: fontSize.xs,
+  rowSubtitle: {
+    ...fonts.medium,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: palette.textMuted,
     marginTop: 2,
-  },
-  addZoneButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  geofenceList: {
-    gap: spacing[3],
-  },
-  geofenceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing[4],
-    borderRadius: borderRadius.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
-  },
-  geofenceIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  geofenceContent: {
-    flex: 1,
-    marginHorizontal: spacing[3],
-  },
-  geofenceTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
   },
   geofenceMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing[1],
-    gap: spacing[2],
+    marginTop: 6,
+    gap: 8,
   },
-  geofenceType: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-  },
-  geofenceRadius: {
-    fontSize: fontSize.xs,
-  },
-  advancedCard: {
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
-  },
-  advancedItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing[4],
-  },
-  advancedIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  advancedContent: {
-    flex: 1,
-    marginHorizontal: spacing[3],
-  },
-  advancedTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
-  },
-  advancedValue: {
-    fontSize: fontSize.xs,
-    marginTop: 2,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: spacing[4] + 40 + spacing[3],
-  },
+
   saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
-    marginTop: spacing[2],
-    minHeight: 56,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    marginTop: 28,
   },
 });

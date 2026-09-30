@@ -4,18 +4,25 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  Pressable,
-  StatusBar,
+  TouchableOpacity,
+  ScrollView,
   Keyboard,
-  ActivityIndicator,
+  type TextStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 import type { AuthStackParamList } from '../../navigation/types';
 import { authService } from '../../services/authService';
 import { ApiRequestError } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import AuthLayoutJs from '../../components/ui/AuthLayout';
+import * as UI from '../../components/ui';
+import * as Kit from '../../theme/kit';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const AuthLayout = AuthLayoutJs as React.ComponentType<any>;
+const { T, PillButton } = UI as unknown as Record<string, React.ComponentType<any>>;
+const { palette, radii } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
 
 // Use NativeStackScreenProps for proper typing
 type Props = NativeStackScreenProps<AuthStackParamList, 'OtpVerify'>;
@@ -23,19 +30,6 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'OtpVerify'>;
 // The backend issues six digits (otpController's CODE_LENGTH).
 const OTP_LENGTH = 6;
 const RESEND_TIMER_SECONDS = 30;
-
-const theme = {
-  colors: {
-    background: '#FFFFFF',
-    primary: '#0D7377',
-    primaryLight: '#EBF4FF',
-    textPrimary: '#1F2937',
-    textSecondary: '#6B7280',
-    border: '#C3E4E1',
-    buttonDisabled: '#9CA3AF',
-    buttonText: '#FFFFFF',
-  },
-};
 
 export default function OtpVerifyScreen({ navigation, route }: Props) {
   const {
@@ -54,6 +48,9 @@ export default function OtpVerifyScreen({ navigation, route }: Props) {
   const [isDisabled, setIsDisabled] = useState(false);
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
+  const scrollRef = useRef<ScrollView>(null);
+  // Visual only: which digit cell currently has focus (ink border).
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
   // Timer countdown
   useEffect(() => {
@@ -213,36 +210,35 @@ export default function OtpVerifyScreen({ navigation, route }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <AuthLayout
+      image={require('../../assets/images/login.jpg')}
+      title={'Check your\nmessages'}
+      subtitle="We sent you a one-time code."
+      onBack={() => navigation.goBack()}
+      scrollRef={scrollRef}
+    >
+      <T variant="h2">Enter code</T>
+      <Text style={styles.lede}>
+        Code sent to <Text style={styles.phoneHighlight}>{displayNumber}</Text>
+        {'  '}
+        <Text style={styles.change} onPress={() => navigation.goBack()}>
+          Change
+        </Text>
+      </Text>
 
-      {/* Decorative Circles */}
-      <View style={styles.circleTopRight} />
-      <View style={styles.circleTopRightInner} />
-      <View style={styles.circleBottomLeft} />
-
-      {/* Back Button */}
-      <Pressable
-        onPress={() => navigation.goBack()}
-        style={styles.backButton}
-      >
-        <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
-      </Pressable>
-
-      {/* Content */}
-      <View style={styles.content}>
-        {/* Header */}
-        <Text style={styles.title}>Enter Code</Text>
-        <Text style={styles.subtitle}>code will be sent to {displayNumber}</Text>
-
-        {/* OTP Inputs */}
-        <View style={styles.otpContainer}>
-          {Array.from({ length: OTP_LENGTH }, (_, index) => (
+      {/* OTP Inputs */}
+      <View style={styles.otpContainer}>
+        {Array.from({ length: OTP_LENGTH }, (_, index) => {
+          const filled = !!otpValues[index];
+          const isFocused = focusedIndex === index;
+          return (
             <View
               key={index}
               style={[
                 styles.otpBox,
-                otpValues[index] && styles.otpBoxFilled,
+                (filled || isFocused) && styles.otpBoxActive,
+                isFocused && styles.otpBoxFocused,
+                !!errorMessage && !isLoading && styles.otpBoxError,
               ]}
             >
               <TextInput
@@ -251,15 +247,19 @@ export default function OtpVerifyScreen({ navigation, route }: Props) {
                 value={otpValues[index]}
                 onChangeText={(text) => handleChange(text, index)}
                 onKeyPress={(e) => handleKeyPress(e, index)}
+                onFocus={() => setFocusedIndex(index)}
+                onBlur={() => setFocusedIndex((cur) => (cur === index ? null : cur))}
                 keyboardType="number-pad"
                 maxLength={1}
                 selectTextOnFocus
               />
             </View>
-          ))}
-        </View>
+          );
+        })}
+      </View>
 
-        {/* Error message */}
+      {/* Fixed-height slot so an error appearing does not shift the CTA. */}
+      <View style={styles.errorSlot}>
         {errorMessage ? (
           <Text
             style={styles.errorText}
@@ -269,188 +269,77 @@ export default function OtpVerifyScreen({ navigation, route }: Props) {
             {errorMessage}
           </Text>
         ) : null}
-
-        {/* Resend Code */}
-        <View style={styles.resendContainer}>
-          {isTimerRunning ? (
-            <Text style={styles.timerText}>
-              Resend Code in {formatTimer(timerSeconds)}
-            </Text>
-          ) : (
-            <Pressable onPress={handleResend}>
-              <Text style={styles.resendText}>Resend Code</Text>
-            </Pressable>
-          )}
-        </View>
-
-        {/* Next Button */}
-        <Pressable
-          onPress={handleNext}
-          disabled={!isNextEnabled}
-          style={[
-            styles.nextButton,
-            !isNextEnabled && styles.nextButtonDisabled,
-          ]}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.nextButtonText}>Next</Text>
-          )}
-        </Pressable>
       </View>
-    </SafeAreaView>
+
+      <PillButton
+        label="Next"
+        iconRight="arrow-right"
+        variant="ink"
+        onPress={handleNext}
+        disabled={!isNextEnabled}
+        loading={isLoading}
+      />
+
+      {/* Resend Code */}
+      <View style={styles.resendContainer}>
+        {isTimerRunning ? (
+          <Text style={styles.timerText}>
+            Resend code in <Text style={styles.timerValue}>{formatTimer(timerSeconds)}</Text>
+          </Text>
+        ) : (
+          <TouchableOpacity onPress={handleResend} activeOpacity={0.7} hitSlop={8}>
+            <Text style={styles.resendText}>Resend code</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
+  lede: { ...fonts.medium, fontSize: 14, lineHeight: 20, color: palette.textMuted, marginTop: 6 },
+  phoneHighlight: { ...fonts.semibold, color: palette.text },
+  change: { ...fonts.semibold, color: palette.text, textDecorationLine: 'underline' },
 
-  // Decorative Circles (same as SignIn screen)
-  circleTopRight: {
-    position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 130,
-    height: 130,
-    borderRadius: 70,
-    backgroundColor: '#EBF4FF',
-  },
-  circleTopRightInner: {
-    position: 'absolute',
-    top: 50,
-    right: 70,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1E6FE8',
-  },
-  circleBottomLeft: {
-    position: 'absolute',
-    bottom: -60,
-    left: -60,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: '#EBF4FF',
-  },
-
-  // Back Button
-  backButton: {
-    position: 'absolute',
-    top: 20,
-    left: 24,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#EBF4FF',
-    borderRadius: 20,
-    zIndex: 10,
-  },
-
-  // Content
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 150,
-    alignItems: 'center',
-  },
-
-  // Header
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-    marginBottom: 50,
-  },
-
-  // OTP Inputs
   otpContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    // The parent centres its children, so the row needs to claim the full
-    // width before flex:1 on the boxes can divide it.
-    alignSelf: 'stretch',
-    // Six boxes at a fixed 70px overflowed the screen; let them share the
-    // row's width instead so the layout holds on narrow devices.
+    // Six cells share the sheet width so the row holds on narrow devices.
     gap: 8,
-    marginBottom: 24,
+    marginTop: 24,
   },
   otpBox: {
     flex: 1,
-    maxWidth: 70,
-    aspectRatio: 1,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
+    height: 64,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: palette.fill,
+    backgroundColor: palette.fill,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  otpBoxFilled: {
-    borderColor: theme.colors.primary,
-  },
+  otpBoxActive: { backgroundColor: palette.surface, borderColor: palette.line },
+  otpBoxFocused: { borderColor: palette.ink },
+  otpBoxError: { borderColor: palette.danger },
   otpInput: {
+    ...fonts.semibold,
     width: '100%',
     height: '100%',
     textAlign: 'center',
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
+    fontSize: 26,
+    color: palette.text,
     // Android gives a TextInput default vertical padding and an extra
-    // font-padding band on top of the glyph. At 28px inside a square box
-    // that pushed the digit below the border — it rendered outside the box.
+    // font-padding band on top of the glyph; strip both so the digit
+    // stays centred inside the cell.
     padding: 0,
     textAlignVertical: 'center',
     includeFontPadding: false,
   },
 
-  // Error
-  errorText: {
-    color: '#EF4444',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
+  errorSlot: { minHeight: 40, justifyContent: 'center' },
+  errorText: { ...fonts.medium, fontSize: 13, color: palette.danger, textAlign: 'center' },
 
-  // Resend
-  resendContainer: {
-    marginBottom: 32,
-  },
-  timerText: {
-    fontSize: 15,
-    color: theme.colors.textSecondary,
-  },
-  resendText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.primary,
-  },
-
-  // Next Button
-  nextButton: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    height: 60,
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  nextButtonDisabled: {
-    backgroundColor: theme.colors.buttonDisabled,
-  },
-  nextButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.buttonText,
-  },
+  resendContainer: { alignItems: 'center', marginTop: 20 },
+  timerText: { ...fonts.medium, fontSize: 14, color: palette.textMuted },
+  timerValue: { ...fonts.semibold, color: palette.text },
+  resendText: { ...fonts.semibold, fontSize: 15, color: palette.text },
 });

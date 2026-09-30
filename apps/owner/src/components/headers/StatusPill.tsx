@@ -2,8 +2,7 @@ import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { radii, fonts, palette } from '../../theme/kit';
 
 // Types
 export type StatusPillVariant = 'verified' | 'pending' | 'rejected' | 'unverified';
@@ -71,7 +70,7 @@ function StatusPill({
       case 'unverified':
       default:
         return {
-          background: theme.borderLight,
+          background: palette.fill,
           text: theme.textMuted,
         };
     }
@@ -82,22 +81,22 @@ function StatusPill({
     switch (size) {
       case 'small':
         return {
-          paddingHorizontal: spacing[2],
-          paddingVertical: spacing[1] - 1,
-          fontSize: fontSize.xs - 1,
+          paddingHorizontal: 10,
+          paddingVertical: 4,
+          fontSize: 11,
           iconSize: 12,
-          gap: spacing[1],
-          borderRadius: borderRadius.md,
+          gap: 4,
+          borderRadius: radii.pill,
         };
       case 'medium':
       default:
         return {
-          paddingHorizontal: spacing[3],
-          paddingVertical: spacing[1],
-          fontSize: fontSize.xs,
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          fontSize: 12,
           iconSize: 14,
-          gap: spacing[1],
-          borderRadius: borderRadius.lg,
+          gap: 5,
+          borderRadius: radii.pill,
         };
     }
   }, [size]);
@@ -149,7 +148,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: {
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
   },
 });
 

@@ -1,15 +1,13 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Platform,
-  Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize, fontWeight } from '../../../theme/typography';
+import { palette, radii, fonts } from '../../../theme/kit';
+import { StatusTag } from '../../../components/ui';
 import type { EarningsSummary } from '../../../types/models';
 
 // Format currency for display
@@ -33,78 +31,74 @@ function EarningsSummaryCard({
   onPressPending,
   testID,
 }: EarningsSummaryCardProps) {
-  const theme = useMemo(() => getTheme(false), []);
-
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.surface }]}
-      testID={testID}
-    >
+    <View style={styles.container} testID={testID}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>Earnings Summary</Text>
-        <View style={[styles.rangeBadge, { backgroundColor: theme.primaryLight }]}>
-          <Text style={[styles.rangeText, { color: theme.primary }]}>{rangeLabel}</Text>
-        </View>
+        <Text style={styles.title}>Summary</Text>
+        <StatusTag label={rangeLabel} tone="ink" />
       </View>
 
-      {/* 2x2 Grid */}
+      {/* 2x2 tiles */}
       <View style={styles.grid}>
         {/* Gross */}
-        <View style={[styles.metric, { backgroundColor: theme.borderLight }]}>
-          <View style={styles.metricHeader}>
-            <Ionicons name="arrow-up-circle-outline" size={18} color={theme.success} />
-            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Gross</Text>
+        <View style={styles.tile}>
+          <View style={styles.tileIcon}>
+            <Ionicons name="arrow-up-outline" size={16} color={palette.text} />
           </View>
-          <Text style={[styles.metricValue, { color: theme.text }]}>
+          <Text style={styles.tileLabel}>Gross</Text>
+          <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
             {formatCurrency(summary.gross, summary.currency)}
           </Text>
         </View>
 
         {/* Fees */}
-        <View style={[styles.metric, { backgroundColor: theme.borderLight }]}>
-          <View style={styles.metricHeader}>
-            <Ionicons name="remove-circle-outline" size={18} color={theme.warning} />
-            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Platform Fee</Text>
+        <View style={styles.tile}>
+          <View style={styles.tileIcon}>
+            <Ionicons name="remove-outline" size={16} color={palette.text} />
           </View>
-          <Text style={[styles.metricValue, { color: theme.warning }]}>
+          <Text style={styles.tileLabel}>Platform Fee</Text>
+          <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
             -{formatCurrency(summary.fees, summary.currency)}
           </Text>
           {/* There is no commission model yet — `fees` is hardcoded to 0
               upstream. "8% of gross" claimed a rate that was never actually
               charged against the ₹0 shown above it. */}
-          <Text style={[styles.metricSubtext, { color: theme.textMuted }]}>No platform fee yet</Text>
+          <Text style={styles.tileSub}>No platform fee yet</Text>
         </View>
 
         {/* Net */}
-        <View style={[styles.metric, styles.netMetric, { backgroundColor: theme.successLight }]}>
-          <View style={styles.metricHeader}>
-            <Ionicons name="wallet-outline" size={18} color={theme.success} />
-            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Net Earnings</Text>
+        <View style={[styles.tile, styles.tilePeach]}>
+          <View style={[styles.tileIcon, styles.tileIconOnPeach]}>
+            <Ionicons name="wallet-outline" size={16} color={palette.text} />
           </View>
-          <Text style={[styles.metricValue, styles.netValue, { color: theme.success }]}>
+          <Text style={styles.tileLabel}>Net Earnings</Text>
+          <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
             {formatCurrency(summary.net, summary.currency)}
           </Text>
         </View>
 
         {/* Pending */}
-        <Pressable
-          style={[styles.metric, { backgroundColor: theme.borderLight }]}
+        <TouchableOpacity
+          style={styles.tile}
           onPress={onPressPending}
           disabled={!onPressPending}
+          activeOpacity={0.8}
         >
-          <View style={styles.metricHeader}>
-            <Ionicons name="time-outline" size={18} color={theme.info} />
-            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Pending</Text>
+          <View style={styles.tileTop}>
+            <View style={styles.tileIcon}>
+              <Ionicons name="time-outline" size={16} color={palette.text} />
+            </View>
             {onPressPending && (
-              <Ionicons name="chevron-forward" size={14} color={theme.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={palette.textSubtle} />
             )}
           </View>
-          <Text style={[styles.metricValue, { color: theme.info }]}>
+          <Text style={styles.tileLabel}>Pending</Text>
+          <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
             {formatCurrency(summary.pending, summary.currency)}
           </Text>
-          <Text style={[styles.metricSubtext, { color: theme.textMuted }]}>Awaiting payout</Text>
-        </Pressable>
+          <Text style={styles.tileSub}>Awaiting payout</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -112,75 +106,71 @@ function EarningsSummaryCard({
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: spacing[4],
-    marginBottom: spacing[4],
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing[4],
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   title: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-  },
-  rangeBadge: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-  },
-  rangeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 19,
+    letterSpacing: -0.2,
+    color: palette.text,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing[2],
+    justifyContent: 'space-between',
+    rowGap: 10,
   },
-  metric: {
-    width: '48%',
-    padding: spacing[3],
-    borderRadius: borderRadius.lg,
+  tile: {
+    width: '48.5%',
+    minHeight: 124,
+    padding: 16,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surface,
   },
-  netMetric: {
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+  tilePeach: {
+    backgroundColor: palette.peachSoft,
   },
-  metricHeader: {
+  tileTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
-    marginBottom: spacing[1],
+    justifyContent: 'space-between',
   },
-  metricLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
-    flex: 1,
+  tileIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  metricValue: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold as any,
+  tileIconOnPeach: {
+    backgroundColor: 'rgba(255,255,255,0.7)',
   },
-  netValue: {
-    fontSize: fontSize['2xl'],
+  tileLabel: {
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
+    marginTop: 12,
   },
-  metricSubtext: {
-    fontSize: 10,
+  tileValue: {
+    ...fonts.semibold,
+    fontSize: 22,
+    letterSpacing: -0.5,
+    color: palette.text,
+    marginTop: 2,
+  },
+  tileSub: {
+    ...fonts.medium,
+    fontSize: 11,
+    color: palette.textSubtle,
     marginTop: 2,
   },
 });

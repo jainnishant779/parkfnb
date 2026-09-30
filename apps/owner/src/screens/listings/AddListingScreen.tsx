@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Modal, FlatList, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, StatusBar } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../../context/AuthContext';
 import { listingService } from '../../services/listingService';
 import type { ApiProperty } from '../../types/api';
+import { palette, radii, fonts } from '../../theme/kit';
+import { ScreenHeader, IsoBlock, StatusTag, ListRow, PillButton } from '../../components/ui';
 
 /**
  * Dispatcher screen: "What would you like to add?"
@@ -18,6 +20,7 @@ export default function AddListingScreen() {
   const [properties, setProperties] = useState<ApiProperty[]>([]);
   const [loading, setLoading] = useState(true);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const load = async () => {
@@ -45,146 +48,184 @@ export default function AddListingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#0D7377" />
+          <ActivityIndicator size="large" color={palette.ink} />
         </View>
       </SafeAreaView>
     );
   }
 
+  const noProperties = properties.length === 0;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color="#1F2937" />
-        </Pressable>
-        <Text style={styles.headerTitle}>What to add?</Text>
-        <View style={{ width: 36 }} />
-      </View>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.bg} />
+      <ScreenHeader title="What to add?" onBack={() => navigation.goBack()} />
 
       <View style={styles.content}>
-        <Pressable
-          style={styles.optionCard}
+        <Text style={styles.lead}>Choose what you want to list next.</Text>
+
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[styles.optionCard, { backgroundColor: palette.peachSoft }]}
           onPress={() => navigation.navigate('PropertyWizard', { chainToSpace: false })}
         >
-          <View style={[styles.iconWrap, { backgroundColor: '#E8F5F4' }]}>
-            <Ionicons name="business-outline" size={28} color="#0D7377" />
+          <View style={styles.optionArt} pointerEvents="none">
+            <IsoBlock size={140} tone="peach" />
           </View>
-          <View style={{ flex: 1 }}>
+          <StatusTag label="Location" tone="ink" />
+          <View style={styles.optionBody}>
             <Text style={styles.optionTitle}>New property</Text>
             <Text style={styles.optionDesc}>
               A new physical location (address). You'll add parking spaces to it next.
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </Pressable>
+          <View style={styles.optionGo}>
+            <Ionicons name="arrow-forward" size={18} color={palette.text} />
+          </View>
+        </TouchableOpacity>
 
-        <Pressable
-          style={[styles.optionCard, properties.length === 0 && styles.optionCardDisabled]}
-          disabled={properties.length === 0}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[
+            styles.optionCard,
+            { backgroundColor: palette.blueSoft },
+            noProperties && styles.optionCardDisabled,
+          ]}
+          disabled={noProperties}
           onPress={() => setPickerVisible(true)}
         >
-          <View style={[styles.iconWrap, { backgroundColor: '#ECFDF5' }]}>
-            <Ionicons name="car-outline" size={28} color="#059669" />
+          <View style={styles.optionArt} pointerEvents="none">
+            <IsoBlock size={140} tone="blue" />
           </View>
-          <View style={{ flex: 1 }}>
+          <StatusTag label="Space" tone="ink" />
+          <View style={styles.optionBody}>
             <Text style={styles.optionTitle}>New parking space</Text>
             <Text style={styles.optionDesc}>
-              {properties.length === 0
+              {noProperties
                 ? 'Add a property first'
                 : 'Add another space to one of your properties'}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </Pressable>
+          <View style={styles.optionGo}>
+            <Ionicons name="arrow-forward" size={18} color={palette.text} />
+          </View>
+        </TouchableOpacity>
       </View>
 
-      {/* Property picker modal */}
+      {/* Property picker sheet */}
       {pickerVisible ? (
-
-        <Pressable style={styles.modalOverlay} onPress={() => setPickerVisible(false)}>
-          <View style={styles.pickerSheet}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setPickerVisible(false)}
+          />
+          <View style={[styles.pickerSheet, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.grabber} />
             <Text style={styles.pickerTitle}>Choose property</Text>
             <FlatList
               data={properties}
               keyExtractor={(p) => p.id}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.pickerItem}
+              style={styles.pickerList}
+              renderItem={({ item, index }) => (
+                <ListRow
+                  icon="home"
+                  title={item.propertyName}
+                  subtitle={item.city}
+                  isLast={index === properties.length - 1}
                   onPress={() => {
                     setPickerVisible(false);
                     navigation.navigate('SpaceWizard', { propertyId: item.id });
                   }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pickerItemTitle}>{item.propertyName}</Text>
-                    <Text style={styles.pickerItemSub}>{item.city}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-                </Pressable>
+                />
               )}
             />
+            <PillButton
+              label="Cancel"
+              variant="grey"
+              onPress={() => setPickerVisible(false)}
+              style={styles.pickerCancel}
+            />
           </View>
-        </Pressable>
-      
+        </View>
       ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F9FAFB' },
+  safe: { flex: 1, backgroundColor: palette.bg },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+  content: { paddingHorizontal: 16, paddingTop: 8 },
+  lead: {
+    ...fonts.medium,
+    fontSize: 15,
+    color: palette.textMuted,
+    marginBottom: 14,
+    paddingHorizontal: 4,
   },
-  backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { flex: 1, fontSize: 17, fontWeight: '600', color: '#1F2937', textAlign: 'center' },
-  content: { padding: 16, gap: 12 },
   optionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    gap: 12,
+    borderRadius: radii.xl,
+    padding: 18,
+    marginBottom: 12,
+    minHeight: 170,
+    overflow: 'hidden',
+    alignItems: 'flex-start',
   },
   optionCardDisabled: { opacity: 0.5 },
-  iconWrap: { width: 52, height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  optionTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-  optionDesc: { fontSize: 13, color: '#6B7280', marginTop: 2 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  optionArt: { position: 'absolute', right: -30, bottom: -26 },
+  optionBody: { width: '64%' },
+  optionTitle: {
+    ...fonts.bold,
+    fontSize: 22,
+    letterSpacing: -0.5,
+    color: palette.text,
+    marginTop: 12,
+  },
+  optionDesc: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginTop: 6, lineHeight: 18 },
+  optionGo: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalOverlay: {
+    // Absolutely positioned overlay rather than a <Modal>, which does not
+    // present on this build.
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9999,
+    elevation: 24,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
   pickerSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 20,
+    paddingTop: 10,
     maxHeight: '70%',
   },
+  grabber: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
   pickerTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1F2937',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
+    marginBottom: 6,
   },
-  pickerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  pickerItemTitle: { fontSize: 15, color: '#1F2937', fontWeight: '500' },
-  pickerItemSub: { fontSize: 13, color: '#6B7280', marginTop: 2 },
+  pickerList: { flexGrow: 0 },
+  pickerCancel: { marginTop: 12 },
 });

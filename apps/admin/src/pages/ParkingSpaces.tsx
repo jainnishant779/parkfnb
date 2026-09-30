@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { ParkingSquare, CheckCircle2, XCircle } from "lucide-react";
+import {
+  ParkingSquare,
+  CheckCircle2,
+  XCircle,
+  Radio,
+  Loader2,
+} from "lucide-react";
 import { request } from "../lib/api";
 import {
   PageHeader,
@@ -41,6 +47,28 @@ interface ParkingSpaceItem {
   vehicleSize?: string;
   features?: string[];
   created_at?: string;
+  device_id?: string | null;
+  deviceId?: string | null;
+  has_smart_barrier?: boolean;
+  hasSmartBarrier?: boolean;
+}
+
+interface BarrierDevice {
+  id?: string;
+  _id?: string;
+  device_id?: string;
+  deviceId?: string;
+  name?: string;
+  status?: string;
+  device_type?: string;
+  deviceType?: string;
+  parking_space_id?: { id?: string; _id?: string; space_number?: string; spaceNumber?: string } | string | null;
+  parkingSpaceId?: { id?: string; _id?: string; spaceNumber?: string } | string | null;
+}
+
+interface BarrierAssignmentsResponse {
+  spaces: ParkingSpaceItem[];
+  devices: BarrierDevice[];
 }
 
 const STATUS_OPTIONS = [
@@ -58,14 +86,21 @@ export default function ParkingSpaces() {
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpaceItem | null>(
     null,
   );
+  const [devices, setDevices] = useState<BarrierDevice[]>([]);
+  const [selectedBarrierId, setSelectedBarrierId] = useState("");
+  const [savingBarrier, setSavingBarrier] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [assignmentMessage, setAssignmentMessage] = useState<string | null>(null);
 
   const loadSpaces = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await request<any>("/api/parking-spaces");
-      const items = Array.isArray(res) ? res : res?.data || res?.spaces || [];
-      setSpaces(items);
+      const res = await request<BarrierAssignmentsResponse>(
+        "/api/devices/admin/barrier-assignments",
+      );
+      setSpaces(res.spaces || []);
+      setDevices(res.devices || []);
     } catch (err: any) {
       setError(err.message || "Could not load parking spaces");
     } finally {
@@ -77,12 +112,53 @@ export default function ParkingSpaces() {
     loadSpaces();
   }, [loadSpaces]);
 
+  useEffect(() => {
+    setSelectedBarrierId(selectedSpace?.deviceId || selectedSpace?.device_id || "");
+    setAssignmentError(null);
+    setAssignmentMessage(null);
+  }, [selectedSpace?.id, selectedSpace?._id]);
+
+  const saveBarrierAssignment = async () => {
+    const spaceId = selectedSpace?.id || selectedSpace?._id;
+    if (!spaceId) return;
+
+    setSavingBarrier(true);
+    setAssignmentError(null);
+    setAssignmentMessage(null);
+    try {
+      const result = await request<{ space: ParkingSpaceItem; message: string }>(
+        `/api/devices/admin/parking-spaces/${spaceId}/barrier`,
+        {
+          method: "PUT",
+          body: { barrierId: selectedBarrierId || null },
+        },
+      );
+      setAssignmentMessage(result.message);
+
+      // Refresh both sides of the relationship so conflict options stay exact.
+      const refreshed = await request<BarrierAssignmentsResponse>(
+        "/api/devices/admin/barrier-assignments",
+      );
+      setSpaces(refreshed.spaces || []);
+      setDevices(refreshed.devices || []);
+      setSelectedSpace(
+        refreshed.spaces.find((space) => (space.id || space._id) === spaceId) || result.space,
+      );
+    } catch (err: any) {
+      setAssignmentError(err.message || "Could not update barrier assignment");
+    } finally {
+      setSavingBarrier(false);
+    }
+  };
+
   const filteredSpaces = spaces.filter((s) => {
     const num = s.space_number || s.spaceNumber || s.bay_code || "";
     const type = s.space_type || s.spaceType || "";
+    const barrierId = s.device_id || s.deviceId || "";
     const matchesSearch =
       num.toLowerCase().includes(search.toLowerCase()) ||
-      type.toLowerCase().includes(search.toLowerCase());
+      type.toLowerCase().includes(search.toLowerCase()) ||
+      barrierId.toLowerCase().includes(search.toLowerCase());
 
     const active = s.is_active ?? s.isActive ?? true;
     const matchesStatus =
@@ -97,7 +173,7 @@ export default function ParkingSpaces() {
     <div className="space-y-6 pb-12">
       <PageHeader
         title="Parking Spaces"
-        subtitle="Live inventory of bays, rates, vehicle dimensions, and availability."
+        subtitle="Live inventory of bays, rates, availability, and assigned parking barriers."
       />
 
       <Card>
@@ -105,7 +181,7 @@ export default function ParkingSpaces() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search bay number, type..."
+            placeholder="Search bay, type, barrier ID..."
           />
           <FilterPills
             options={STATUS_OPTIONS}
@@ -136,6 +212,7 @@ export default function ParkingSpaces() {
                   <Th>Type</Th>
                   <Th>Vehicle Size</Th>
                   <Th>Hourly Rate</Th>
+                  <Th>Barrier ID</Th>
                   <Th>Status</Th>
                   <Th align="right">Actions</Th>
                 </tr>
@@ -159,6 +236,7 @@ export default function ParkingSpaces() {
                   const size =
                     space.vehicle_size || space.vehicleSize || "Car / SUV";
                   const active = space.is_active ?? space.isActive ?? true;
+                  const barrierId = space.device_id || space.deviceId;
 
                   return (
                     <tr
@@ -180,6 +258,16 @@ export default function ParkingSpaces() {
                       <Td className="text-xs text-slate-600">{size}</Td>
                       <Td className="font-semibold text-slate-900">
                         ₹{rate}/hr
+                      </Td>
+                      <Td>
+                        {barrierId ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-0.5 font-mono text-xs font-semibold text-cyan-800">
+                            <Radio className="h-3 w-3" />
+                            {barrierId}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">Not assigned</span>
+                        )}
                       </Td>
                       <Td>
                         <span
@@ -265,6 +353,81 @@ export default function ParkingSpaces() {
                     : "Inactive"
                 }
               />
+            </DetailSection>
+
+            <DetailSection title="Parking Barrier Assignment">
+              <div className="space-y-3 p-3">
+                <div>
+                  <label
+                    htmlFor="barrier-assignment"
+                    className="mb-1.5 block text-xs font-medium text-slate-600"
+                  >
+                    Barrier ID
+                  </label>
+                  <select
+                    id="barrier-assignment"
+                    value={selectedBarrierId}
+                    onChange={(event) => {
+                      setSelectedBarrierId(event.target.value);
+                      setAssignmentError(null);
+                      setAssignmentMessage(null);
+                    }}
+                    disabled={savingBarrier}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:opacity-60"
+                  >
+                    <option value="">No barrier assigned</option>
+                    {devices.map((device) => {
+                      const id = device.deviceId || device.device_id || "";
+                      const assignment = device.parkingSpaceId ?? device.parking_space_id;
+                      const assignedSpaceId =
+                        typeof assignment === "string"
+                          ? assignment
+                          : assignment?.id || assignment?._id;
+                      const currentSpaceId = selectedSpace.id || selectedSpace._id;
+                      const assignedElsewhere = Boolean(
+                        assignedSpaceId && assignedSpaceId !== currentSpaceId,
+                      );
+                      return (
+                        <option
+                          key={device.id || device._id || id}
+                          value={id}
+                          disabled={assignedElsewhere}
+                        >
+                          {id} — {device.name || "Smart Barrier"} ({device.status || "offline"})
+                          {assignedElsewhere ? " — assigned to another space" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="mt-1.5 text-xs text-slate-400">
+                    Choose a registered barrier, or select “No barrier assigned” to unlink it.
+                  </p>
+                </div>
+
+                {assignmentError && (
+                  <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {assignmentError}
+                  </p>
+                )}
+                {assignmentMessage && (
+                  <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                    {assignmentMessage}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={saveBarrierAssignment}
+                  disabled={
+                    savingBarrier ||
+                    selectedBarrierId === (selectedSpace.deviceId || selectedSpace.device_id || "")
+                  }
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-teal px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingBarrier && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {savingBarrier ? "Saving assignment…" : "Save barrier assignment"}
+                </button>
+              </div>
             </DetailSection>
 
             {selectedSpace.features && selectedSpace.features.length > 0 && (

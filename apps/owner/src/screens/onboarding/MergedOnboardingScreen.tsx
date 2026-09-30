@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
-  Modal,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   LayoutAnimation,
@@ -17,9 +16,10 @@ import {
   Keyboard,
   TextInput,
   findNodeHandle,
+  type TextStyle,
 } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -27,7 +27,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import FormTextInput from '../../components/inputs/FormTextInput';
 import FormPickerInput from '../../components/inputs/FormPickerInput';
 import { DateField } from '../../components/inputs/DateField';
-import ProgressHeader, { type ProgressStep } from '../../components/headers/ProgressHeader';
+import type { ProgressStep } from '../../components/headers/ProgressHeader';
 import PincodeAddressBlock, {
   EMPTY_PINCODE_ADDRESS,
   type PincodeAddressValue,
@@ -41,6 +41,16 @@ import { reverseGeocode } from '../../services/reverseGeocodeService';
 import { AppAlert } from '../../components/common/AppAlert';
 import { ownerTypeLabels } from '../../constants/mockData';
 import { pickAndUploadImage, handleMediaUploadError, type PickSource } from '../../utils/mediaUpload';
+import * as UI from '../../components/ui';
+import * as Kit from '../../theme/kit';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const { PillButton, ScreenHeader, ProgressTrack, StatusTag } = UI as unknown as Record<
+  string,
+  React.ComponentType<any>
+>;
+const { palette, radii, shadow } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -222,6 +232,7 @@ export default function MergedOnboardingScreen() {
   const navigation = useNavigation<any>();
   const { user, owner, signOut, updateUser, updateOwner, updateOnboardingStep } = useAuth();
   const [state, dispatch] = useReducer(reducer, INITIAL);
+  const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = React.useState(false);
   // ProgressHeader's autosave indicator: 'saving' while the autosave
   // timer is in flight, 'saved' once the AsyncStorage write resolves.
@@ -829,28 +840,28 @@ export default function MergedOnboardingScreen() {
           sectionOffsets.current[id] = e.nativeEvent.layout.y;
         }}
       >
-        <Pressable
+        <TouchableOpacity
           style={styles.sectionHeader}
+          activeOpacity={0.7}
           onPress={() => dispatch({ type: 'TOGGLE', section: id })}
         >
           <View style={{ flex: 1 }}>
             <View style={styles.sectionTitleRow}>
               <Text style={styles.sectionTitle}>{title}</Text>
               {hasError ? (
-                <View style={styles.sectionErrorBadge}>
-                  <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                  <Text style={styles.sectionErrorText}>Needs attention</Text>
-                </View>
+                <StatusTag label="Needs attention" tone="danger" style={styles.sectionErrorBadge} />
               ) : null}
             </View>
             <Text style={styles.sectionSubtitle}>{subtitle}</Text>
           </View>
-          <Ionicons
-            name={isExpanded ? 'chevron-up' : 'chevron-down'}
-            size={20}
-            color="#6B7280"
-          />
-        </Pressable>
+          <View style={[styles.chevron, isExpanded && styles.chevronOpen]}>
+            <Ionicons
+              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={isExpanded ? palette.textInverse : palette.text}
+            />
+          </View>
+        </TouchableOpacity>
         {isExpanded ? <View style={styles.sectionBody}>{body}</View> : null}
       </View>
     );
@@ -902,9 +913,10 @@ export default function MergedOnboardingScreen() {
 
   // No "active" pill emphasis — each step shows only its own
   // independent status (complete / partial / pending). currentStepIndex
-  // is still passed for legacy ProgressHeader compatibility but is
-  // visually inert in the current design.
-  const currentStepIndex = 0;
+  // The slim ProgressTrack under the header fills up to the first step
+  // that is not complete yet.
+  const firstIncomplete = stepStatuses.findIndex((st) => st !== 'complete');
+  const trackCurrent = firstIncomplete === -1 ? PROGRESS_STEPS.length : firstIncomplete;
 
   // Tapping a step pill expands the matching accordion section. Several
   // section IDs map to the first step (ownerType / personal / business /
@@ -954,21 +966,48 @@ export default function MergedOnboardingScreen() {
 
   // ---- Render ----
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }} edges={['top']}>
-      <ProgressHeader
+    <SafeAreaView style={styles.root} edges={['top']}>
+      <ScreenHeader
         title="Complete your profile"
-        subtitle="A few quick details to get you ready to list your first parking spot."
-        steps={PROGRESS_STEPS}
-        currentStepIndex={currentStepIndex}
-        stepStatuses={stepStatuses}
-        onStepPress={handleStepPress}
-        savedStatus={savedStatus}
-        onBackPress={confirmQuit}
-        // No menu here: the ⋮ button was wired to confirmQuit too, so it was
-        // a "More options" icon whose only option was signing out — the same
-        // thing the back arrow already does. Omitting onMenuPress hides it.
-        showBack
+        onBack={confirmQuit}
+        right={
+          <Text style={styles.savedText}>{savedStatus === 'saving' ? 'Saving' : 'Saved'}</Text>
+        }
       />
+
+      {/* Slim step progress: dotted track + tappable step labels */}
+      <View style={styles.progressWrap}>
+        <ProgressTrack steps={PROGRESS_STEPS.length} current={trackCurrent} trackColor={palette.line} />
+        <View style={styles.stepLabels}>
+          {PROGRESS_STEPS.map((step, idx) => {
+            const st = stepStatuses[idx];
+            return (
+              <TouchableOpacity
+                key={step.id}
+                onPress={() => handleStepPress(idx)}
+                activeOpacity={0.6}
+                hitSlop={8}
+                style={styles.stepLabelBtn}
+                accessibilityRole="button"
+                accessibilityLabel={`${step.label}, ${st}`}
+              >
+                {st === 'complete' ? (
+                  <Ionicons name="checkmark-circle" size={13} color={palette.success} style={styles.stepCheck} />
+                ) : null}
+                <Text
+                  style={[
+                    styles.stepLabel,
+                    st === 'partial' && styles.stepLabelPartial,
+                    st === 'complete' && styles.stepLabelDone,
+                  ]}
+                >
+                  {step.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -980,10 +1019,15 @@ export default function MergedOnboardingScreen() {
             styles.scroll,
             // Add the keyboard's height to the bottom padding while it's
             // open so the last input has room to scroll above it.
-            { paddingBottom: 160 + keyboardHeight },
+            { paddingBottom: 40 + keyboardHeight },
           ]}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
+          <Text style={styles.lede}>
+            A few quick details to get you ready to list your first parking spot.
+          </Text>
+
           {/* OWNER TYPE */}
           {showOwnerTypeSection
             ? renderSection(
@@ -1132,54 +1176,53 @@ export default function MergedOnboardingScreen() {
               {showPrefillBanner ? (
                 <View style={styles.prefillBanner}>
                   <View style={styles.prefillBannerIcon}>
-                    <Ionicons name="locate" size={20} color="#0D7377" />
+                    <Ionicons name="locate" size={20} color={palette.text} />
                   </View>
                   <View style={styles.prefillBannerText}>
                     <Text style={styles.prefillBannerTitle}>Auto-fill your address?</Text>
                     <Text style={styles.prefillBannerBody}>
-                      We can detect your pincode, city and state from your current location — or you can type them yourself.
+                      We can detect your pincode, city and state from your current location, or you can type them yourself.
                     </Text>
                     <View style={styles.prefillBannerActions}>
-                      <Pressable
+                      <PillButton
+                        label="Auto-fill address"
+                        variant="ink"
+                        size="sm"
                         onPress={() => {
                           setShowPrefillBanner(false);
                           runAddressPrefill();
                         }}
                         disabled={prefillingLocation}
-                        style={[styles.prefillBannerPrimary, prefillingLocation && { opacity: 0.6 }]}
-                      >
-                        {prefillingLocation ? (
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                        ) : (
-                          <Text style={styles.prefillBannerPrimaryText}>Auto-fill address</Text>
-                        )}
-                      </Pressable>
-                      <Pressable
+                        loading={prefillingLocation}
+                      />
+                      <TouchableOpacity
                         onPress={() => setShowPrefillBanner(false)}
+                        activeOpacity={0.6}
                         style={styles.prefillBannerSecondary}
                       >
                         <Text style={styles.prefillBannerSecondaryText}>I'll type it</Text>
-                      </Pressable>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 </View>
               ) : (
                 // Compact secondary trigger so the user can re-run the prefill
                 // any time (e.g., after dismissing the banner or for a redo).
-                <Pressable
-                  style={[styles.useLocationBtn, prefillingLocation && { opacity: 0.6 }]}
+                <TouchableOpacity
+                  style={[styles.useLocationBtn, prefillingLocation && styles.dimmed]}
                   onPress={runAddressPrefill}
+                  activeOpacity={0.7}
                   disabled={prefillingLocation}
                 >
                   {prefillingLocation ? (
-                    <ActivityIndicator size="small" color="#0D7377" />
+                    <ActivityIndicator size="small" color={palette.ink} />
                   ) : (
-                    <Ionicons name="locate" size={16} color="#0D7377" />
+                    <Ionicons name="locate" size={16} color={palette.ink} />
                   )}
                   <Text style={styles.useLocationBtnText}>
                     {prefillingLocation ? 'Auto-filling…' : 'Auto-fill address from location'}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               )}
 
               <PincodeAddressBlock
@@ -1212,8 +1255,9 @@ export default function MergedOnboardingScreen() {
 
               <Text style={styles.subsectionTitle}>Address proof</Text>
               <Text style={styles.subsectionHint}>Utility bill, bank statement, or any government-issued document showing your address.</Text>
-              <Pressable
+              <TouchableOpacity
                 style={styles.checkboxRow}
+                activeOpacity={0.7}
                 onPress={() =>
                   dispatch({
                     type: 'PATCH',
@@ -1222,13 +1266,13 @@ export default function MergedOnboardingScreen() {
                   })
                 }
               >
-                <Ionicons
-                  name={state.addressProof.sameAsProfile ? 'checkbox' : 'square-outline'}
-                  size={22}
-                  color="#0D7377"
-                />
+                <View style={[styles.checkbox, state.addressProof.sameAsProfile && styles.checkboxOn]}>
+                  {state.addressProof.sameAsProfile ? (
+                    <Ionicons name="checkmark" size={14} color={palette.textInverse} />
+                  ) : null}
+                </View>
                 <Text style={styles.checkboxLabel}>Address proof matches the address above</Text>
-              </Pressable>
+              </TouchableOpacity>
               {!state.addressProof.sameAsProfile ? (
                 <PincodeAddressBlock
                   value={state.addressProof.altAddress}
@@ -1385,36 +1429,51 @@ export default function MergedOnboardingScreen() {
             </View>,
           )}
 
-          <Pressable style={styles.submitBtn} onPress={handleSubmit} disabled={submitting}>
-            {submitting ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.submitBtnText}>Submit for verification</Text>
-            )}
-          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Sticky submit */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+        <PillButton
+          label="Submit for verification"
+          iconRight="arrow-right"
+          variant="ink"
+          onPress={handleSubmit}
+          loading={submitting}
+        />
+      </View>
 
       {/* Upload source picker */}
       {!!uploadModal ? (
 
-        <Pressable style={styles.modalBackdrop} onPress={() => setUploadModal(null)}>
-          <Pressable style={styles.modalCard}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setUploadModal(null)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.modalCard, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.grabber} />
             <Text style={styles.modalTitle}>Add document</Text>
-            <Pressable style={styles.modalRow} onPress={() => handleUpload('camera')}>
-              <Ionicons name="camera-outline" size={20} color="#1F2937" />
+            <TouchableOpacity style={[styles.modalRow, styles.modalRowDivider]} activeOpacity={0.6} onPress={() => handleUpload('camera')}>
+              <View style={styles.modalRowIcon}>
+                <Ionicons name="camera-outline" size={19} color={palette.text} />
+              </View>
               <Text style={styles.modalRowText}>Take a photo</Text>
-            </Pressable>
-            <Pressable style={styles.modalRow} onPress={() => handleUpload('gallery')}>
-              <Ionicons name="images-outline" size={20} color="#1F2937" />
+              <Ionicons name="chevron-forward" size={18} color={palette.textSubtle} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalRow} activeOpacity={0.6} onPress={() => handleUpload('gallery')}>
+              <View style={styles.modalRowIcon}>
+                <Ionicons name="images-outline" size={19} color={palette.text} />
+              </View>
               <Text style={styles.modalRowText}>Choose from gallery</Text>
-            </Pressable>
-            <Pressable style={styles.modalCancel} onPress={() => setUploadModal(null)}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      
+              <Ionicons name="chevron-forward" size={18} color={palette.textSubtle} />
+            </TouchableOpacity>
+            <PillButton
+              label="Cancel"
+              variant="grey"
+              size="md"
+              onPress={() => setUploadModal(null)}
+              style={styles.modalCancel}
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
+
       ) : null}
     </SafeAreaView>
   );
@@ -1424,11 +1483,9 @@ export default function MergedOnboardingScreen() {
 // SUB-COMPONENTS
 // ============================================================================
 
-// Card-style upload tile with a dashed outer border (empty state) and a
-// small dashed-border placeholder square holding the icon. When a file is
-// present, the outer border becomes solid green, the placeholder becomes
-// a filled blue tile with a document icon, and a green check appears.
-// Two cards can sit side-by-side via the `<UploadCardRow>` wrapper.
+// Grey rounded upload tile. Empty: white icon circle with a plus. Filled:
+// ink icon circle with a document glyph and a green check. Two tiles can
+// sit side-by-side via the `<UploadCardRow>` wrapper.
 function UploadCard({
   label,
   file,
@@ -1445,8 +1502,9 @@ function UploadCard({
   const isFilled = !!file;
   return (
     <View style={styles.uploadCardWrap}>
-      <Pressable
+      <TouchableOpacity
         onPress={onPress}
+        activeOpacity={0.8}
         style={[
           styles.uploadCard,
           isFilled ? styles.uploadCardFilled : null,
@@ -1457,11 +1515,11 @@ function UploadCard({
       >
         {isFilled ? (
           <View style={styles.uploadPreview}>
-            <Ionicons name="document" size={20} color="#FFFFFF" />
+            <Ionicons name="document-text-outline" size={20} color={palette.textInverse} />
           </View>
         ) : (
           <View style={styles.uploadPlaceholder}>
-            <Ionicons name="add" size={22} color="#9CA3AF" />
+            <Ionicons name="add" size={22} color={palette.text} />
           </View>
         )}
         <View style={styles.uploadCardContent}>
@@ -1472,9 +1530,9 @@ function UploadCard({
           <Text style={styles.uploadCardAction}>{isFilled ? 'Replace' : 'Add'}</Text>
         </View>
         {isFilled ? (
-          <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+          <Ionicons name="checkmark-circle" size={18} color={palette.success} />
         ) : null}
-      </Pressable>
+      </TouchableOpacity>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
@@ -1487,7 +1545,7 @@ function UploadCardRow({ children }: { children: React.ReactNode }) {
 }
 
 // Inline "reuse this earlier value" toggle. Renders a checkbox + label + the
-// candidate value (e.g., "Use legal name — Anita Sharma"). Tapping fills the
+// candidate value (e.g., "Use legal name: Anita Sharma"). Tapping fills the
 // associated field; the field stays editable and the box shows a checkmark
 // while the value matches. Used wherever the same data has already been
 // entered in another section.
@@ -1503,14 +1561,14 @@ function ReuseRow({
   onPress: () => void;
 }) {
   return (
-    <Pressable style={styles.reuseRow} onPress={onPress}>
+    <TouchableOpacity style={styles.reuseRow} onPress={onPress} activeOpacity={0.7}>
       <View style={[styles.reuseCheckbox, active && styles.reuseCheckboxActive]}>
-        {active ? <Ionicons name="checkmark" size={12} color="#FFFFFF" /> : null}
+        {active ? <Ionicons name="checkmark" size={12} color={palette.textInverse} /> : null}
       </View>
       <Text style={styles.reuseRowText} numberOfLines={1}>
-        {label} — <Text style={styles.reuseRowValue}>{value}</Text>
+        {label}: <Text style={styles.reuseRowValue}>{value}</Text>
       </Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -1519,196 +1577,196 @@ function ReuseRow({
 // ============================================================================
 
 const styles = StyleSheet.create({
-  scroll: { padding: 16, paddingBottom: 160 },
+  root: { flex: 1, backgroundColor: palette.bg },
+  savedText: { ...fonts.semibold, fontSize: 12, color: palette.textMuted },
+
+  progressWrap: { paddingHorizontal: 24, paddingTop: 2, paddingBottom: 12 },
+  stepLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  stepLabelBtn: { flexDirection: 'row', alignItems: 'center' },
+  stepCheck: { marginRight: 3 },
+  stepLabel: { ...fonts.semibold, fontSize: 12, color: palette.textMuted },
+  stepLabelPartial: { color: palette.text },
+  stepLabelDone: { color: palette.text },
+
+  scroll: { paddingHorizontal: 16, paddingTop: 4 },
+  lede: {
+    ...fonts.medium,
+    fontSize: 14,
+    lineHeight: 20,
+    color: palette.textMuted,
+    marginHorizontal: 6,
+    marginBottom: 14,
+  },
+
   section: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
     marginBottom: 12,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E5E7EB',
+    borderWidth: 1.5,
+    borderColor: palette.surface,
   },
-  sectionError: {
-    borderColor: '#FCA5A5',
-    borderWidth: 1,
-  },
+  sectionError: { borderColor: palette.danger },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
   },
-  sectionTitleRow: {
-    flexDirection: 'row',
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  sectionTitle: { ...fonts.semibold, fontSize: 17, letterSpacing: -0.2, color: palette.text },
+  sectionSubtitle: { ...fonts.medium, fontSize: 12.5, lineHeight: 17, color: palette.textMuted, marginTop: 3 },
+  sectionErrorBadge: { marginLeft: 8 },
+  chevron: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: palette.fill,
     alignItems: 'center',
-    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginLeft: 12,
   },
-  sectionTitle: { fontSize: 15, fontWeight: '600', color: '#1F2937' },
-  sectionSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  sectionErrorBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 4,
-  },
-  sectionErrorText: {
-    fontSize: 11,
-    color: '#B91C1C',
-    fontWeight: '500',
-    marginLeft: 4,
-  },
+  chevronOpen: { backgroundColor: palette.ink },
   sectionBody: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: 4,
-    paddingBottom: 16,
+    paddingBottom: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: palette.line,
   },
   field: { marginTop: 12 },
-  errorText: { color: '#EF4444', fontSize: 12, marginTop: 6 },
+  errorText: { ...fonts.medium, color: palette.danger, fontSize: 12, marginTop: 6, marginLeft: 4 },
   subsectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginTop: 20,
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
+    marginTop: 22,
     marginBottom: 4,
   },
-  subsectionHint: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 8,
-  },
+  subsectionHint: { ...fonts.medium, fontSize: 12.5, lineHeight: 17, color: palette.textMuted, marginBottom: 8 },
+
   useLocationBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#E8F5F4',
-    borderRadius: 8,
+    height: 40,
+    paddingHorizontal: 16,
+    backgroundColor: palette.fill,
+    borderRadius: radii.pill,
+    marginTop: 12,
     marginBottom: 4,
   },
-  useLocationBtnText: {
-    color: '#0D7377',
-    fontSize: 13,
-    fontWeight: '500',
-    marginLeft: 6,
-  },
+  dimmed: { opacity: 0.6 },
+  useLocationBtnText: { ...fonts.semibold, color: palette.text, fontSize: 13, marginLeft: 8 },
   prefillBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: 12,
-    backgroundColor: '#E8F5F4',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#D6ECEA',
+    padding: 16,
+    backgroundColor: palette.blueSoft,
+    borderRadius: radii.lg,
+    marginTop: 12,
     marginBottom: 12,
   },
   prefillBannerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 12,
   },
   prefillBannerText: { flex: 1 },
-  prefillBannerTitle: { fontSize: 14, fontWeight: '600', color: '#1F2937', marginBottom: 4 },
-  prefillBannerBody: { fontSize: 13, color: '#4B5563', lineHeight: 18 },
-  prefillBannerActions: { flexDirection: 'row', marginTop: 10, alignItems: 'center' },
-  prefillBannerPrimary: {
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8,
-    backgroundColor: '#0D7377', minHeight: 36, justifyContent: 'center', alignItems: 'center',
-    minWidth: 130,
-  },
-  prefillBannerPrimaryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
-  prefillBannerSecondary: {
-    paddingHorizontal: 12, paddingVertical: 9, marginLeft: 8,
-  },
-  prefillBannerSecondaryText: { color: '#4B5563', fontSize: 13, fontWeight: '500' },
+  prefillBannerTitle: { ...fonts.semibold, fontSize: 15, color: palette.text, marginBottom: 4 },
+  prefillBannerBody: { ...fonts.medium, fontSize: 13, color: palette.inkSoft, lineHeight: 18 },
+  prefillBannerActions: { flexDirection: 'row', marginTop: 12, alignItems: 'center' },
+  prefillBannerSecondary: { paddingHorizontal: 12, paddingVertical: 9, marginLeft: 4 },
+  prefillBannerSecondaryText: { ...fonts.semibold, color: palette.text, fontSize: 13 },
+
   readonlyRow: {
     marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
   },
-  readonlyLabel: { fontSize: 11, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.4 },
-  readonlyValue: { fontSize: 14, color: '#1F2937', marginTop: 2 },
-  readonlyHint: { fontSize: 11, color: '#10B981', marginTop: 2 },
-  // Upload tile (dashed-border card with placeholder square + label) —
-  // shared by identity images and address-proof document.
+  readonlyLabel: { ...fonts.medium, fontSize: 12, color: palette.textMuted },
+  readonlyValue: { ...fonts.semibold, fontSize: 16, color: palette.text, marginTop: 2 },
+  readonlyHint: { ...fonts.semibold, fontSize: 11.5, color: palette.success, marginTop: 2 },
+
+  // Upload tile (grey rounded tile + icon circle + label), shared by
+  // identity images and the address-proof document.
   uploadCardWrap: { flex: 1, marginTop: 12 },
-  uploadCardRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+  uploadCardRow: { flexDirection: 'row', gap: 10 },
   uploadCard: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 12,
+    borderRadius: radii.lg,
     borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#D1D5DB',
-    backgroundColor: '#F9FAFB',
-    minHeight: 76,
+    borderColor: palette.fill,
+    backgroundColor: palette.fill,
+    minHeight: 72,
   },
-  uploadCardFilled: {
-    borderColor: '#10B981',
-    borderStyle: 'solid',
-    backgroundColor: '#ECFDF5',
-  },
-  uploadCardError: { borderColor: '#EF4444' },
+  uploadCardFilled: { backgroundColor: palette.successSoft, borderColor: palette.successSoft },
+  uploadCardError: { borderColor: palette.danger },
   uploadPlaceholder: {
-    width: 48, height: 48, borderRadius: 8,
-    borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#D1D5DB',
-    justifyContent: 'center', alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: palette.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   uploadPreview: {
-    width: 48, height: 48, borderRadius: 8,
-    backgroundColor: '#0D7377',
-    justifyContent: 'center', alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: palette.ink,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   uploadCardContent: { flex: 1, marginLeft: 12 },
-  uploadCardLabel: { fontSize: 13, fontWeight: '500', color: '#1F2937' },
-  uploadCardRequired: { color: '#EF4444' },
-  uploadCardAction: { fontSize: 12, fontWeight: '600', color: '#0D7377', marginTop: 2 },
+  uploadCardLabel: { ...fonts.semibold, fontSize: 14, color: palette.text },
+  uploadCardRequired: { color: palette.danger },
+  uploadCardAction: { ...fonts.medium, fontSize: 12, color: palette.textMuted, marginTop: 2 },
+
   // "Reuse earlier input" inline toggle row.
-  reuseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    marginTop: 4,
-  },
+  reuseRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, marginTop: 4 },
   reuseCheckbox: {
-    width: 18, height: 18, borderRadius: 4,
-    borderWidth: 1.5, borderColor: '#0D7377',
-    justifyContent: 'center', alignItems: 'center',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: palette.textSubtle,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 10,
   },
-  reuseCheckboxActive: { backgroundColor: '#0D7377' },
-  reuseRowText: { flex: 1, fontSize: 13, color: '#6B7280' },
-  reuseRowValue: { color: '#1F2937', fontWeight: '500' },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  checkboxLabel: { fontSize: 14, color: '#1F2937', marginLeft: 10 },
-  submitBtn: {
-    marginTop: 24,
-    backgroundColor: '#0D7377',
-    paddingVertical: 16,
+  reuseCheckboxActive: { backgroundColor: palette.ink, borderColor: palette.ink },
+  reuseRowText: { ...fonts.medium, flex: 1, fontSize: 13, color: palette.textMuted },
+  reuseRowValue: { ...fonts.semibold, color: palette.text },
+
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  checkbox: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: palette.textSubtle,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  submitBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  checkboxOn: { backgroundColor: palette.ink, borderColor: palette.ink },
+  checkboxLabel: { ...fonts.medium, flex: 1, fontSize: 14, color: palette.text, marginLeft: 12 },
+
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    backgroundColor: palette.bg,
+  },
+
   modalBackdrop: {
     // Absolutely positioned rather than flex:1 — no longer inside a
     // <Modal>, which does not present on this build.
@@ -1719,28 +1777,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    ...shadow.lifted,
   },
-  modalTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 12 },
-  modalRow: {
-    flexDirection: 'row',
+  grabber: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    marginBottom: 18,
+  },
+  modalTitle: { ...fonts.semibold, fontSize: 20, letterSpacing: -0.3, color: palette.text, marginBottom: 8 },
+  modalRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+  modalRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line },
+  modalRowIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: palette.fill,
     alignItems: 'center',
-    paddingVertical: 14,
+    justifyContent: 'center',
+    marginRight: 14,
   },
-  modalRowText: { fontSize: 15, color: '#1F2937', marginLeft: 12 },
-  modalCancel: {
-    marginTop: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 10,
-  },
-  modalCancelText: { color: '#1F2937', fontSize: 15, fontWeight: '500' },
+  modalRowText: { ...fonts.semibold, flex: 1, fontSize: 15.5, color: palette.text },
+  modalCancel: { marginTop: 14 },
 });

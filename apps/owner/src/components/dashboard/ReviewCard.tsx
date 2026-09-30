@@ -6,8 +6,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, fonts } from '../../theme/kit';
 import { formatRelativeTime } from '../../utils/formatters';
 
 export interface ReviewCardProps {
@@ -35,7 +34,7 @@ function ReviewCard({
         key={i}
         name={i < rating ? 'star' : 'star-outline'}
         size={14}
-        color={i < rating ? '#F59E0B' : theme.textMuted}
+        color={i < rating ? palette.peachDeep : palette.textSubtle}
       />
     ));
   };
@@ -73,7 +72,7 @@ function ReviewCard({
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: spacing[3],
+    paddingVertical: 14,
   },
   withBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -82,24 +81,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing[2],
+    marginBottom: 8,
   },
   renterInfo: {
-    gap: spacing[1],
+    gap: 4,
   },
   renterName: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 15.5,
   },
   stars: {
     flexDirection: 'row',
     gap: 2,
   },
   date: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12,
   },
   comment: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    fontSize: 14,
     lineHeight: 20,
   },
 });

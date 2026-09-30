@@ -6,6 +6,119 @@ const { success, error } = require('../utils/responseHelper');
 const errorCodes = require('../utils/errorCodes');
 
 /**
+ * Admin view of every parking space and every registered access device.
+ * GET /api/devices/admin/barrier-assignments
+ */
+exports.getAdminBarrierAssignments = async (req, res) => {
+  try {
+    const [spaces, devices] = await Promise.all([
+      ParkingSpace.find()
+        .populate('property_id', 'property_name address city state')
+        .populate('owner_id', 'business_name user_id')
+        .sort({ created_at: -1 }),
+      Device.find({ device_type: { $in: ['barrier', 'gate', 'lock'] } })
+        .populate('parking_space_id', 'space_number property_id')
+        .sort({ device_id: 1 }),
+    ]);
+
+    return success(res, { spaces, devices });
+  } catch (err) {
+    console.error('getAdminBarrierAssignments error:', err);
+    return error(res, errorCodes.SERVER_ERROR, 500, 'Could not load barrier assignments');
+  }
+};
+
+/**
+ * Assign (or unassign) one physical barrier to one parking space while keeping
+ * both documents in sync. Send { barrier_id: null } to remove the mapping.
+ * PUT /api/devices/admin/parking-spaces/:spaceId/barrier
+ */
+exports.assignBarrierToSpace = async (req, res) => {
+  try {
+    const space = await ParkingSpace.findById(req.params.spaceId);
+    if (!space) {
+      return error(res, errorCodes.RES_NOT_FOUND, 404, 'Parking space not found');
+    }
+
+    const requestedId = req.body.barrier_id;
+    const barrierId = requestedId === null || requestedId === undefined || requestedId === ''
+      ? null
+      : String(requestedId).trim();
+
+    let device = null;
+    if (barrierId) {
+      device = await Device.findOne({ device_id: barrierId });
+      if (!device) {
+        return error(res, errorCodes.RES_NOT_FOUND, 404, 'Barrier ID is not registered');
+      }
+
+      const deviceSpaceId = device.parking_space_id?.toString();
+      if (deviceSpaceId && deviceSpaceId !== space._id.toString()) {
+        return error(
+          res,
+          errorCodes.RES_CONFLICT,
+          409,
+          'This barrier is already assigned to another parking space'
+        );
+      }
+
+      // ParkingSpace.device_id is the operational lookup used by access flows.
+      // Guard it as well in case legacy data has only that side populated.
+      const conflictingSpace = await ParkingSpace.findOne({
+        _id: { $ne: space._id },
+        device_id: barrierId,
+      }).select('_id space_number');
+      if (conflictingSpace) {
+        return error(
+          res,
+          errorCodes.RES_CONFLICT,
+          409,
+          `This barrier is already assigned to parking space ${conflictingSpace.space_number}`
+        );
+      }
+    }
+
+    const previousBarrierId = space.device_id;
+    if (previousBarrierId && previousBarrierId !== barrierId) {
+      await Device.updateOne(
+        { device_id: previousBarrierId, parking_space_id: space._id },
+        { $set: { parking_space_id: null } }
+      );
+    }
+
+    if (device) {
+      device.parking_space_id = space._id;
+      await device.save();
+    } else {
+      // Also clears legacy records where ParkingSpace.device_id was missing.
+      await Device.updateMany(
+        { parking_space_id: space._id },
+        { $set: { parking_space_id: null } }
+      );
+    }
+
+    space.device_id = barrierId;
+    space.has_smart_barrier = Boolean(barrierId);
+    await space.save();
+
+    const updatedSpace = await ParkingSpace.findById(space._id)
+      .populate('property_id', 'property_name address city state')
+      .populate('owner_id', 'business_name user_id');
+
+    return success(res, {
+      space: updatedSpace,
+      device,
+      message: barrierId
+        ? `Barrier ${barrierId} assigned to parking space ${space.space_number}`
+        : `Barrier removed from parking space ${space.space_number}`,
+    });
+  } catch (err) {
+    console.error('assignBarrierToSpace error:', err);
+    return error(res, errorCodes.SERVER_ERROR, 500, 'Could not update barrier assignment');
+  }
+};
+
+/**
  * Pair or register a new IoT smart barrier with an owner's parking space
  * POST /api/v1/devices/pair
  */

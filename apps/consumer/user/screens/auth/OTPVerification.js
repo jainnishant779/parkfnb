@@ -8,9 +8,8 @@
  *   - authService.resendOtp on resend
  *   - auto-verify when all digits are entered
  *
- * Visuals: large airy header, six glass digit cells with focus halo
- * driven by an animated border. Sat on the warm ambient background so
- * the cells actually look like glass, not flat tiles.
+ * Visuals: photo header + white sheet (AuthLayout). Six grey pill digit
+ * cells; the next cell to fill gets an ink border, errors turn red.
  */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -18,26 +17,18 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  KeyboardAvoidingView,
-  ScrollView,
-  Platform,
   Pressable,
   Animated,
-  Easing,
-  StatusBar,
   Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '../../context/AuthContext';
 import * as authService from '../../services/authService';
 import { maskPhone } from '../../utils/validateForm';
 
-import AmbientBackground from '../../components/glass/AmbientBackground';
-import GlassCard from '../../components/glass/GlassCard';
-import GlassButton from '../../components/glass/GlassButton';
-import { BackIcon } from '../../components/glass/Icons';
-import { palette, typography, spacing, fontStacks, radii } from '../../theme';
+import AuthLayout from '../../components/ui/AuthLayout';
+import { T, PillButton } from '../../components/ui';
+import { palette, fonts, radii } from '../../theme';
 
 const RESEND_COOLDOWN = 30;
 
@@ -57,12 +48,11 @@ const DigitCell = ({ value, focused, error }) => {
     }).start();
   }, [focused, halo]);
 
-  // The card is near-white, so a white border/fill made the cells vanish.
   const borderColor = error
     ? palette.danger
     : halo.interpolate({
         inputRange: [0, 1],
-        outputRange: ['rgba(26,26,46,0.16)', palette.primary],
+        outputRange: [value ? palette.line : palette.fill, palette.ink],
       });
 
   return (
@@ -71,7 +61,7 @@ const DigitCell = ({ value, focused, error }) => {
         styles.cellWrap,
         {
           borderColor,
-          backgroundColor: value ? '#FFFFFF' : 'rgba(26,26,46,0.04)',
+          backgroundColor: value || focused ? palette.surface : palette.fill,
         },
       ]}
     >
@@ -148,17 +138,6 @@ const OTPVerification = ({ navigation, route }) => {
     });
     return () => sub.remove();
   }, []);
-
-  // Entrance animation
-  const enter = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(enter, {
-      toValue: 1,
-      duration: 520,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [enter]);
 
   const handleDigitsChange = (value) => {
     if (isDisabled || isLoading) return;
@@ -250,200 +229,93 @@ const OTPVerification = ({ navigation, route }) => {
     }
   }, [isLoading, identifier]);
 
-  const cardSlide = enter.interpolate({ inputRange: [0, 1], outputRange: [40, 0] });
   const maskedPhone = identifier ? maskPhone(identifier) : '';
 
   return (
-    <View style={{ flex: 1 }}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-      <AmbientBackground>
-        <SafeAreaView style={styles.safe}>
-          {/* Android already resizes the window (adjustResize); a second
-              'height' adjustment here fought it and made the page jump. */}
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={{ flex: 1 }}
-            keyboardVerticalOffset={0}
-          >
-            <ScrollView
-              ref={scrollRef}
-              contentContainerStyle={styles.scroll}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets
-            >
-              {/* Top row */}
-              <View style={styles.topRow}>
-                <Pressable
-                  onPress={() => navigation.goBack()}
-                  hitSlop={10}
-                  style={styles.backBtn}
-                >
-                  <BackIcon color={palette.text} />
-                </Pressable>
-                <Text style={styles.brand}>PARKFNB</Text>
-                <View style={{ width: 24 }} />
-              </View>
+    <AuthLayout
+      image={require('../../assets/images/login.jpg')}
+      title={'Check your\nmessages'}
+      subtitle="We sent you a one-time code."
+      onBack={() => navigation.goBack()}
+      scrollRef={scrollRef}
+    >
+      <T variant="h2">Enter code</T>
+      <Text style={styles.lede}>
+        Sent to <Text style={styles.phoneHighlight}>{maskedPhone || identifier}</Text>
+        {'  '}
+        <Text style={styles.change} onPress={() => navigation.goBack()}>
+          Change
+        </Text>
+      </Text>
 
-              <Animated.View
-                style={{
-                  opacity: enter,
-                  transform: [{ translateY: cardSlide }],
-                }}
-              >
-                <View style={styles.headline}>
-                  <Text style={styles.eyebrow}>Verify</Text>
-                  <Text style={styles.title}>Enter the{'\n'}code.</Text>
-                  <Text style={styles.subtitle}>
-                    A 6-digit code was sent to{' '}
-                    <Text style={styles.phoneHighlight}>
-                      {maskedPhone || identifier}
-                    </Text>
-                  </Text>
-                </View>
+      {/* Six display cells with ONE invisible input laid over the whole
+          row: tapping anywhere focuses it, typing/pasting/SMS autofill fill
+          the cells left to right. */}
+      <View style={styles.cellsRow}>
+        {otp.map((digit, index) => (
+          <View key={index} style={styles.cellSlot}>
+            <DigitCell
+              value={digit}
+              focused={inputFocused && index === Math.min(digits.length, OTP_LENGTH - 1)}
+              error={!!errorMessage && !isLoading}
+            />
+          </View>
+        ))}
+        <TextInput
+          ref={inputRef}
+          style={styles.hiddenInput}
+          value={digits}
+          onChangeText={handleDigitsChange}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
+          keyboardType="number-pad"
+          maxLength={OTP_LENGTH}
+          textContentType="oneTimeCode"
+          autoComplete="sms-otp"
+          autoFocus
+          editable={!isDisabled}
+          caretHidden
+          contextMenuHidden
+        />
+      </View>
 
-                <GlassCard radius={radii.lg} intensity={20} style={styles.card}>
-                  <View style={styles.cardInner}>
-                    {/* Six display cells with ONE invisible input laid over the
-                        whole row: tapping anywhere focuses it, typing/pasting/SMS
-                        autofill fill the cells left to right. */}
-                    <View style={styles.cellsRow}>
-                      {otp.map((digit, index) => (
-                        <View key={index} style={styles.cellSlot}>
-                          <DigitCell
-                            value={digit}
-                            focused={inputFocused && index === Math.min(digits.length, OTP_LENGTH - 1)}
-                            error={!!errorMessage && !isLoading}
-                          />
-                        </View>
-                      ))}
-                      <TextInput
-                        ref={inputRef}
-                        style={styles.hiddenInput}
-                        value={digits}
-                        onChangeText={handleDigitsChange}
-                        onFocus={() => setInputFocused(true)}
-                        onBlur={() => setInputFocused(false)}
-                        keyboardType="number-pad"
-                        maxLength={OTP_LENGTH}
-                        textContentType="oneTimeCode"
-                        autoComplete="sms-otp"
-                        autoFocus
-                        editable={!isDisabled}
-                        caretHidden
-                        contextMenuHidden
-                      />
-                    </View>
+      {/* Fixed-height slot so an error appearing/clearing does not push the
+          Resend link and Verify button up and down. */}
+      <View style={styles.errorSlot}>
+        {errorMessage ? (
+          <Text style={styles.errorText} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+            {errorMessage}
+          </Text>
+        ) : null}
+      </View>
 
-                    {/* Fixed-height slot so an error appearing/clearing does not
-                        push the Resend link and Verify button up and down. */}
-                    <View style={styles.errorSlot}>
-                      {errorMessage ? (
-                        <Text
-                          style={styles.errorText}
-                          accessibilityRole="alert"
-                          accessibilityLiveRegion="assertive"
-                        >
-                          {errorMessage}
-                        </Text>
-                      ) : null}
-                    </View>
+      <PillButton
+        label="Verify"
+        iconRight="arrow-right"
+        variant="ink"
+        onPress={handleVerify}
+        disabled={!isOtpComplete || isDisabled}
+        loading={isLoading}
+      />
 
-                    <ResendRow
-                      cooldownKey={resendKey}
-                      forceActive={forceResend}
-                      onResend={handleResend}
-                      disabled={isLoading}
-                    />
-
-                    <GlassButton
-                      label="Verify"
-                      onPress={handleVerify}
-                      disabled={!isOtpComplete || isDisabled}
-                      loading={isLoading}
-                      fullWidth
-                      style={{ marginTop: spacing.md }}
-                    />
-                  </View>
-                </GlassCard>
-              </Animated.View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </AmbientBackground>
-    </View>
+      <ResendRow
+        cooldownKey={resendKey}
+        forceActive={forceResend}
+        onResend={handleResend}
+        disabled={isLoading}
+      />
+    </AuthLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xl,
-  },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brand: {
-    fontFamily: fontStacks.regular,
-    fontSize: 20,
-    fontWeight: '300',
-    letterSpacing: 4,
-    color: palette.text,
-  },
-  headline: {
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.xl,
-  },
-  eyebrow: {
-    ...typography.label,
-    color: palette.primary,
-    marginBottom: spacing.sm,
-  },
-  title: {
-    fontFamily: fontStacks.regular,
-    fontSize: 44,
-    fontWeight: '300',
-    letterSpacing: -1.5,
-    lineHeight: 48,
-    color: palette.text,
-    marginBottom: spacing.md,
-  },
-  subtitle: {
-    ...typography.body,
-    color: palette.textMuted,
-  },
-  phoneHighlight: {
-    color: palette.text,
-    fontFamily: fontStacks.medium,
-    fontWeight: '500',
-  },
-  card: { width: '100%' },
-  cardInner: { padding: spacing.lg + 4 },
-  cellsRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  // Six cells have to share the card width, so they flex instead of taking a
-  // fixed 64pt each — at that width the last cells fell outside the card.
-  cellSlot: {
-    flex: 1,
-    height: 72,
-    position: 'relative',
-  },
+  lede: { ...fonts.medium, fontSize: 14, lineHeight: 20, color: palette.textMuted, marginTop: 6 },
+  phoneHighlight: { ...fonts.semibold, color: palette.text },
+  change: { ...fonts.semibold, color: palette.text, textDecorationLine: 'underline' },
+
+  cellsRow: { flexDirection: 'row', marginTop: 24 },
+  // Six cells share the sheet width, so they flex instead of a fixed width.
+  cellSlot: { flex: 1, height: 64, marginHorizontal: 4 },
   cellWrap: {
     flex: 1,
     borderRadius: radii.md,
@@ -452,13 +324,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cellDigit: {
-    fontFamily: fontStacks.regular,
-    fontSize: 28,
-    fontWeight: '400',
+    ...fonts.semibold,
+    fontSize: 26,
     color: palette.text,
-    letterSpacing: -1,
-    // Android reserves an extra font-padding band above/below the glyph,
-    // which at 28px can push the digit out of its cell.
+    // Android reserves an extra font-padding band above/below the glyph.
     includeFontPadding: false,
     textAlign: 'center',
   },
@@ -473,35 +342,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     backgroundColor: 'transparent',
   },
-  errorSlot: {
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  errorText: {
-    fontSize: 12,
-    color: palette.danger,
-    textAlign: 'center',
-  },
-  resendRow: {
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  resendActive: {
-    color: palette.text,
-    fontFamily: fontStacks.medium,
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  resendIdle: {
-    color: palette.textMuted,
-    fontFamily: fontStacks.regular,
-    fontSize: 14,
-  },
-  resendTimer: {
-    color: palette.text,
-    fontFamily: fontStacks.medium,
-    fontWeight: '500',
-  },
+  errorSlot: { minHeight: 40, justifyContent: 'center' },
+  errorText: { ...fonts.medium, fontSize: 13, color: palette.danger, textAlign: 'center' },
+
+  resendRow: { alignItems: 'center', marginTop: 20 },
+  resendActive: { ...fonts.semibold, fontSize: 15, color: palette.text },
+  resendIdle: { ...fonts.medium, fontSize: 14, color: palette.textMuted },
+  resendTimer: { ...fonts.semibold, color: palette.text },
 });
 
 export default OTPVerification;

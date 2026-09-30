@@ -1,8 +1,8 @@
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { spacing } from '../../theme/spacing';
+import { palette, fonts } from '../../theme/kit';
 
 // Types
 export interface BadgeProps {
@@ -41,7 +41,7 @@ function Badge({
       case 'success':
         return theme.success;
       case 'primary':
-        return theme.primary;
+        return palette.ink;
       default:
         return theme.danger;
     }
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: palette.surface,
   },
   countBadge: {
     position: 'absolute',
@@ -132,11 +132,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: palette.surface,
   },
   countText: {
-    color: '#FFFFFF',
-    fontWeight: fontWeight.bold as any,
+    ...fonts.bold,
+    color: palette.textInverse,
+    includeFontPadding: false,
     textAlign: 'center',
   },
 });

@@ -4,11 +4,10 @@ import {
   Text,
   StyleSheet,
   Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import { palette, fonts } from '../../theme/kit';
 
 // ============================================================================
 // TYPES
@@ -55,19 +54,19 @@ export interface ProgressHeaderProps {
 // ============================================================================
 
 const headerTheme = {
-  background: colors.white,
-  title: colors.gray[900],
-  subtitle: colors.gray[600],
-  stepActive: colors.primary[600],
-  stepCompleted: colors.success[500],
-  stepPending: colors.gray[300],
-  stepText: colors.gray[500],
-  stepTextActive: colors.primary[600],
-  savedText: colors.success[500],
-  savingText: colors.gray[500],
-  errorText: colors.error[500],
-  lineCompleted: colors.success[500],
-  linePending: colors.gray[200],
+  background: palette.bg,
+  title: palette.text,
+  subtitle: palette.textMuted,
+  stepActive: palette.ink,
+  stepCompleted: palette.ink,
+  stepPending: palette.line,
+  stepText: palette.textMuted,
+  stepTextActive: palette.text,
+  savedText: palette.success,
+  savingText: palette.textMuted,
+  errorText: palette.danger,
+  lineCompleted: palette.ink,
+  linePending: palette.line,
 };
 
 // ============================================================================
@@ -134,15 +133,16 @@ export default function ProgressHeader({
       {/* Top Row: Back, Title Area, Menu */}
       <View style={styles.topRow}>
         {showBack && onBackPress ? (
-          <Pressable
+          <TouchableOpacity
             onPress={onBackPress}
             style={styles.backButton}
+            activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
             <Ionicons name="arrow-back" size={24} color={headerTheme.title} />
-          </Pressable>
+          </TouchableOpacity>
         ) : (
           <View style={styles.backButton} />
         )}
@@ -153,15 +153,16 @@ export default function ProgressHeader({
         </View>
 
         {onMenuPress ? (
-          <Pressable
+          <TouchableOpacity
             onPress={onMenuPress}
-            style={styles.menuButton}
+            style={[styles.menuButton, styles.menuButtonCircle]}
+            activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel="More options"
             accessibilityRole="button"
           >
-            <Ionicons name="ellipsis-vertical" size={20} color={headerTheme.title} />
-          </Pressable>
+            <Ionicons name="ellipsis-vertical" size={18} color={headerTheme.title} />
+          </TouchableOpacity>
         ) : (
           <View style={styles.menuButton} />
         )}
@@ -213,12 +214,20 @@ export default function ProgressHeader({
                     isCompleted && styles.stepCircleCompleted,
                     isPartial && styles.stepCirclePartial,
                     !isCompleted && !isPartial && styles.stepCirclePending,
+                    isActive && styles.stepCircleActive,
                   ]}
                 >
                   {isCompleted ? (
-                    <Ionicons name="checkmark" size={14} color={colors.white} />
+                    <Ionicons name="checkmark" size={14} color={palette.textInverse} />
                   ) : (
-                    <Text style={styles.stepNumber}>{index + 1}</Text>
+                    <Text
+                      style={[
+                        styles.stepNumber,
+                        isActive && !isPartial && styles.stepNumberActive,
+                      ]}
+                    >
+                      {index + 1}
+                    </Text>
                   )}
                 </View>
                 <Text
@@ -226,6 +235,7 @@ export default function ProgressHeader({
                     styles.stepLabel,
                     isCompleted && styles.stepLabelCompleted,
                     isPartial && styles.stepLabelPartial,
+                    isActive && styles.stepLabelActive,
                   ]}
                   numberOfLines={1}
                 >
@@ -269,58 +279,61 @@ export default function ProgressHeader({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: headerTheme.background,
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[3],
-    paddingBottom: spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[100],
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 14,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing[4],
+    minHeight: 48,
+    marginBottom: 14,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#EBF4FF',
-    borderRadius: 20,
+    alignItems: 'flex-start',
   },
   titleContainer: {
     flex: 1,
     alignItems: 'center',
   },
   title: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as any,
+    ...fonts.semibold,
+    fontSize: 19,
+    letterSpacing: -0.2,
     color: headerTheme.title,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    fontSize: 13,
     color: headerTheme.subtitle,
     textAlign: 'center',
-    marginTop: spacing[1],
+    marginTop: 2,
   },
   menuButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+  },
+  menuButtonCircle: {
+    borderRadius: 22,
+    backgroundColor: palette.surface,
   },
 
-  // Progress Steps
+  // Progress Steps (dotted track: ink = done, grey = to do)
   stepsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    marginBottom: spacing[3],
+    marginBottom: 10,
   },
   stepItem: {
     alignItems: 'center',
-    minWidth: 60,
+    minWidth: 58,
   },
   stepCircle: {
     width: 28,
@@ -328,42 +341,55 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing[1],
+    marginBottom: 6,
   },
   stepCircleCompleted: {
-    backgroundColor: headerTheme.stepCompleted, // green
+    backgroundColor: headerTheme.stepCompleted,
   },
   stepCirclePending: {
-    backgroundColor: headerTheme.stepPending,   // gray
+    backgroundColor: palette.surface,
+    borderWidth: 1.5,
+    borderColor: palette.line,
   },
-  // Partial = section started but not finished. Solid amber fill so it
-  // reads at a glance against the green/gray neighbors.
+  // Partial = section started but not finished: peach fill.
   stepCirclePartial: {
-    backgroundColor: '#F59E0B',                 // amber-500
+    backgroundColor: palette.peach,
+  },
+  stepCircleActive: {
+    borderWidth: 3,
+    borderColor: palette.ink,
   },
   stepNumber: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-    color: colors.white,
+    ...fonts.bold,
+    fontSize: 12,
+    color: palette.textMuted,
+  },
+  stepNumberActive: {
+    color: palette.text,
   },
   stepLabel: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 11.5,
     color: headerTheme.stepText,
     textAlign: 'center',
   },
   stepLabelCompleted: {
-    color: headerTheme.stepCompleted,
+    color: palette.text,
   },
   stepLabelPartial: {
-    color: '#B45309',                            // amber-700, readable on white
-    fontWeight: fontWeight.medium as any,
+    color: palette.text,
+  },
+  stepLabelActive: {
+    ...fonts.bold,
+    color: headerTheme.stepTextActive,
   },
   connector: {
-    height: 2,
+    height: 4,
+    borderRadius: 2,
     flex: 1,
     maxWidth: 40,
-    marginHorizontal: spacing[2],
-    marginBottom: spacing[4],
+    marginHorizontal: 2,
+    marginTop: 12,
   },
   connectorCompleted: {
     backgroundColor: headerTheme.lineCompleted,
@@ -377,9 +403,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[1],
+    gap: 4,
   },
   savedStatusText: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12,
   },
 });

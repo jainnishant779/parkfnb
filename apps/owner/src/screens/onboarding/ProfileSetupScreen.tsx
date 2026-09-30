@@ -7,24 +7,21 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  Modal,
   Image,
   LayoutAnimation,
   UIManager,
+  type TextStyle,
 } from 'react-native';
 import { AppAlert } from '../../components/common/AppAlert';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 
 import FormTextInput from '../../components/inputs/FormTextInput';
 import FormPickerInput from '../../components/inputs/FormPickerInput';
-import ProgressHeader from '../../components/headers/ProgressHeader';
-import PrimaryButton from '../../components/buttons/PrimaryButton';
-import { colors } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
+import * as UI from '../../components/ui';
+import * as Kit from '../../theme/kit';
 import { strings } from '../../constants/strings';
 import { pickAndUploadImage, handleMediaUploadError, type PickSource } from '../../utils/mediaUpload';
 import { resolveImageUri } from '../../utils/imageUri';
@@ -37,6 +34,14 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { ownerService } from '../../services/ownerService';
 import { ApiRequestError } from '../../services/api';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const { PillButton, ScreenHeader, ProgressTrack, IconCircle, StatusTag } = UI as unknown as Record<
+  string,
+  React.ComponentType<any>
+>;
+const { palette, radii, shadow } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -216,6 +221,7 @@ export default function ProfileSetupScreen({
   initialOwnerType = 'individual',
   onSaveExit,
 }: ProfileSetupScreenProps) {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { user, updateOnboardingStep, updateUser, updateOwner } = useAuth();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -472,21 +478,23 @@ export default function ProfileSetupScreen({
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ProgressHeader
+        <ScreenHeader
           title={strings.profileSetup.title}
-          subtitle={strings.profileSetup.subtitle}
-          steps={PROGRESS_STEPS}
-          currentStepIndex={0}
-          savedStatus={savedStatus}
-          lastSavedText={getLastSavedText()}
-          onBackPress={() => navigation.goBack()}
-          onMenuPress={() => setShowMenuModal(true)}
-          showBack={true}
+          onBack={() => navigation.goBack()}
+          right={
+            <IconCircle icon="more-horizontal" size={40} onPress={() => setShowMenuModal(true)} />
+          }
         />
+        <View style={styles.progressWrap}>
+          <ProgressTrack steps={PROGRESS_STEPS.length} current={0} trackColor={palette.line} />
+          <Text style={styles.savedText}>
+            {savedStatus === 'saving' ? 'Saving' : getLastSavedText() || 'Saved'}
+          </Text>
+        </View>
 
         {storageError && (
           <View style={styles.errorBanner}>
-            <Ionicons name="alert-circle" size={16} color={colors.error[500]} />
+            <Ionicons name="alert-circle" size={16} color={palette.danger} />
             <Text style={styles.errorBannerText}>
               {strings.profileSetup.status.notSaved}
             </Text>
@@ -510,11 +518,7 @@ export default function ProfileSetupScreen({
               <Text style={styles.fieldLabel}>
                 {strings.profileSetup.fields.ownerType}
               </Text>
-              <View style={styles.ownerTypePill}>
-                <Text style={styles.ownerTypePillText}>
-                  {ownerTypeLabels[formData.ownerType]}
-                </Text>
-              </View>
+              <StatusTag label={ownerTypeLabels[formData.ownerType]} tone="ink" style={styles.ownerTypePill} />
             </View>
 
             <FormTextInput
@@ -545,7 +549,7 @@ export default function ProfileSetupScreen({
                       <Ionicons
                         name="person"
                         size={32}
-                        color={colors.gray[400]}
+                        color={palette.textSubtle}
                       />
                     </View>
                   )}
@@ -559,7 +563,7 @@ export default function ProfileSetupScreen({
                   <Ionicons
                     name="camera-outline"
                     size={18}
-                    color={colors.primary[600]}
+                    color={palette.text}
                   />
                   <Text style={styles.uploadButtonText}>
                     {strings.profileSetup.buttons.uploadPhoto}
@@ -706,7 +710,7 @@ export default function ProfileSetupScreen({
                   <Ionicons
                     name="location-outline"
                     size={32}
-                    color={colors.gray[400]}
+                    color={palette.textSubtle}
                   />
                   {formData.locationLat && formData.locationLng ? (
                     <Text style={styles.locationText}>
@@ -723,7 +727,7 @@ export default function ProfileSetupScreen({
                   <Ionicons
                     name="navigate"
                     size={16}
-                    color={colors.primary[600]}
+                    color={palette.text}
                   />
                   <Text style={styles.setPinButtonText}>
                     {strings.profileSetup.fields.setPin}
@@ -840,7 +844,7 @@ export default function ProfileSetupScreen({
                     <Ionicons
                       name="checkmark"
                       size={14}
-                      color={colors.primary[600]}
+                      color={palette.text}
                     />
                   )}
                 </Pressable>
@@ -869,7 +873,7 @@ export default function ProfileSetupScreen({
                     <Ionicons
                       name="checkmark"
                       size={14}
-                      color={colors.primary[600]}
+                      color={palette.text}
                     />
                   )}
                 </Pressable>
@@ -901,7 +905,7 @@ export default function ProfileSetupScreen({
                     <Ionicons
                       name="checkmark"
                       size={14}
-                      color={colors.primary[600]}
+                      color={palette.text}
                     />
                   )}
                 </Pressable>
@@ -966,17 +970,14 @@ export default function ProfileSetupScreen({
         ) : null}
 
         {/* Sticky Bottom Save & Continue Button */}
-        <Pressable
-          style={[styles.saveExitButton, isSaving && styles.saveExitButtonDisabled]}
-          onPress={handleSaveExit}
-          disabled={isSaving}
-          accessibilityLabel="Save and continue"
-          accessibilityRole="button"
-        >
-          <Text style={styles.saveExitButtonText}>
-            {isSaving ? 'Saving...' : strings.profileSetup.buttons.saveExit}
-          </Text>
-        </Pressable>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+          <PillButton
+            label={isSaving ? 'Saving...' : strings.profileSetup.buttons.saveExit}
+            variant="ink"
+            onPress={handleSaveExit}
+            disabled={isSaving}
+          />
+        </View>
 
         {/* Photo Upload Modal */}
         {showPhotoModal ? (
@@ -985,7 +986,7 @@ export default function ProfileSetupScreen({
             style={styles.modalOverlay}
             onPress={() => setShowPhotoModal(false)}
           >
-            <View style={styles.bottomSheet}>
+            <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 20 }]}>
               <View style={styles.bottomSheetHandle} />
               <Text style={styles.bottomSheetTitle}>Profile Photo</Text>
 
@@ -994,7 +995,7 @@ export default function ProfileSetupScreen({
                 onPress={() => handlePickPhoto('camera')}
                 disabled={uploadingPhoto}
               >
-                <Ionicons name="camera" size={24} color={colors.gray[700]} />
+                <Ionicons name="camera-outline" size={20} color={palette.text} />
                 <Text style={styles.bottomSheetOptionText}>
                   {uploadingPhoto ? 'Uploading…' : strings.profileSetup.buttons.takePhoto}
                 </Text>
@@ -1005,7 +1006,7 @@ export default function ProfileSetupScreen({
                 onPress={() => handlePickPhoto('gallery')}
                 disabled={uploadingPhoto}
               >
-                <Ionicons name="images" size={24} color={colors.gray[700]} />
+                <Ionicons name="images-outline" size={20} color={palette.text} />
                 <Text style={styles.bottomSheetOptionText}>
                   {uploadingPhoto ? 'Uploading…' : strings.profileSetup.buttons.chooseLibrary}
                 </Text>
@@ -1019,11 +1020,11 @@ export default function ProfileSetupScreen({
                     setShowPhotoModal(false);
                   }}
                 >
-                  <Ionicons name="trash" size={24} color={colors.error[500]} />
+                  <Ionicons name="trash-outline" size={20} color={palette.danger} />
                   <Text
                     style={[
                       styles.bottomSheetOptionText,
-                      { color: colors.error[500] },
+                      styles.dangerText,
                     ]}
                   >
                     {strings.profileSetup.buttons.removePhoto}
@@ -1046,12 +1047,12 @@ export default function ProfileSetupScreen({
                   onPress={() => setShowLocationModal(false)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Ionicons name="close" size={24} color={colors.gray[700]} />
+                  <Ionicons name="close" size={24} color={palette.text} />
                 </Pressable>
               </View>
 
               <View style={styles.mapPlaceholder}>
-                <Ionicons name="map" size={64} color={colors.gray[300]} />
+                <Ionicons name="map" size={64} color={palette.textSubtle} />
                 <Text style={styles.mapPlaceholderText}>
                   Map would appear here
                 </Text>
@@ -1060,8 +1061,9 @@ export default function ProfileSetupScreen({
                 </Text>
               </View>
 
-              <PrimaryButton
-                title={strings.common.confirm}
+              <PillButton
+                label={strings.common.confirm}
+                variant="ink"
                 onPress={() => {
                   updateField('locationLat', 12.9716 + Math.random() * 0.01);
                   updateField('locationLng', 77.5946 + Math.random() * 0.01);
@@ -1098,8 +1100,8 @@ export default function ProfileSetupScreen({
                   );
                 }}
               >
-                <Ionicons name="refresh" size={20} color={colors.error[500]} />
-                <Text style={[styles.menuOptionText, { color: colors.error[500] }]}>
+                <Ionicons name="refresh" size={20} color={palette.danger} />
+                <Text style={[styles.menuOptionText, styles.dangerText]}>
                   Reset draft
                 </Text>
               </Pressable>
@@ -1117,271 +1119,151 @@ export default function ProfileSetupScreen({
 // ============================================================================
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.gray[50],
-  },
-  keyboardAvoid: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[4],
-  },
+  container: { flex: 1, backgroundColor: palette.bg },
+  keyboardAvoid: { flex: 1 },
+  progressWrap: { paddingHorizontal: 24, paddingBottom: 12 },
+  savedText: { ...fonts.semibold, fontSize: 12, color: palette.textMuted, marginTop: 8, textAlign: 'right' },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.error[50],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    gap: spacing[2],
+    backgroundColor: palette.dangerSoft,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: radii.lg,
+    gap: 8,
   },
-  errorBannerText: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.error[600],
-  },
+  errorBannerText: { ...fonts.medium, flex: 1, fontSize: 13, color: palette.danger },
   errorSummary: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.error[50],
-    marginHorizontal: spacing[4],
-    marginTop: spacing[3],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
+    backgroundColor: palette.dangerSoft,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: radii.lg,
+    gap: 8,
   },
-  errorSummaryText: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.error[600],
-    fontWeight: fontWeight.medium as any,
-  },
+  errorSummaryText: { ...fonts.medium, flex: 1, fontSize: 13, color: palette.danger },
   section: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    marginBottom: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.black,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 20,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-    color: colors.gray[800],
-    marginBottom: spacing[4],
+    ...fonts.semibold,
+    fontSize: 18,
+    letterSpacing: -0.3,
+    color: palette.text,
+    marginBottom: 14,
   },
-  fieldContainer: {
-    marginBottom: spacing[3],
-  },
-  fieldLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: colors.gray[700],
-    marginBottom: spacing[1],
-  },
-  ownerTypePill: {
-    backgroundColor: colors.primary[50],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.full,
-    alignSelf: 'flex-start',
-  },
-  ownerTypePillText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: colors.primary[700],
-  },
-  photoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[4],
-  },
+  fieldContainer: { marginBottom: 14 },
+  fieldLabel: { ...fonts.medium, fontSize: 12.5, color: palette.textMuted, marginBottom: 8, marginLeft: 4 },
+  ownerTypePill: { paddingHorizontal: 14, paddingVertical: 7 },
+  photoRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   avatarContainer: {
     width: 72,
     height: 72,
     borderRadius: 36,
     overflow: 'hidden',
+    borderWidth: 2.5,
+    borderColor: palette.ink,
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
+  avatarImage: { width: '100%', height: '100%' },
   avatarPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: colors.gray[100],
+    backgroundColor: palette.peachSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderWidth: 1,
-    borderColor: colors.primary[200],
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.primary[50],
+    gap: 8,
+    height: 42,
+    paddingHorizontal: 18,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
   },
-  uploadButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: colors.primary[600],
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing[3],
-  },
-  halfField: {
-    flex: 1,
-  },
+  uploadButtonText: { ...fonts.semibold, fontSize: 14, color: palette.text },
+  row: { flexDirection: 'row', gap: 10 },
+  halfField: { flex: 1 },
   locationCard: {
-    backgroundColor: colors.gray[50],
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.gray[200],
-    borderStyle: 'dashed',
-    padding: spacing[4],
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
+    padding: 16,
   },
-  locationPlaceholder: {
-    alignItems: 'center',
-    paddingVertical: spacing[4],
-  },
-  locationText: {
-    fontSize: fontSize.sm,
-    color: colors.gray[700],
-    marginTop: spacing[2],
-  },
-  locationPlaceholderText: {
-    fontSize: fontSize.sm,
-    color: colors.gray[400],
-    marginTop: spacing[2],
-  },
+  locationPlaceholder: { alignItems: 'center', paddingVertical: 14 },
+  locationText: { ...fonts.semibold, fontSize: 14, color: palette.text, marginTop: 8 },
+  locationPlaceholderText: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginTop: 8 },
   setPinButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[2],
-    borderTopWidth: 1,
-    borderTopColor: colors.gray[200],
-    marginTop: spacing[3],
+    alignSelf: 'center',
+    gap: 8,
+    height: 40,
+    paddingHorizontal: 18,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surface,
+    marginTop: 6,
   },
-  setPinButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: colors.primary[600],
-  },
-  chipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing[2],
-  },
+  setPinButtonText: { ...fonts.semibold, fontSize: 14, color: palette.text },
+  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.gray[300],
-    backgroundColor: colors.white,
+    gap: 6,
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
   },
-  chipSelected: {
-    borderColor: colors.primary[500],
-    backgroundColor: colors.primary[50],
-  },
-  chipText: {
-    fontSize: fontSize.sm,
-    color: colors.gray[600],
-  },
-  chipTextSelected: {
-    color: colors.primary[700],
-    fontWeight: fontWeight.medium as any,
-  },
+  chipSelected: { backgroundColor: palette.ink },
+  chipText: { ...fonts.semibold, fontSize: 13.5, color: palette.text },
+  chipTextSelected: { color: palette.textInverse },
   segmentedControl: {
     flexDirection: 'row',
-    backgroundColor: colors.gray[100],
-    borderRadius: borderRadius.lg,
-    padding: spacing[1],
+    backgroundColor: palette.fill,
+    borderRadius: radii.pill,
+    padding: 5,
   },
   segment: {
     flex: 1,
-    paddingVertical: spacing[2],
-    alignItems: 'center',
-    borderRadius: borderRadius.md,
-  },
-  segmentSelected: {
-    backgroundColor: colors.white,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.black,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
-  },
-  segmentText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    color: colors.gray[500],
-  },
-  segmentTextSelected: {
-    color: colors.gray[900],
-  },
-  bottomSpacer: {
-    height: 70,
-  },
-  serverErrorContainer: {
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    backgroundColor: '#FEF2F2',
-  },
-  serverErrorText: {
-    color: '#EF4444',
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-  },
-  saveExitButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveExitButton: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? spacing[6] : spacing[4],
-    left: spacing[4],
-    right: spacing[4],
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
+    borderRadius: radii.pill,
   },
-  saveExitButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-    color: colors.white,
+  segmentSelected: { backgroundColor: palette.surface, ...shadow.press },
+  segmentText: { ...fonts.semibold, fontSize: 14, color: palette.textMuted },
+  segmentTextSelected: { color: palette.text },
+  bottomSpacer: { height: 90 },
+  serverErrorContainer: {
+    marginHorizontal: 16,
+    marginBottom: 90,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radii.lg,
+    backgroundColor: palette.dangerSoft,
   },
+  serverErrorText: { ...fonts.medium, color: palette.danger, fontSize: 13, textAlign: 'center' },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    backgroundColor: palette.bg,
+  },
+  dangerText: { color: palette.danger },
   modalOverlay: {
     // Absolutely positioned rather than flex:1 — no longer inside a
     // <Modal>, which does not present on this build.
@@ -1392,96 +1274,77 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   bottomSheet: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: borderRadius['2xl'],
-    borderTopRightRadius: borderRadius['2xl'],
-    paddingHorizontal: spacing[5],
-    paddingBottom: Platform.OS === 'ios' ? spacing[8] : spacing[5],
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 24,
   },
   bottomSheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: colors.gray[300],
-    borderRadius: 2,
+    width: 44,
+    height: 5,
+    backgroundColor: palette.line,
+    borderRadius: 3,
     alignSelf: 'center',
-    marginTop: spacing[3],
-    marginBottom: spacing[4],
+    marginTop: 12,
+    marginBottom: 18,
   },
   bottomSheetTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    color: colors.gray[900],
-    marginBottom: spacing[4],
-    textAlign: 'center',
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
+    marginBottom: 8,
   },
   bottomSheetOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[4],
-    paddingVertical: spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[100],
+    gap: 14,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
   },
-  bottomSheetOptionText: {
-    fontSize: fontSize.base,
-    color: colors.gray[700],
-  },
+  bottomSheetOptionText: { ...fonts.semibold, fontSize: 15.5, color: palette.text },
   locationModalContent: {
-    backgroundColor: colors.white,
-    margin: spacing[4],
-    borderRadius: borderRadius.xl,
-    padding: spacing[5],
+    backgroundColor: palette.surface,
+    margin: 16,
+    borderRadius: radii.xl,
+    padding: 20,
     maxHeight: '80%',
   },
   locationModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing[4],
+    marginBottom: 16,
   },
-  locationModalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    color: colors.gray[900],
-  },
+  locationModalTitle: { ...fonts.semibold, fontSize: 20, letterSpacing: -0.3, color: palette.text },
   mapPlaceholder: {
     height: 250,
-    backgroundColor: colors.gray[100],
-    borderRadius: borderRadius.lg,
+    backgroundColor: palette.fill,
+    borderRadius: radii.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing[4],
+    marginBottom: 16,
   },
-  mapPlaceholderText: {
-    fontSize: fontSize.base,
-    color: colors.gray[500],
-    marginTop: spacing[3],
-  },
-  mapPlaceholderSubtext: {
-    fontSize: fontSize.sm,
-    color: colors.gray[400],
-    marginTop: spacing[1],
-  },
+  mapPlaceholderText: { ...fonts.semibold, fontSize: 15, color: palette.textMuted, marginTop: 12 },
+  mapPlaceholderSubtext: { ...fonts.medium, fontSize: 13, color: palette.textSubtle, marginTop: 4 },
   menuModalContent: {
-    backgroundColor: colors.white,
-    margin: spacing[4],
-    marginBottom: Platform.OS === 'ios' ? spacing[10] : spacing[4],
-    borderRadius: borderRadius.xl,
-    padding: spacing[2],
+    backgroundColor: palette.surface,
+    margin: 16,
+    marginBottom: Platform.OS === 'ios' ? 40 : 16,
+    borderRadius: radii.xl,
+    padding: 8,
   },
   menuOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[4],
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
-  menuOptionText: {
-    fontSize: fontSize.base,
-    color: colors.gray[700],
-  },
+  menuOptionText: { ...fonts.semibold, fontSize: 15.5, color: palette.text },
 });

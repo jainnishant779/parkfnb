@@ -13,7 +13,6 @@ import {
   FlatList,
   TextInput,
   Pressable,
-  Modal,
   Animated,
   Platform,
   KeyboardAvoidingView,
@@ -22,11 +21,14 @@ import {
   UIManager,
   Dimensions,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { palette, radii, fonts } from '../../theme/kit';
+import { IconCircle, SearchPill, PillButton, EmptyState as KitEmptyState } from '../../components/ui';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -52,26 +54,26 @@ const MIN_REPLY_LENGTH = 10;
 // ============================================================================
 
 const colors = {
-  background: '#F8FAFC',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#F1F5F9',
-  text: '#1E293B',
-  textSecondary: '#64748B',
-  textMuted: '#94A3B8',
-  border: '#E2E8F0',
-  borderLight: '#F1F5F9',
-  primary: '#0D7377',
-  primaryLight: '#E8F5F4',
-  success: '#10B981',
-  successLight: '#ECFDF5',
-  warning: '#F59E0B',
-  warningLight: '#FFFBEB',
-  danger: '#EF4444',
-  dangerLight: '#FEF2F2',
-  star: '#FBBF24',
-  starEmpty: '#E2E8F0',
-  purple: '#8B5CF6',
-  purpleLight: '#F5F3FF',
+  background: palette.bg,
+  surface: palette.surface,
+  surfaceSecondary: palette.fill,
+  text: palette.text,
+  textSecondary: palette.textMuted,
+  textMuted: palette.textMuted,
+  border: palette.line,
+  borderLight: palette.line,
+  primary: palette.ink,
+  primaryLight: palette.peachSoft,
+  success: palette.success,
+  successLight: palette.successSoft,
+  warning: palette.warning,
+  warningLight: palette.warningSoft,
+  danger: palette.danger,
+  dangerLight: palette.dangerSoft,
+  star: palette.warning,
+  starEmpty: palette.line,
+  purple: palette.blue,
+  purpleLight: palette.blueSoft,
 };
 
 const spacing = {
@@ -440,7 +442,7 @@ const starStyles = StyleSheet.create({
   },
   number: {
     marginLeft: spacing.sm,
-    fontWeight: '600',
+    ...fonts.semibold,
     color: colors.text,
   },
 });
@@ -458,7 +460,10 @@ interface RatingDistributionBarProps {
 const RatingDistributionBar = memo(({ rating, percentage, count }: RatingDistributionBarProps) => {
   return (
     <View style={distStyles.row}>
-      <Text style={distStyles.label}>{rating}★</Text>
+      <View style={distStyles.labelWrap}>
+        <Text style={distStyles.label}>{rating}</Text>
+        <Ionicons name="star" size={10} color={colors.star} />
+      </View>
       <View style={distStyles.barContainer}>
         <View style={[distStyles.barFill, { width: `${percentage}%` }]} />
       </View>
@@ -473,26 +478,32 @@ const distStyles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 3,
   },
-  label: {
+  labelWrap: {
     width: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  label: {
+    marginRight: 2,
     fontSize: 12,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.textSecondary,
   },
   barContainer: {
     flex: 1,
     height: 8,
-    backgroundColor: colors.borderLight,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: 4,
     marginHorizontal: spacing.sm,
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
-    backgroundColor: colors.star,
+    backgroundColor: palette.ink,
     borderRadius: 4,
   },
   count: {
+    ...fonts.medium,
     width: 24,
     fontSize: 12,
     color: colors.textMuted,
@@ -539,42 +550,39 @@ const chipStyles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 20,
+    height: 42,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     marginRight: spacing.sm,
-    gap: spacing.xs,
+    gap: 6,
   },
   chipSelected: {
-    backgroundColor: colors.primaryLight,
-    borderColor: colors.primary,
+    backgroundColor: palette.ink,
   },
   chipText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
+    fontSize: 14,
+    ...fonts.semibold,
+    color: colors.text,
   },
   chipTextSelected: {
-    color: colors.primary,
+    color: palette.textInverse,
   },
   badge: {
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.borderLight,
+    backgroundColor: colors.surfaceSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 6,
   },
   badgeSelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: palette.inkSoft,
   },
   badgeText: {
     fontSize: 11,
-    fontWeight: '600',
+    ...fonts.semibold,
     color: colors.textSecondary,
   },
   badgeTextSelected: {
@@ -599,13 +607,11 @@ const ReviewCard = memo(({ review, onPress, onLongPress, onQuickAction }: Review
   const hasComment = !!review.comment;
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [
-        cardStyles.container,
-        pressed && cardStyles.pressed,
-      ]}
+      activeOpacity={0.9}
+      style={cardStyles.container}
       accessibilityRole="button"
       accessibilityLabel={`Review by ${maskName(review.reviewerName)}, ${review.rating} stars`}
     >
@@ -693,31 +699,16 @@ const ReviewCard = memo(({ review, onPress, onLongPress, onQuickAction }: Review
           <Ionicons name="ellipsis-horizontal" size={16} color={colors.textSecondary} />
         </Pressable>
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 });
 
 const cardStyles = StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.lg,
+    borderRadius: radii.xl,
+    padding: 18,
     marginBottom: spacing.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  pressed: {
-    opacity: 0.95,
-    transform: [{ scale: 0.99 }],
   },
   header: {
     flexDirection: 'row',
@@ -731,29 +722,32 @@ const cardStyles = StyleSheet.create({
     gap: spacing.md,
   },
   date: {
+    ...fonts.medium,
     fontSize: 12,
     color: colors.textMuted,
   },
   flagBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: colors.dangerLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   reviewer: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    ...fonts.semibold,
     color: colors.text,
     marginBottom: 2,
   },
   listing: {
+    ...fonts.medium,
     fontSize: 13,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
   comment: {
+    ...fonts.medium,
     fontSize: 14,
     color: colors.text,
     lineHeight: 20,
@@ -766,17 +760,18 @@ const cardStyles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   tag: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.surfaceSecondary,
-    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    backgroundColor: palette.peachSoft,
+    borderRadius: radii.pill,
   },
   tagText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: colors.textSecondary,
+    fontSize: 11.5,
+    ...fonts.semibold,
+    color: colors.text,
   },
   moreTagsText: {
+    ...fonts.medium,
     fontSize: 11,
     color: colors.textMuted,
     alignSelf: 'center',
@@ -790,9 +785,9 @@ const cardStyles = StyleSheet.create({
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: radii.pill,
     gap: 4,
   },
   statusReplied: {
@@ -806,7 +801,7 @@ const cardStyles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.textMuted,
   },
   statusTextReplied: {
@@ -814,26 +809,25 @@ const cardStyles = StyleSheet.create({
   },
   statusTextAddressed: {
     fontSize: 11,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.purple,
   },
   actionsRow: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    paddingTop: spacing.md,
-    gap: spacing.lg,
+    gap: spacing.sm,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    minHeight: 44,
-    paddingHorizontal: spacing.sm,
+    gap: 6,
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surfaceSecondary,
   },
   actionText: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 13.5,
+    ...fonts.semibold,
     color: colors.primary,
   },
 });
@@ -851,62 +845,14 @@ interface EmptyStateProps {
 }
 
 const EmptyState = memo(({ icon, title, subtitle, actionLabel, onAction }: EmptyStateProps) => (
-  <View style={emptyStyles.container}>
-    <View style={emptyStyles.iconContainer}>
-      <Ionicons name={icon as any} size={48} color={colors.textMuted} />
-    </View>
-    <Text style={emptyStyles.title}>{title}</Text>
-    <Text style={emptyStyles.subtitle}>{subtitle}</Text>
-    {actionLabel && onAction && (
-      <Pressable onPress={onAction} style={emptyStyles.actionButton}>
-        <Text style={emptyStyles.actionText}>{actionLabel}</Text>
-      </Pressable>
-    )}
-  </View>
+  <KitEmptyState
+    tone={icon === 'search-outline' ? 'grey' : 'peach'}
+    title={title}
+    subtitle={subtitle}
+    action={actionLabel && onAction ? actionLabel : undefined}
+    onAction={onAction}
+  />
 ));
-
-const emptyStyles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xxl * 2,
-    paddingHorizontal: spacing.xl,
-  },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.surfaceSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  actionButton: {
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.primaryLight,
-    borderRadius: 20,
-  },
-  actionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-});
 
 // ============================================================================
 // TOAST COMPONENT
@@ -943,9 +889,7 @@ const Toast = memo(({ toast, onDismiss }: ToastProps) => {
 
   if (!toast.visible) return null;
 
-  const bgColor = toast.type === 'success' ? colors.success
-    : toast.type === 'error' ? colors.danger
-    : colors.primary;
+  const bgColor = toast.type === 'error' ? colors.danger : palette.ink;
 
   return (
     <Animated.View
@@ -973,24 +917,14 @@ const toastStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.lg,
-    borderRadius: 12,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: radii.pill,
   },
   message: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.surface,
   },
   actionButton: {
@@ -1000,8 +934,8 @@ const toastStyles = StyleSheet.create({
   },
   actionText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.surface,
+    ...fonts.bold,
+    color: palette.peach,
   },
 });
 
@@ -1067,9 +1001,7 @@ const BottomSheetModal = memo(({ visible, onClose, title, children }: BottomShee
           {title && (
             <View style={sheetStyles.header}>
               <Text style={sheetStyles.title}>{title}</Text>
-              <Pressable onPress={onClose} style={sheetStyles.closeButton}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </Pressable>
+              <IconCircle icon="x" size={40} variant="grey" onPress={onClose} />
             </View>
           )}
           {children}
@@ -1094,20 +1026,20 @@ const sheetStyles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
     maxHeight: '90%',
     paddingBottom: spacing.xl,
   },
   handle: {
-    width: 40,
-    height: 4,
+    width: 44,
+    height: 5,
     backgroundColor: colors.border,
-    borderRadius: 2,
+    borderRadius: 3,
     alignSelf: 'center',
     marginTop: spacing.md,
     marginBottom: spacing.md,
@@ -1116,21 +1048,13 @@ const sheetStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    paddingHorizontal: 20,
+    paddingBottom: spacing.sm,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 22,
+    ...fonts.semibold,
     color: colors.text,
-  },
-  closeButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });
 
@@ -1214,25 +1138,21 @@ const listingSelectorStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    height: 52,
+    paddingHorizontal: 18,
+    borderRadius: radii.pill,
     gap: spacing.sm,
   },
   label: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    ...fonts.semibold,
     color: colors.text,
   },
   dropdown: {
     marginTop: spacing.sm,
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radii.lg,
     overflow: 'hidden',
   },
   option: {
@@ -1241,19 +1161,20 @@ const listingSelectorStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderLight,
   },
   optionSelected: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: palette.peachWash,
   },
   optionText: {
+    ...fonts.medium,
     flex: 1,
     fontSize: 14,
     color: colors.text,
   },
   optionTextSelected: {
-    fontWeight: '600',
+    ...fonts.semibold,
     color: colors.primary,
   },
 });
@@ -1555,12 +1476,13 @@ const detailStyles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   date: {
+    ...fonts.medium,
     fontSize: 12,
     color: colors.textMuted,
   },
   reviewer: {
     fontSize: 16,
-    fontWeight: '600',
+    ...fonts.semibold,
     color: colors.text,
     marginBottom: spacing.sm,
   },
@@ -1571,25 +1493,26 @@ const detailStyles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   tag: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.surfaceSecondary,
-    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    backgroundColor: palette.peachSoft,
+    borderRadius: radii.pill,
   },
   tagText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: colors.textSecondary,
+    ...fonts.semibold,
+    color: colors.text,
   },
   comment: {
+    ...fonts.medium,
     fontSize: 15,
     color: colors.text,
     lineHeight: 22,
     marginBottom: spacing.lg,
   },
   bookingCard: {
-    backgroundColor: colors.surfaceSecondary,
-    borderRadius: 12,
+    backgroundColor: palette.surfaceDim,
+    borderRadius: radii.lg,
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
@@ -1600,6 +1523,7 @@ const detailStyles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   bookingText: {
+    ...fonts.medium,
     fontSize: 13,
     color: colors.textSecondary,
   },
@@ -1615,8 +1539,8 @@ const detailStyles = StyleSheet.create({
     gap: spacing.sm,
   },
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 17,
+    ...fonts.semibold,
     color: colors.text,
   },
   privateBadge: {
@@ -1626,11 +1550,11 @@ const detailStyles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     backgroundColor: colors.surfaceSecondary,
-    borderRadius: 8,
+    borderRadius: radii.pill,
   },
   privateBadgeText: {
     fontSize: 10,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.textMuted,
   },
   editButton: {
@@ -1642,7 +1566,7 @@ const detailStyles = StyleSheet.create({
   },
   editButtonText: {
     fontSize: 13,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.primary,
   },
   replySection: {
@@ -1653,17 +1577,19 @@ const detailStyles = StyleSheet.create({
   },
   composer: {
     backgroundColor: colors.surfaceSecondary,
-    borderRadius: 12,
+    borderRadius: radii.lg,
     padding: spacing.md,
   },
   hint: {
+    ...fonts.medium,
     fontSize: 12,
     color: colors.textMuted,
     marginBottom: spacing.sm,
   },
   textInput: {
+    ...fonts.medium,
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: radii.md,
     padding: spacing.md,
     fontSize: 14,
     color: colors.text,
@@ -1677,6 +1603,7 @@ const detailStyles = StyleSheet.create({
     marginTop: spacing.md,
   },
   charCount: {
+    ...fonts.medium,
     fontSize: 12,
     color: colors.textMuted,
   },
@@ -1685,49 +1612,55 @@ const detailStyles = StyleSheet.create({
     gap: spacing.sm,
   },
   cancelButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    height: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
   },
   cancelButtonText: {
     fontSize: 14,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.textSecondary,
   },
   saveButton: {
     backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: 8,
+    height: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    borderRadius: radii.pill,
   },
   saveButtonDisabled: {
     backgroundColor: colors.border,
   },
   saveButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    ...fonts.semibold,
     color: colors.surface,
   },
   saveButtonTextDisabled: {
     color: colors.textMuted,
   },
   validationHint: {
+    ...fonts.medium,
     fontSize: 12,
     color: colors.warning,
     marginTop: spacing.sm,
   },
   replyBubble: {
-    backgroundColor: colors.primaryLight,
-    borderRadius: 12,
-    padding: spacing.md,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
+    backgroundColor: palette.peachSoft,
+    borderRadius: radii.lg,
+    borderTopLeftRadius: 6,
+    padding: 16,
   },
   replyText: {
+    ...fonts.medium,
     fontSize: 14,
     color: colors.text,
     lineHeight: 20,
   },
   replyDate: {
+    ...fonts.medium,
     fontSize: 11,
     color: colors.textMuted,
     marginTop: spacing.sm,
@@ -1740,23 +1673,22 @@ const detailStyles = StyleSheet.create({
   },
   addReplyText: {
     fontSize: 14,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.primary,
   },
   noteCard: {
-    backgroundColor: colors.warningLight,
-    borderRadius: 12,
-    padding: spacing.md,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.warning,
+    backgroundColor: palette.blueWash,
+    borderRadius: radii.lg,
+    padding: 16,
   },
   noteText: {
+    ...fonts.medium,
     fontSize: 14,
     color: colors.text,
     lineHeight: 20,
   },
   actionsSection: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderLight,
     paddingTop: spacing.lg,
   },
@@ -1765,9 +1697,10 @@ const detailStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    borderRadius: radii.lg,
     marginBottom: spacing.sm,
+    backgroundColor: palette.surfaceDim,
   },
   actionRowActive: {
     backgroundColor: colors.purpleLight,
@@ -1779,11 +1712,12 @@ const detailStyles = StyleSheet.create({
     flex: 1,
   },
   actionTitle: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    ...fonts.semibold,
     color: colors.text,
   },
   actionSubtitle: {
+    ...fonts.medium,
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 2,
@@ -1888,18 +1822,18 @@ const actionSheetStyles = StyleSheet.create({
   optionIcon: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 22,
     backgroundColor: colors.surfaceSecondary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   optionText: {
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 15.5,
+    ...fonts.semibold,
     color: colors.text,
   },
   optionDanger: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderLight,
     marginTop: spacing.sm,
     paddingTop: spacing.lg,
@@ -1936,9 +1870,9 @@ const TipsPanel = memo(({ dismissed, onDismiss }: TipsPanelProps) => {
 
 const tipsStyles = StyleSheet.create({
   container: {
-    backgroundColor: colors.warningLight,
-    borderRadius: 12,
-    padding: spacing.md,
+    backgroundColor: palette.peachSoft,
+    borderRadius: radii.xl,
+    padding: 18,
     marginBottom: spacing.lg,
   },
   header: {
@@ -1950,7 +1884,7 @@ const tipsStyles = StyleSheet.create({
   title: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '600',
+    ...fonts.semibold,
     color: colors.text,
   },
   dismissButton: {
@@ -1960,6 +1894,7 @@ const tipsStyles = StyleSheet.create({
     alignItems: 'center',
   },
   tip: {
+    ...fonts.medium,
     fontSize: 13,
     color: colors.textSecondary,
     lineHeight: 20,
@@ -2021,9 +1956,9 @@ const FilterModal = memo(({
           <View style={filterModalStyles.optionsRow}>
             {[
               { key: 'all', label: 'All' },
-              { key: '5', label: '5★' },
-              { key: '4', label: '4★' },
-              { key: '1-3', label: '1-3★' },
+              { key: '5', label: '5 stars' },
+              { key: '4', label: '4 stars' },
+              { key: '1-3', label: '1-3 stars' },
             ].map((option) => (
               <Pressable
                 key={option.key}
@@ -2101,8 +2036,8 @@ const filterModalStyles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    ...fonts.semibold,
     color: colors.text,
     marginBottom: spacing.md,
   },
@@ -2116,41 +2051,44 @@ const filterModalStyles = StyleSheet.create({
     gap: spacing.sm,
   },
   option: {
+    height: 44,
+    justifyContent: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 8,
+    borderRadius: radii.pill,
     backgroundColor: colors.surfaceSecondary,
     minWidth: '45%',
   },
   optionSelected: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: palette.ink,
   },
   optionText: {
+    ...fonts.semibold,
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.text,
     textAlign: 'center',
   },
   optionTextSelected: {
-    color: colors.primary,
-    fontWeight: '600',
+    color: palette.textInverse,
+    ...fonts.semibold,
   },
   chipOption: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: 20,
+    height: 42,
+    justifyContent: 'center',
+    borderRadius: radii.pill,
     backgroundColor: colors.surfaceSecondary,
     alignItems: 'center',
   },
   chipOptionSelected: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: palette.ink,
   },
   chipOptionText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
+    fontSize: 14,
+    ...fonts.semibold,
+    color: colors.text,
   },
   chipOptionTextSelected: {
-    color: colors.primary,
+    color: palette.textInverse,
   },
   checkRow: {
     flexDirection: 'row',
@@ -2159,6 +2097,7 @@ const filterModalStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   checkLabel: {
+    ...fonts.medium,
     fontSize: 14,
     color: colors.text,
   },
@@ -2167,13 +2106,13 @@ const filterModalStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    height: 52,
+    borderRadius: radii.pill,
+    backgroundColor: colors.dangerLight,
   },
   resetText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    ...fonts.semibold,
     color: colors.danger,
   },
 });
@@ -2447,7 +2386,7 @@ export default function ReviewsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={palette.ink} />
         </View>
       </SafeAreaView>
     );
@@ -2463,58 +2402,38 @@ export default function ReviewsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-            accessibilityLabel="Go back"
-          >
-            <View style={styles.backButtonBg}>
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
-            </View>
-          </Pressable>
-          <View>
-            <Text style={styles.headerTitle}>Reviews</Text>
-            <Text style={styles.headerSubtitle}>See what renters are saying</Text>
-          </View>
+        <IconCircle icon="arrow-left" size={46} onPress={() => navigation.goBack()} />
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle}>Reviews</Text>
+          <Text style={styles.headerSubtitle}>See what renters are saying</Text>
         </View>
-        <View style={styles.headerRight}>
-          <Pressable
-            onPress={() => setShowSearch(!showSearch)}
-            style={styles.headerButton}
-            accessibilityLabel="Search reviews"
-          >
-            <Ionicons name="search-outline" size={22} color={colors.text} />
-          </Pressable>
-          <Pressable
-            onPress={() => setShowFilterModal(true)}
-            style={[styles.headerButton, hasActiveFilters && styles.headerButtonActive]}
-            accessibilityLabel="Filter reviews"
-          >
-            <Ionicons name="options-outline" size={22} color={hasActiveFilters ? colors.primary : colors.text} />
-          </Pressable>
-        </View>
+        <IconCircle icon="search" size={46} onPress={() => setShowSearch(!showSearch)} />
+        <IconCircle
+          icon="sliders"
+          size={46}
+          badge={hasActiveFilters}
+          onPress={() => setShowFilterModal(true)}
+          style={styles.headerGap}
+        />
       </View>
 
       {showSearch && (
         <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={colors.textMuted} />
-            <TextInput
-              value={prefs.searchQuery}
-              onChangeText={(text) => updatePrefs({ searchQuery: text })}
-              placeholder="Search reviews..."
-              placeholderTextColor={colors.textMuted}
-              style={styles.searchInput}
-              autoFocus
-              returnKeyType="search"
-            />
-            {prefs.searchQuery.length > 0 && (
-              <Pressable onPress={() => updatePrefs({ searchQuery: '' })}>
-                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-              </Pressable>
-            )}
-          </View>
+          <SearchPill
+            value={prefs.searchQuery}
+            onChangeText={(text: string) => updatePrefs({ searchQuery: text })}
+            placeholder="Search reviews"
+            style={styles.searchBar}
+            autoFocus
+            returnKeyType="search"
+            right={
+              prefs.searchQuery.length > 0 ? (
+                <Pressable onPress={() => updatePrefs({ searchQuery: '' })} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </Pressable>
+              ) : null
+            }
+          />
         </View>
       )}
 
@@ -2540,10 +2459,11 @@ export default function ReviewsScreen() {
         ListHeaderComponent={
           <>
             <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Average rating</Text>
               <View style={styles.summaryTop}>
                 <View style={styles.summaryRating}>
                   <Text style={styles.bigRating}>{summary.average.toFixed(1)}</Text>
-                  <StarRatingRow rating={Math.round(summary.average)} size={18} />
+                  <StarRatingRow rating={Math.round(summary.average)} size={16} />
                   <Text style={styles.totalReviews}>{summary.total} reviews</Text>
                 </View>
                 <View style={styles.summaryBars}>
@@ -2585,19 +2505,19 @@ export default function ReviewsScreen() {
                 count={filterCounts.all}
               />
               <FilterChip
-                label="5★"
+                label="5 stars"
                 isSelected={prefs.ratingFilter === '5'}
                 onPress={() => updatePrefs({ ratingFilter: prefs.ratingFilter === '5' ? 'all' : '5' })}
                 count={filterCounts.five}
               />
               <FilterChip
-                label="4★"
+                label="4 stars"
                 isSelected={prefs.ratingFilter === '4'}
                 onPress={() => updatePrefs({ ratingFilter: prefs.ratingFilter === '4' ? 'all' : '4' })}
                 count={filterCounts.four}
               />
               <FilterChip
-                label="1-3★"
+                label="1-3 stars"
                 isSelected={prefs.ratingFilter === '1-3'}
                 onPress={() => updatePrefs({ ratingFilter: prefs.ratingFilter === '1-3' ? 'all' : '1-3' })}
                 count={filterCounts.low}
@@ -2622,9 +2542,7 @@ export default function ReviewsScreen() {
                 {hasActiveFilters ? ' (filtered)' : ''}
               </Text>
               {hasActiveFilters && (
-                <Pressable onPress={handleResetFilters}>
-                  <Text style={styles.clearFiltersText}>Clear filters</Text>
-                </Pressable>
+                <PillButton size="sm" variant="white" label="Clear filters" onPress={handleResetFilters} />
               )}
             </View>
           </>
@@ -2740,129 +2658,87 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    marginBottom: 14,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backButtonBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerText: {
+    flex: 1,
+    marginLeft: 12,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    ...fonts.semibold,
+    fontSize: 26,
+    letterSpacing: -0.6,
     color: colors.text,
   },
   headerSubtitle: {
+    ...fonts.medium,
     fontSize: 13,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: 1,
   },
-  headerRight: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  headerButtonActive: {
-    backgroundColor: colors.primaryLight,
-    borderColor: colors.primary,
+  headerGap: {
+    marginLeft: 8,
   },
   searchContainer: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 16,
     paddingBottom: spacing.md,
   },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text,
-    paddingVertical: spacing.xs,
   },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.warningLight,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    marginHorizontal: 16,
+    marginBottom: spacing.sm,
+    borderRadius: radii.pill,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     gap: spacing.sm,
   },
   errorBannerText: {
+    ...fonts.medium,
     flex: 1,
     fontSize: 13,
     color: colors.text,
   },
   listContent: {
-    padding: spacing.lg,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
   summaryCard: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    borderRadius: radii.xl,
+    padding: 20,
+    marginBottom: spacing.md,
+  },
+  summaryLabel: {
+    ...fonts.medium,
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 4,
   },
   summaryTop: {
     flexDirection: 'row',
-    gap: spacing.lg,
+    gap: 20,
   },
   summaryRating: {
-    alignItems: 'center',
-    paddingRight: spacing.lg,
-    borderRightWidth: 1,
-    borderRightColor: colors.borderLight,
+    alignItems: 'flex-start',
   },
   bigRating: {
-    fontSize: 48,
-    fontWeight: '700',
+    fontSize: 44,
+    ...fonts.semibold,
+    letterSpacing: -1.2,
     color: colors.text,
-    lineHeight: 52,
+    lineHeight: 50,
+    marginBottom: 4,
   },
   totalReviews: {
+    ...fonts.medium,
     fontSize: 12,
     color: colors.textMuted,
     marginTop: spacing.xs,
@@ -2882,7 +2758,7 @@ const styles = StyleSheet.create({
   },
   trendText: {
     fontSize: 13,
-    fontWeight: '500',
+    ...fonts.medium,
   },
   insightsRow: {
     flexDirection: 'row',
@@ -2900,7 +2776,7 @@ const styles = StyleSheet.create({
   },
   insightText: {
     fontSize: 12,
-    fontWeight: '500',
+    ...fonts.medium,
   },
   filtersScroll: {
     marginBottom: spacing.md,
@@ -2917,12 +2793,12 @@ const styles = StyleSheet.create({
   },
   resultsText: {
     fontSize: 14,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.textSecondary,
   },
   clearFiltersText: {
     fontSize: 14,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.primary,
   },
 });

@@ -1,10 +1,28 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { palette, fonts } from '../../theme/kit';
+import { IsoBlock } from '../../components/ui';
 
 export default function DisputeDetailsScreen() {
   return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <Text className="text-xl font-bold">Dispute Details</Text>
+    <View style={styles.container}>
+      <IsoBlock size={110} tone="blue" />
+      <Text style={styles.title}>Dispute Details</Text>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.bg,
+  },
+  title: {
+    ...fonts.semibold,
+    fontSize: 20,
+    color: palette.text,
+    marginTop: 14,
+  },
+});

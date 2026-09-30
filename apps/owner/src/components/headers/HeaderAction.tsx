@@ -8,6 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getTheme } from '../../theme/colors';
+import { palette } from '../../theme/kit';
 import Badge from '../common/Badge';
 
 // Types
@@ -85,18 +86,17 @@ function HeaderAction({
   // Animation values
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
-  const backgroundOpacity = useSharedValue(0);
 
   // Get size dimensions
   const dimensions = useMemo(() => {
     switch (size) {
       case 'small':
-        return { container: 36, icon: 20, hitSlop: 8 };
+        return { container: 38, icon: 18, hitSlop: 8 };
       case 'large':
-        return { container: 48, icon: 28, hitSlop: 4 };
+        return { container: 50, icon: 24, hitSlop: 4 };
       case 'medium':
       default:
-        return { container: 44, icon: 24, hitSlop: 6 };
+        return { container: 46, icon: 21, hitSlop: 6 };
     }
   }, [size]);
 
@@ -104,36 +104,34 @@ function HeaderAction({
   const colors = useMemo(() => {
     switch (variant) {
       case 'primary':
-        return { icon: theme.primary, background: theme.primaryLight };
+        return { icon: palette.textInverse, background: palette.ink };
       case 'danger':
         return { icon: theme.danger, background: theme.dangerLight };
       case 'default':
       default:
-        return { icon: theme.text, background: theme.primaryLight };
+        return { icon: theme.text, background: palette.surface };
     }
   }, [variant, theme]);
+
+  // Back/close arrows sit bare like the kit's ScreenHeader; every other
+  // action is a solid circle (IconCircle look).
+  const circled = showBackground || (icon !== 'back' && icon !== 'close');
 
   // Handle press in/out
   const handlePressIn = useCallback(() => {
     scale.value = withSpring(0.9, SPRING_CONFIG);
     opacity.value = withTiming(0.7, { duration: 100 });
-    backgroundOpacity.value = withTiming(1, { duration: 100 });
-  }, [scale, opacity, backgroundOpacity]);
+  }, [scale, opacity]);
 
   const handlePressOut = useCallback(() => {
     scale.value = withSpring(1, SPRING_CONFIG);
     opacity.value = withTiming(1, { duration: 150 });
-    backgroundOpacity.value = withTiming(showBackground ? 1 : 0, { duration: 150 });
-  }, [scale, opacity, backgroundOpacity, showBackground]);
+  }, [scale, opacity]);
 
   // Animated styles
   const animatedContainerStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
     opacity: disabled ? 0.4 : opacity.value,
-  }));
-
-  const animatedBackgroundStyle = useAnimatedStyle(() => ({
-    opacity: showBackground ? 1 : backgroundOpacity.value,
   }));
 
   const iconName = ICON_MAP[icon] || 'help-circle-outline';
@@ -165,17 +163,19 @@ function HeaderAction({
           animatedContainerStyle,
         ]}
       >
-        {/* Background layer */}
-        <Animated.View
-          style={[
-            styles.background,
-            {
-              backgroundColor: colors.background,
-              borderRadius: dimensions.container / 2,
-            },
-            animatedBackgroundStyle,
-          ]}
-        />
+        {/* Background circle */}
+        {circled ? (
+          <View
+            style={[
+              styles.background,
+              {
+                backgroundColor: colors.background,
+                borderRadius: dimensions.container / 2,
+              },
+              variant === 'default' && styles.backgroundBorder,
+            ]}
+          />
+        ) : null}
 
         {/* Icon */}
         <Ionicons
@@ -209,10 +209,14 @@ const styles = StyleSheet.create({
   background: {
     ...StyleSheet.absoluteFillObject,
   },
+  backgroundBorder: {
+    borderWidth: 1,
+    borderColor: palette.line,
+  },
   badgeContainer: {
     position: 'absolute',
-    top: 0,
-    right: 0,
+    top: 2,
+    right: 2,
   },
 });
 

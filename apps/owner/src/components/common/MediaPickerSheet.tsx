@@ -1,8 +1,9 @@
 import React from 'react';
-import { Modal, Pressable, View, Text, StyleSheet } from 'react-native';
+import { Pressable, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import type { PickSource } from '../../utils/mediaUpload';
+import { palette, radii, fonts } from '../../theme/kit';
 
 interface Props {
   visible: boolean;
@@ -24,70 +25,117 @@ export default function MediaPickerSheet({
   const insets = useSafeAreaInsets();
 
   return visible ? (
+    <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable
+        style={[styles.sheet, { paddingBottom: Math.max(28, insets.bottom + 16) }]}
+        onPress={(e) => e.stopPropagation()}
+      >
+        <View style={styles.handle} />
+        <Text style={styles.title}>{title}</Text>
 
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
-          style={[styles.sheet, { paddingBottom: Math.max(28, insets.bottom + 16) }]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={styles.handle} />
-          <Text style={styles.title}>{title}</Text>
-
-          <Pressable style={styles.option} onPress={() => onPick('camera')}>
-            <Ionicons name="camera-outline" size={22} color="#111827" />
+        <View style={styles.group}>
+          <TouchableOpacity
+            style={styles.option}
+            activeOpacity={0.7}
+            onPress={() => onPick('camera')}
+          >
+            <View style={styles.optionIcon}>
+              <Ionicons name="camera-outline" size={20} color={palette.text} />
+            </View>
             <Text style={styles.optionText}>Take Photo</Text>
-          </Pressable>
+            <Ionicons name="chevron-forward" size={18} color={palette.textSubtle} />
+          </TouchableOpacity>
 
-          <Pressable style={styles.option} onPress={() => onPick('gallery')}>
-            <Ionicons name="images-outline" size={22} color="#111827" />
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.option}
+            activeOpacity={0.7}
+            onPress={() => onPick('gallery')}
+          >
+            <View style={styles.optionIcon}>
+              <Ionicons name="images-outline" size={20} color={palette.text} />
+            </View>
             <Text style={styles.optionText}>Choose from Gallery</Text>
-          </Pressable>
+            <Ionicons name="chevron-forward" size={18} color={palette.textSubtle} />
+          </TouchableOpacity>
 
           {showRemove && onRemove ? (
-            <Pressable style={styles.option} onPress={onRemove}>
-              <Ionicons name="trash-outline" size={22} color="#EF4444" />
-              <Text style={[styles.optionText, { color: '#EF4444' }]}>Remove</Text>
-            </Pressable>
+            <>
+              <View style={styles.divider} />
+              <TouchableOpacity style={styles.option} activeOpacity={0.7} onPress={onRemove}>
+                <View style={[styles.optionIcon, styles.optionIconDanger]}>
+                  <Ionicons name="trash-outline" size={20} color={palette.danger} />
+                </View>
+                <Text style={[styles.optionText, styles.optionTextDanger]}>Remove</Text>
+              </TouchableOpacity>
+            </>
           ) : null}
+        </View>
 
-          <Pressable style={[styles.option, styles.cancel]} onPress={onClose}>
-            <Text style={[styles.optionText, { color: '#6B7280', textAlign: 'center', flex: 1 }]}>
-              Cancel
-            </Text>
-          </Pressable>
-        </Pressable>
+        <TouchableOpacity style={styles.cancel} activeOpacity={0.7} onPress={onClose}>
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
       </Pressable>
-    
-    ) : null;
+    </Pressable>
+  ) : null;
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 20,
+    paddingTop: 10,
     paddingBottom: 32,
   },
   handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#E5E7EB',
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
     alignSelf: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  title: { fontSize: 16, fontWeight: '700', color: '#111827', textAlign: 'center', marginBottom: 8 },
+  title: {
+    ...fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
+    marginBottom: 14,
+  },
+  group: {
+    backgroundColor: palette.surfaceDim,
+    borderRadius: radii.lg,
+    paddingHorizontal: 14,
+  },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    paddingVertical: 12,
   },
-  cancel: { marginTop: 4 },
-  optionText: { fontSize: 15, color: '#111827', fontWeight: '500' },
+  optionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  optionIconDanger: { backgroundColor: palette.dangerSoft },
+  optionText: { ...fonts.semibold, flex: 1, fontSize: 15, color: palette.text },
+  optionTextDanger: { color: palette.danger },
+  divider: { height: 1, backgroundColor: palette.line, marginLeft: 52 },
+  cancel: {
+    marginTop: 14,
+    height: 52,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelText: { ...fonts.semibold, fontSize: 15, color: palette.text },
 });

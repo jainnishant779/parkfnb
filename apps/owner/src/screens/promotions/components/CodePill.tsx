@@ -1,11 +1,10 @@
 // CodePill Component - Displays promo code with copy functionality
-import React, { memo, useMemo, useCallback } from 'react';
+import React, { memo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
-  Platform,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -15,9 +14,7 @@ import Animated, {
   withSequence,
   withSpring,
 } from 'react-native-reanimated';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize, fontWeight } from '../../../theme/typography';
+import { palette, radii, fonts } from '../../../theme/kit';
 
 interface CodePillProps {
   code: string;
@@ -29,7 +26,6 @@ interface CodePillProps {
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 function CodePill({ code, onCopy, size = 'medium', testID }: CodePillProps) {
-  const theme = useMemo(() => getTheme(false), []);
   const scale = useSharedValue(1);
 
   const handleCopy = useCallback(() => {
@@ -55,10 +51,6 @@ function CodePill({ code, onCopy, size = 'medium', testID }: CodePillProps) {
       onPress={handleCopy}
       style={[
         styles.container,
-        {
-          backgroundColor: theme.borderLight,
-          borderColor: theme.border,
-        },
         isSmall && styles.containerSmall,
         animatedStyle,
       ]}
@@ -70,18 +62,17 @@ function CodePill({ code, onCopy, size = 'medium', testID }: CodePillProps) {
       <Text
         style={[
           styles.code,
-          { color: theme.text },
           isSmall && styles.codeSmall,
         ]}
         numberOfLines={1}
       >
         {code}
       </Text>
-      <View style={[styles.iconContainer, { backgroundColor: theme.surface }]}>
+      <View style={styles.iconContainer}>
         <Ionicons
           name="copy-outline"
           size={isSmall ? 12 : 14}
-          color={theme.textMuted}
+          color={palette.textInverse}
         />
       </View>
     </AnimatedPressable>
@@ -92,36 +83,36 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: spacing[3],
-    paddingRight: spacing[1],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    gap: spacing[2],
+    paddingLeft: 14,
+    paddingRight: 4,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surface,
+    gap: 8,
     alignSelf: 'flex-start',
   },
   containerSmall: {
-    paddingLeft: spacing[2],
-    paddingVertical: 2,
-    gap: spacing[1],
+    paddingLeft: 12,
+    paddingVertical: 3,
+    gap: 6,
   },
   code: {
-    fontFamily: Platform.select({
-      ios: 'Menlo',
-      android: 'monospace',
-      default: 'monospace',
-    }),
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    letterSpacing: 0.5,
+    ...fonts.bold,
+    fontSize: 14,
+    letterSpacing: 1,
+    color: palette.text,
   },
   codeSmall: {
-    fontSize: fontSize.xs,
-    letterSpacing: 0.3,
+    fontSize: 13,
+    letterSpacing: 0.8,
   },
   iconContainer: {
-    padding: 4,
-    borderRadius: borderRadius.sm,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: palette.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

@@ -4,36 +4,48 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
+  TouchableOpacity,
   Platform,
+  KeyboardAvoidingView,
   ActivityIndicator,
-  Modal,
   TextInput,
   Switch,
   Animated as RNAnimated,
   LayoutAnimation,
   UIManager,
+  type TextStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  FadeIn,
-  FadeInDown,
-  FadeOut,
-} from 'react-native-reanimated';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
-import AppHeader from '../../components/headers/AppHeader';
+import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import * as Kit from '../../theme/kit';
+import * as UI from '../../components/ui';
 import { iotService, type IoTDevice } from '../../services/iotService';
 import { AppAlert } from '../../components/common/AppAlert';
+
+// The UI kit is plain JS; give it loose component types and typed font tokens.
+const {
+  T,
+  Card,
+  PillButton,
+  IconCircle,
+  Field,
+  ScreenHeader,
+  StatusTag,
+  InfoGrid,
+  Segmented,
+  EmptyState,
+  IsoBlock,
+} = UI as unknown as Record<string, React.ComponentType<any>>;
+const { palette, radii, shadow } = Kit;
+const fonts = Kit.fonts as Record<keyof typeof Kit.fonts, TextStyle>;
+
+// Ink toggle colours shared by every Switch on this screen.
+const SWITCH_TRACK = { false: palette.bgSoft, true: palette.ink };
+const SWITCH_THUMB = palette.surface;
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -134,6 +146,7 @@ const DEFAULT_INTEGRATIONS: Integration[] = [
   },
 ];
 
+
 // Snackbar component
 interface SnackbarProps {
   visible: boolean;
@@ -143,7 +156,6 @@ interface SnackbarProps {
 }
 
 function Snackbar({ visible, message, type, onDismiss }: SnackbarProps) {
-  const theme = useMemo(() => getTheme(false), []);
   const translateY = useRef(new RNAnimated.Value(100)).current;
 
   useEffect(() => {
@@ -169,23 +181,30 @@ function Snackbar({ visible, message, type, onDismiss }: SnackbarProps) {
 
   if (!visible) return null;
 
-  const bgColor = type === 'success' ? theme.success : type === 'error' ? theme.danger : theme.info;
+  const iconBg = type === 'success' ? palette.success : type === 'error' ? palette.danger : palette.inkSoft;
 
   return (
-    <RNAnimated.View
-      style={[
-        styles.snackbar,
-        { backgroundColor: bgColor, transform: [{ translateY }] },
-      ]}
-    >
-      <Ionicons
-        name={type === 'success' ? 'checkmark-circle' : type === 'error' ? 'alert-circle' : 'information-circle'}
-        size={20}
-        color="#FFFFFF"
-      />
+    <RNAnimated.View style={[styles.snackbar, { transform: [{ translateY }] }]}>
+      <View style={[styles.snackbarIcon, { backgroundColor: iconBg }]}>
+        <Ionicons
+          name={type === 'success' ? 'checkmark' : type === 'error' ? 'alert' : 'information'}
+          size={15}
+          color={palette.textInverse}
+        />
+      </View>
       <Text style={styles.snackbarText}>{message}</Text>
     </RNAnimated.View>
   );
+}
+
+// Integration icon in either icon family
+function IntegrationIcon({ integration, size = 22 }: { integration: Integration; size?: number }) {
+  if (integration.iconFamily === 'material') {
+    return (
+      <MaterialCommunityIcons name={integration.icon as any} size={size} color={palette.text} />
+    );
+  }
+  return <Ionicons name={integration.icon as any} size={size} color={palette.text} />;
 }
 
 // Integration Card Component
@@ -195,7 +214,6 @@ interface IntegrationCardProps {
   onToggle: (id: string, enabled: boolean) => void;
   onExpand: (id: string) => void;
   onSettingsChange: (id: string, settings: IntegrationSettings) => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
 function IntegrationCard({
@@ -204,26 +222,12 @@ function IntegrationCard({
   onToggle,
   onExpand,
   onSettingsChange,
-  theme,
 }: IntegrationCardProps) {
-  const scale = useSharedValue(1);
   const [localSettings, setLocalSettings] = useState(integration.settings);
 
   useEffect(() => {
     setLocalSettings(integration.settings);
   }, [integration.settings]);
-
-  const handlePressIn = useCallback(() => {
-    scale.value = withSpring(0.98, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const handlePressOut = useCallback(() => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 200 });
-  }, [scale]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
 
   const handleToggle = useCallback((value: boolean) => {
     onToggle(integration.id, value);
@@ -238,25 +242,6 @@ function IntegrationCard({
     onSettingsChange(integration.id, localSettings);
   }, [integration.id, localSettings, onSettingsChange]);
 
-  const renderIcon = () => {
-    if (integration.iconFamily === 'material') {
-      return (
-        <MaterialCommunityIcons
-          name={integration.icon as any}
-          size={24}
-          color={integration.enabled ? theme.primary : theme.textMuted}
-        />
-      );
-    }
-    return (
-      <Ionicons
-        name={integration.icon as any}
-        size={24}
-        color={integration.enabled ? theme.primary : theme.textMuted}
-      />
-    );
-  };
-
   const formatLastConnected = () => {
     if (!integration.lastConnected) return 'Never connected';
     const date = new Date(integration.lastConnected);
@@ -264,91 +249,75 @@ function IntegrationCard({
   };
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={handleExpand}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+      activeOpacity={0.9}
       accessibilityLabel={`${integration.name}, ${integration.enabled ? 'enabled' : 'disabled'}`}
       accessibilityRole="button"
     >
-      <Animated.View
-        entering={FadeInDown.duration(300)}
-        style={[styles.integrationCard, { backgroundColor: theme.surface }, animatedStyle]}
-      >
+      <Animated.View entering={FadeInDown.duration(300)} style={styles.integrationCard}>
         {/* Card Header */}
         <View style={styles.cardHeader}>
-          <View style={[
-            styles.iconContainer,
-            { backgroundColor: integration.enabled ? theme.primaryLight : theme.borderLight }
-          ]}>
-            {renderIcon()}
+          <View style={[styles.iconCircle, integration.enabled && styles.iconCircleActive]}>
+            <IntegrationIcon integration={integration} />
           </View>
           <View style={styles.cardContent}>
             <View style={styles.cardTitleRow}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>{integration.name}</Text>
-              <View style={[
-                styles.categoryBadge,
-                { backgroundColor: integration.category === 'iot' ? theme.infoLight : theme.successLight }
-              ]}>
-                <Text style={[
-                  styles.categoryText,
-                  { color: integration.category === 'iot' ? theme.info : theme.success }
-                ]}>
-                  {integration.category.toUpperCase()}
-                </Text>
-              </View>
+              <Text style={styles.cardTitle} numberOfLines={1}>{integration.name}</Text>
+              <StatusTag label={integration.category.toUpperCase()} tone="grey" />
             </View>
-            <Text style={[styles.cardDescription, { color: theme.textMuted }]} numberOfLines={2}>
+            <Text style={styles.cardDescription} numberOfLines={2}>
               {integration.description}
             </Text>
-            <Text style={[styles.lastConnected, { color: theme.textMuted }]}>
-              {formatLastConnected()}
-            </Text>
           </View>
-          <View style={styles.toggleContainer}>
-            <Switch
-              value={integration.enabled}
-              onValueChange={handleToggle}
-              trackColor={{ false: theme.borderLight, true: theme.primary + '40' }}
-              thumbColor={integration.enabled ? theme.primary : theme.textMuted}
-              accessibilityLabel={`Toggle ${integration.name}`}
+          <Switch
+            value={integration.enabled}
+            onValueChange={handleToggle}
+            trackColor={SWITCH_TRACK}
+            thumbColor={SWITCH_THUMB}
+            ios_backgroundColor={palette.bgSoft}
+            accessibilityLabel={`Toggle ${integration.name}`}
+          />
+        </View>
+
+        {/* Status + expand indicator */}
+        <View style={styles.cardFooter}>
+          <StatusTag
+            label={integration.enabled ? 'Connected' : 'Offline'}
+            tone={integration.enabled ? 'success' : 'grey'}
+          />
+          <Text style={styles.lastConnected} numberOfLines={1}>{formatLastConnected()}</Text>
+          <View style={styles.chevronCircle}>
+            <Ionicons
+              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={palette.text}
             />
           </View>
         </View>
 
-        {/* Expand Indicator */}
-        <View style={styles.expandIndicator}>
-          <Ionicons
-            name={isExpanded ? 'chevron-up' : 'chevron-down'}
-            size={20}
-            color={theme.textMuted}
-          />
-        </View>
-
         {/* Expanded Details */}
         {isExpanded && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            style={[styles.expandedContent, { borderTopColor: theme.borderLight }]}
-          >
-            <Text style={[styles.sectionLabel, { color: theme.text }]}>Settings</Text>
+          <Animated.View entering={FadeIn.duration(200)} style={styles.expandedContent}>
+            <Text style={styles.expandedLabel}>Settings</Text>
 
             {/* Render settings based on integration type */}
             {Object.entries(localSettings).map(([key, value]) => (
               <View key={key} style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: theme.textSecondary }]}>
+                <Text style={styles.settingLabel}>
                   {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                 </Text>
                 {typeof value === 'boolean' ? (
                   <Switch
                     value={value}
                     onValueChange={(newValue) => setLocalSettings(prev => ({ ...prev, [key]: newValue }))}
-                    trackColor={{ false: theme.borderLight, true: theme.primary + '40' }}
-                    thumbColor={value ? theme.primary : theme.textMuted}
+                    trackColor={SWITCH_TRACK}
+                    thumbColor={SWITCH_THUMB}
+                    ios_backgroundColor={palette.bgSoft}
                   />
                 ) : typeof value === 'number' ? (
                   <TextInput
-                    style={[styles.settingInput, { color: theme.text, borderColor: theme.border }]}
+                    style={styles.settingInput}
                     value={String(value)}
                     onChangeText={(text) => setLocalSettings(prev => ({ ...prev, [key]: parseInt(text) || 0 }))}
                     keyboardType="numeric"
@@ -356,11 +325,11 @@ function IntegrationCard({
                   />
                 ) : (
                   <TextInput
-                    style={[styles.settingInput, styles.settingInputWide, { color: theme.text, borderColor: theme.border }]}
+                    style={[styles.settingInput, styles.settingInputWide]}
                     value={String(value)}
                     onChangeText={(text) => setLocalSettings(prev => ({ ...prev, [key]: text }))}
                     placeholder="Enter value"
-                    placeholderTextColor={theme.textMuted}
+                    placeholderTextColor={palette.textSubtle}
                     accessibilityLabel={key}
                   />
                 )}
@@ -368,27 +337,64 @@ function IntegrationCard({
             ))}
 
             {/* Status indicator */}
-            <View style={[styles.statusRow, { backgroundColor: integration.enabled ? theme.successLight : theme.borderLight }]}>
-              <View style={[styles.statusDot, { backgroundColor: integration.enabled ? theme.success : theme.textMuted }]} />
-              <Text style={[styles.statusText, { color: integration.enabled ? theme.success : theme.textMuted }]}>
+            <View style={[styles.statusRow, integration.enabled && styles.statusRowActive]}>
+              <View style={[styles.statusDot, integration.enabled && styles.statusDotActive]} />
+              <Text style={[styles.statusText, integration.enabled && styles.statusTextActive]}>
                 {integration.enabled ? 'Integration Active' : 'Integration Disabled'}
               </Text>
             </View>
 
             {/* Save button for settings */}
-            <Pressable
+            <PillButton
+              label="Save Settings"
+              icon="check"
+              variant="ink"
+              size="md"
               onPress={handleSaveSettings}
-              style={[styles.saveSettingsButton, { backgroundColor: theme.primary }]}
-              accessibilityLabel="Save settings"
-              accessibilityRole="button"
-            >
-              <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-              <Text style={styles.saveSettingsText}>Save Settings</Text>
-            </Pressable>
+            />
           </Animated.View>
         )}
       </Animated.View>
-    </Pressable>
+    </TouchableOpacity>
+  );
+}
+
+// Sheet shell shared by the modals below
+function Sheet({
+  title,
+  onClose,
+  onBackdropPress,
+  children,
+}: {
+  title?: string;
+  onClose?: () => void;
+  onBackdropPress?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.modalOverlay}>
+      <TouchableOpacity
+        style={styles.modalBackdrop}
+        activeOpacity={1}
+        onPress={onBackdropPress}
+        disabled={!onBackdropPress}
+      />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.sheet}
+      >
+        <View style={styles.grabber} />
+        {title ? (
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle} numberOfLines={2}>{title}</Text>
+            {onClose ? (
+              <IconCircle icon="x" variant="grey" size={38} onPress={onClose} />
+            ) : null}
+          </View>
+        ) : null}
+        {children}
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -398,10 +404,9 @@ interface AddIntegrationModalProps {
   onClose: () => void;
   onAdd: (integration: Integration) => void;
   existingIds: string[];
-  theme: ReturnType<typeof getTheme>;
 }
 
-function AddIntegrationModal({ visible, onClose, onAdd, existingIds, theme }: AddIntegrationModalProps) {
+function AddIntegrationModal({ visible, onClose, onAdd, existingIds }: AddIntegrationModalProps) {
   const [selectedCategory, setSelectedCategory] = useState<'iot' | 'pos'>('iot');
 
   const availableIntegrations = DEFAULT_INTEGRATIONS.filter(
@@ -418,133 +423,93 @@ function AddIntegrationModal({ visible, onClose, onAdd, existingIds, theme }: Ad
   };
 
   return visible ? (
+    <Sheet title="Add Integration" onClose={onClose}>
+      {/* Category tabs */}
+      <Segmented
+        options={[
+          { id: 'iot', label: 'IoT Devices' },
+          { id: 'pos', label: 'POS Systems' },
+        ]}
+        value={selectedCategory}
+        onChange={(id: string) => setSelectedCategory(id as 'iot' | 'pos')}
+        style={styles.sheetSegmented}
+      />
 
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Add Integration</Text>
-            <Pressable onPress={onClose} accessibilityLabel="Close" accessibilityRole="button">
-              <Ionicons name="close" size={24} color={theme.textMuted} />
-            </Pressable>
-          </View>
-
-          {/* Category tabs */}
-          <View style={styles.categoryTabs}>
-            <Pressable
-              onPress={() => setSelectedCategory('iot')}
+      {/* Available integrations */}
+      <ScrollView style={styles.integrationsList} showsVerticalScrollIndicator={false}>
+        {availableIntegrations.length === 0 ? (
+          <EmptyState
+            title={`All ${selectedCategory.toUpperCase()} integrations added`}
+            tone="grey"
+          />
+        ) : (
+          availableIntegrations.map((integration, index) => (
+            <TouchableOpacity
+              key={integration.id}
+              onPress={() => handleAdd(integration)}
+              activeOpacity={0.7}
               style={[
-                styles.categoryTab,
-                selectedCategory === 'iot' && { backgroundColor: theme.primaryLight },
+                styles.integrationOption,
+                index < availableIntegrations.length - 1 && styles.divider,
               ]}
+              accessibilityLabel={`Add ${integration.name}`}
+              accessibilityRole="button"
             >
-              <MaterialCommunityIcons
-                name="access-point"
-                size={20}
-                color={selectedCategory === 'iot' ? theme.primary : theme.textMuted}
-              />
-              <Text style={[
-                styles.categoryTabText,
-                { color: selectedCategory === 'iot' ? theme.primary : theme.textMuted }
-              ]}>IoT Devices</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setSelectedCategory('pos')}
-              style={[
-                styles.categoryTab,
-                selectedCategory === 'pos' && { backgroundColor: theme.primaryLight },
-              ]}
-            >
-              <Ionicons
-                name="card-outline"
-                size={20}
-                color={selectedCategory === 'pos' ? theme.primary : theme.textMuted}
-              />
-              <Text style={[
-                styles.categoryTabText,
-                { color: selectedCategory === 'pos' ? theme.primary : theme.textMuted }
-              ]}>POS Systems</Text>
-            </Pressable>
-          </View>
-
-          {/* Available integrations */}
-          <ScrollView style={styles.integrationsList}>
-            {availableIntegrations.length === 0 ? (
-              <View style={styles.noIntegrationsAvailable}>
-                <Ionicons name="checkmark-circle" size={48} color={theme.success} />
-                <Text style={[styles.noIntegrationsText, { color: theme.textMuted }]}>
-                  All {selectedCategory.toUpperCase()} integrations added
-                </Text>
+              <View style={styles.iconCircle}>
+                <IntegrationIcon integration={integration} />
               </View>
-            ) : (
-              availableIntegrations.map(integration => (
-                <Pressable
-                  key={integration.id}
-                  onPress={() => handleAdd(integration)}
-                  style={[styles.integrationOption, { borderColor: theme.border }]}
-                  accessibilityLabel={`Add ${integration.name}`}
-                  accessibilityRole="button"
-                >
-                  <View style={[styles.optionIcon, { backgroundColor: theme.primaryLight }]}>
-                    {integration.iconFamily === 'material' ? (
-                      <MaterialCommunityIcons name={integration.icon as any} size={24} color={theme.primary} />
-                    ) : (
-                      <Ionicons name={integration.icon as any} size={24} color={theme.primary} />
-                    )}
-                  </View>
-                  <View style={styles.optionContent}>
-                    <Text style={[styles.optionTitle, { color: theme.text }]}>{integration.name}</Text>
-                    <Text style={[styles.optionDescription, { color: theme.textMuted }]}>
-                      {integration.description}
-                    </Text>
-                  </View>
-                  <Ionicons name="add-circle" size={24} color={theme.primary} />
-                </Pressable>
-              ))
-            )}
-          </ScrollView>
-        </View>
-      </View>
-    
-    ) : null;
+              <View style={styles.optionContent}>
+                <Text style={styles.optionTitle}>{integration.name}</Text>
+                <Text style={styles.optionDescription}>{integration.description}</Text>
+              </View>
+              <View style={styles.addCircle}>
+                <Ionicons name="add" size={18} color={palette.textInverse} />
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
+      </ScrollView>
+    </Sheet>
+  ) : null;
 }
 
 // Info Modal
 interface InfoModalProps {
   visible: boolean;
   onClose: () => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
-function InfoModal({ visible, onClose, theme }: InfoModalProps) {
+function InfoModal({ visible, onClose }: InfoModalProps) {
   return visible ? (
-
-      <Pressable style={styles.infoModalOverlay} onPress={onClose}>
-        <View style={[styles.infoModalContent, { backgroundColor: theme.surface }]}>
-          <View style={[styles.infoIconContainer, { backgroundColor: theme.primaryLight }]}>
-            <Ionicons name="information-circle" size={32} color={theme.primary} />
-          </View>
-          <Text style={[styles.infoTitle, { color: theme.text }]}>IoT/POS Integrations</Text>
-          <Text style={[styles.infoText, { color: theme.textSecondary }]}>
-            Connect your parking facility with smart devices and payment systems.
-            {'\n\n'}
-            <Text style={{ fontWeight: '600' }}>IoT Devices:</Text>
-            {'\n'}Occupancy sensors, smart barriers, and LPR cameras for automated operations.
-            {'\n\n'}
-            <Text style={{ fontWeight: '600' }}>POS Systems:</Text>
-            {'\n'}Accept payments via Stripe, Square, or other payment terminals.
-          </Text>
-          <Pressable
-            onPress={onClose}
-            style={[styles.infoButton, { backgroundColor: theme.primary }]}
-            accessibilityLabel="Close"
-            accessibilityRole="button"
-          >
-            <Text style={styles.infoButtonText}>Got it</Text>
-          </Pressable>
+    <Sheet onBackdropPress={onClose}>
+      <View style={styles.infoBody}>
+        <View style={styles.infoIconContainer}>
+          <Ionicons name="information" size={26} color={palette.text} />
         </View>
-      </Pressable>
-    
-    ) : null;
+        <Text style={styles.infoTitle}>IoT/POS Integrations</Text>
+        <Text style={styles.infoText}>
+          Connect your parking facility with smart devices and payment systems.
+        </Text>
+        <View style={styles.infoBlock}>
+          <Text style={styles.infoBlockTitle}>IoT Devices:</Text>
+          <Text style={styles.infoBlockText}>
+            Occupancy sensors, smart barriers, and LPR cameras for automated operations.
+          </Text>
+          <View style={styles.infoBlockDivider} />
+          <Text style={styles.infoBlockTitle}>POS Systems:</Text>
+          <Text style={styles.infoBlockText}>
+            Accept payments via Stripe, Square, or other payment terminals.
+          </Text>
+        </View>
+        <PillButton
+          label="Got it"
+          variant="ink"
+          onPress={onClose}
+          style={styles.infoButton}
+        />
+      </View>
+    </Sheet>
+  ) : null;
 }
 
 // Pair Smart Barrier Modal
@@ -556,7 +521,6 @@ interface PairDeviceModalProps {
   setDeviceId: (val: string) => void;
   deviceName: string;
   setDeviceName: (val: string) => void;
-  theme: ReturnType<typeof getTheme>;
 }
 
 function PairDeviceModal({
@@ -567,60 +531,50 @@ function PairDeviceModal({
   setDeviceId,
   deviceName,
   setDeviceName,
-  theme,
 }: PairDeviceModalProps) {
   return visible ? (
-    <View style={styles.modalOverlay}>
-      <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-        <View style={styles.modalHeader}>
-          <Text style={[styles.modalTitle, { color: theme.text }]}>Pair Smart Barrier (ESP32)</Text>
-          <Pressable onPress={onClose} accessibilityLabel="Close" accessibilityRole="button">
-            <Ionicons name="close" size={24} color={theme.textMuted} />
-          </Pressable>
-        </View>
-        <Text style={[styles.pairModalSubtitle, { color: theme.textSecondary }]}>
+    <Sheet title="Pair Smart Barrier (ESP32)" onClose={onClose}>
+      <View style={styles.pairBody}>
+        <Text style={styles.pairModalSubtitle}>
           Enter the Device ID configured in your ESP32 firmware (e.g. pb-001).
         </Text>
 
-        <Text style={[styles.inputLabel, { color: theme.text }]}>Device ID *</Text>
-        <TextInput
-          style={[styles.pairInput, { color: theme.text, borderColor: theme.border }]}
+        <Field
+          label="Device ID *"
+          icon="cpu"
           placeholder="e.g. pb-001"
-          placeholderTextColor={theme.textMuted}
           value={deviceId}
           onChangeText={setDeviceId}
           autoCapitalize="none"
           autoCorrect={false}
         />
 
-        <Text style={[styles.inputLabel, { color: theme.text, marginTop: spacing[3] }]}>
-          Barrier Label (Optional)
-        </Text>
-        <TextInput
-          style={[styles.pairInput, { color: theme.text, borderColor: theme.border }]}
+        <Field
+          label="Barrier Label (Optional)"
+          icon="tag"
           placeholder="e.g. Main Gate Barrier"
-          placeholderTextColor={theme.textMuted}
           value={deviceName}
           onChangeText={setDeviceName}
+          style={styles.fieldGap}
         />
 
         <View style={styles.pairModalActions}>
-          <Pressable
-            style={[styles.pairCancelBtn, { borderColor: theme.border }]}
+          <PillButton
+            label="Cancel"
+            variant="grey"
             onPress={onClose}
-          >
-            <Text style={[styles.pairCancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.pairSubmitBtn, { backgroundColor: '#0D7377' }]}
+            style={styles.flex1}
+          />
+          <PillButton
+            label="Pair Hardware"
+            icon="link"
+            variant="ink"
             onPress={onPair}
-          >
-            <Ionicons name="link" size={16} color="#FFFFFF" />
-            <Text style={styles.pairSubmitBtnText}>Pair Hardware</Text>
-          </Pressable>
+            style={styles.flex1}
+          />
         </View>
       </View>
-    </View>
+    </Sheet>
   ) : null;
 }
 
@@ -628,7 +582,6 @@ function PairDeviceModal({
 export default function IoTIntegrationsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const theme = useMemo(() => getTheme(false), []);
 
   // State
   const [loading, setLoading] = useState(false);
@@ -835,111 +788,117 @@ export default function IoTIntegrationsScreen() {
   // Get existing integration IDs
   const existingIds = useMemo(() => integrations.map(int => int.id), [integrations]);
 
+
+  const iotIntegrations = integrations.filter(int => int.category === 'iot');
+  const posIntegrations = integrations.filter(int => int.category === 'pos');
+  const activeCount = integrations.filter(int => int.enabled).length;
+
+  const header = (withInfo: boolean) => (
+    <ScreenHeader
+      title="Integrations"
+      onBack={() => navigation.goBack()}
+      right={
+        withInfo ? (
+          <IconCircle icon="help-circle" size={40} onPress={() => setShowInfoModal(true)} />
+        ) : undefined
+      }
+    />
+  );
+
+  const renderIntegrationCard = (integration: Integration) => (
+    <IntegrationCard
+      key={integration.id}
+      integration={integration}
+      isExpanded={expandedId === integration.id}
+      onToggle={handleToggle}
+      onExpand={handleExpand}
+      onSettingsChange={handleSettingsChange}
+    />
+  );
+
   // Loading state
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <AppHeader
-          variant="standard"
-          title="Integrations"
-          leftAction={{
-            icon: 'back',
-            label: 'Back',
-            onPress: () => navigation.goBack(),
-            showBackground: true,
-          }}
-          showDivider={false}
-        />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {header(false)}
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={[styles.loadingText, { color: theme.textMuted }]}>
-            Loading integrations...
-          </Text>
+          <ActivityIndicator size="large" color={palette.ink} />
+          <Text style={styles.loadingText}>Loading integrations...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <AppHeader
-        variant="standard"
-        title="Integrations"
-        leftAction={{
-          icon: 'back',
-          label: 'Back',
-          onPress: () => navigation.goBack(),
-          showBackground: true,
-        }}
-        rightActions={[
-          {
-            icon: 'help',
-            label: 'Info',
-            onPress: () => setShowInfoModal(true),
-          },
-        ]}
-        showDivider={false}
-      />
+      {header(true)}
 
       {/* Content */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + spacing[20] },
+          { paddingBottom: insets.bottom + 120 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Subtitle */}
-        <View style={styles.subtitleContainer}>
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Manage your IoT/POS integrations
-          </Text>
-        </View>
+        {/* Hero */}
+        <Card tone="peach" style={styles.hero}>
+          <View style={styles.heroText}>
+            <T variant="h2">Devices &{'\n'}payments</T>
+            <T variant="bodySmall" style={styles.heroSub}>
+              Manage your IoT/POS integrations
+            </T>
+          </View>
+          <View style={styles.heroStats}>
+            <View>
+              <Text style={styles.heroStatValue}>{realDevices.length}</Text>
+              <Text style={styles.heroStatLabel}>Barriers</Text>
+            </View>
+            <View>
+              <Text style={styles.heroStatValue}>{activeCount}</Text>
+              <Text style={styles.heroStatLabel}>Active</Text>
+            </View>
+          </View>
+          <View style={styles.heroArt} pointerEvents="none">
+            <IsoBlock size={140} tone="peach" />
+          </View>
+        </Card>
 
         {/* Smart Barriers (ESP32 Hardware) Section */}
-        <View style={styles.section}>
-          <View style={styles.hardwareHeaderRow}>
-            <View style={styles.hardwareHeaderLeft}>
-              <MaterialCommunityIcons name="boom-gate" size={22} color="#0D7377" />
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>Smart Barriers (ESP32)</Text>
-              <View style={[styles.hardwareCountBadge, { backgroundColor: realDevices.length > 0 ? '#E0F2F1' : '#F1F5F9' }]}>
-                <Text style={[styles.hardwareCountBadgeText, { color: realDevices.length > 0 ? '#0D7377' : '#64748B' }]}>
-                  {realDevices.length}
-                </Text>
-              </View>
-            </View>
-            <Pressable
-              style={styles.pairHardwareSmallBtn}
-              onPress={() => setShowPairModal(true)}
-              accessibilityLabel="Pair ESP32 barrier"
-              accessibilityRole="button"
-            >
-              <Ionicons name="add" size={16} color="#FFFFFF" />
-              <Text style={styles.pairHardwareSmallBtnText}>Pair Barrier</Text>
-            </Pressable>
+        <View style={styles.hardwareHeaderRow}>
+          <View style={styles.hardwareHeaderLeft}>
+            <Text style={styles.sectionTitle}>Smart Barriers (ESP32)</Text>
+            <StatusTag
+              label={String(realDevices.length)}
+              tone={realDevices.length > 0 ? 'ink' : 'grey'}
+            />
           </View>
+          <PillButton
+            label="Pair Barrier"
+            icon="plus"
+            variant="ink"
+            size="sm"
+            onPress={() => setShowPairModal(true)}
+          />
+        </View>
 
-          {loadingDevices ? (
-            <ActivityIndicator size="small" color="#0D7377" style={{ marginVertical: spacing[4] }} />
-          ) : realDevices.length === 0 ? (
-            <View style={[styles.hardwareEmptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <MaterialCommunityIcons name="boom-gate-outline" size={36} color={theme.textMuted} />
-              <Text style={[styles.hardwareEmptyTitle, { color: theme.text }]}>No Smart Barriers Paired</Text>
-              <Text style={[styles.hardwareEmptyText, { color: theme.textMuted }]}>
-                Connect physical ESP32 barrier controllers to automate vehicle entry and spot locking.
-              </Text>
-              <Pressable
-                style={[styles.pairHardwareSmallBtn, { alignSelf: 'center', marginTop: spacing[2] }]}
-                onPress={() => setShowPairModal(true)}
-              >
-                <Ionicons name="link" size={16} color="#FFFFFF" />
-                <Text style={styles.pairHardwareSmallBtnText}>Pair ESP32 Controller</Text>
-              </Pressable>
-            </View>
-          ) : (
-            realDevices.map(device => {
+        {loadingDevices ? (
+          <ActivityIndicator size="small" color={palette.ink} style={styles.devicesLoader} />
+        ) : realDevices.length === 0 ? (
+          <Card padded={false}>
+            <EmptyState
+              title="No Smart Barriers Paired"
+              subtitle="Connect physical ESP32 barrier controllers to automate vehicle entry and spot locking."
+              action="Pair ESP32 Controller"
+              onAction={() => setShowPairModal(true)}
+              tone="grey"
+            />
+          </Card>
+        ) : (
+          <View style={styles.cardList}>
+            {realDevices.map(device => {
               const isOnline = device.status === 'online';
               const isCommanding = commandingDeviceId === device.device_id;
               const angle = device.last_state?.angle !== undefined ? `${device.last_state.angle}°` : (isOnline ? '0°' : '--');
@@ -949,83 +908,76 @@ export default function IoTIntegrationsScreen() {
               const fw = device.last_state?.fw_version || '1.0.0';
 
               return (
-                <View
-                  key={device._id || device.device_id}
-                  style={[styles.deviceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                >
-                  <View style={styles.deviceCardHeader}>
-                    <View style={styles.deviceCardTitleRow}>
-                      <View style={[styles.deviceIconBox, { backgroundColor: isOnline ? '#E0F2F1' : '#F1F5F9' }]}>
-                        <MaterialCommunityIcons
-                          name={isUpright ? 'boom-gate-up' : 'boom-gate-down'}
-                          size={24}
-                          color={isOnline ? '#0D7377' : '#64748B'}
-                        />
-                      </View>
-                      <View style={{ flex: 1, marginLeft: spacing[3] }}>
-                        <Text style={[styles.deviceTitle, { color: theme.text }]}>
-                          {device.name || device.device_id}
-                        </Text>
-                        <Text style={[styles.deviceIdText, { color: theme.textMuted }]}>
-                          ID: {device.device_id} • FW: v{fw}
-                        </Text>
-                      </View>
-                      <View style={isOnline ? styles.onlineBadge : styles.offlineBadge}>
-                        <View style={isOnline ? styles.onlineBadgeDot : styles.offlineBadgeDot} />
-                        <Text style={isOnline ? styles.onlineBadgeText : styles.offlineBadgeText}>
-                          {isOnline ? 'Online' : 'Offline'}
-                        </Text>
-                      </View>
+                <View key={device._id || device.device_id} style={styles.deviceCard}>
+                  <View style={styles.deviceCardTitleRow}>
+                    <View style={[styles.iconCircle, isOnline && styles.iconCircleActive]}>
+                      <MaterialCommunityIcons
+                        name={isUpright ? 'boom-gate-up' : 'boom-gate-down'}
+                        size={22}
+                        color={palette.text}
+                      />
                     </View>
+                    <View style={styles.deviceTitleBlock}>
+                      <Text style={styles.deviceTitle} numberOfLines={1}>
+                        {device.name || device.device_id}
+                      </Text>
+                      <Text style={styles.deviceIdText} numberOfLines={1}>
+                        ID: {device.device_id} • FW: v{fw}
+                      </Text>
+                    </View>
+                    <StatusTag
+                      label={isOnline ? 'Online' : 'Offline'}
+                      tone={isOnline ? 'success' : 'grey'}
+                    />
                   </View>
 
                   {/* Telemetry row */}
-                  <View style={[styles.deviceTelemetryGrid, { borderColor: theme.borderLight }]}>
-                    <View style={styles.telemetryItem}>
-                      <Text style={[styles.telemetryLabel, { color: theme.textMuted }]}>Barrier Arm</Text>
-                      <Text style={[styles.telemetryValue, { color: theme.text }]}>{angle}</Text>
-                    </View>
-                    <View style={styles.telemetryItem}>
-                      <Text style={[styles.telemetryLabel, { color: theme.textMuted }]}>Signal (WiFi)</Text>
-                      <Text style={[styles.telemetryValue, { color: theme.text }]}>{rssi}</Text>
-                    </View>
-                    <View style={styles.telemetryItem}>
-                      <Text style={[styles.telemetryLabel, { color: theme.textMuted }]}>Battery</Text>
-                      <Text style={[styles.telemetryValue, { color: theme.text }]}>{battery}</Text>
-                    </View>
-                  </View>
+                  <InfoGrid
+                    columns={3}
+                    items={[
+                      { label: 'Barrier Arm', value: angle },
+                      { label: 'Signal (WiFi)', value: rssi },
+                      { label: 'Battery', value: battery },
+                    ]}
+                    style={styles.telemetryGrid}
+                  />
 
                   {/* Manual Controls */}
                   <View style={styles.deviceActionsRow}>
-                    <Pressable
-                      style={[styles.cmdBtnOpen, isCommanding && { opacity: 0.5 }]}
+                    <PillButton
+                      label="Open (0°)"
+                      icon="arrow-down-circle"
+                      variant="ink"
+                      size="sm"
                       onPress={() => handleDeviceCommand(device.device_id, 'open')}
                       disabled={isCommanding}
-                    >
-                      <Ionicons name="arrow-down-circle" size={16} color="#FFFFFF" />
-                      <Text style={styles.cmdBtnText}>Open (0°)</Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={[styles.cmdBtnClose, isCommanding && { opacity: 0.5 }]}
+                      style={styles.flex1}
+                    />
+                    <PillButton
+                      label="Secure (90°)"
+                      icon="shield"
+                      variant="ink"
+                      size="sm"
                       onPress={() => handleDeviceCommand(device.device_id, 'close')}
                       disabled={isCommanding}
-                    >
-                      <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" />
-                      <Text style={styles.cmdBtnText}>Secure (90°)</Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={[styles.cmdBtnStop, isCommanding && { opacity: 0.5 }]}
+                      style={styles.flex1}
+                    />
+                  </View>
+                  <View style={styles.deviceActionsRow}>
+                    <PillButton
+                      label="Stop"
+                      icon="stop-circle"
+                      variant="grey"
+                      size="sm"
                       onPress={() => handleDeviceCommand(device.device_id, 'stop')}
                       disabled={isCommanding}
-                    >
-                      <Ionicons name="stop-circle" size={16} color="#475569" />
-                      <Text style={[styles.cmdBtnText, { color: '#475569' }]}>Stop</Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={styles.cmdBtnUnpair}
+                      style={styles.flex1}
+                    />
+                    <TouchableOpacity
+                      style={styles.unpairButton}
+                      activeOpacity={0.75}
+                      accessibilityLabel="Unpair barrier"
+                      accessibilityRole="button"
                       onPress={() => {
                         AppAlert.alert(
                           'Unpair Barrier?',
@@ -1037,83 +989,45 @@ export default function IoTIntegrationsScreen() {
                         );
                       }}
                     >
-                      <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                    </Pressable>
+                      <Ionicons name="trash-outline" size={17} color={palette.danger} />
+                    </TouchableOpacity>
                   </View>
                 </View>
               );
-            })
-          )}
-        </View>
+            })}
+          </View>
+        )}
 
         {/* Empty State */}
         {integrations.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={[styles.emptyIconContainer, { backgroundColor: theme.primaryLight }]}>
-              <MaterialCommunityIcons name="connection" size={48} color={theme.primary} />
-            </View>
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>
-              No integrations set up yet
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: theme.textMuted }]}>
-              Connect IoT devices and POS systems to automate your parking facility
-            </Text>
-            <Pressable
-              onPress={() => setShowAddModal(true)}
-              style={[styles.emptyButton, { backgroundColor: theme.primary }]}
-              accessibilityLabel="Add new integration"
-              accessibilityRole="button"
-            >
-              <Ionicons name="add" size={20} color="#FFFFFF" />
-              <Text style={styles.emptyButtonText}>Add New Integration</Text>
-            </Pressable>
-          </View>
+          <>
+            <Text style={[styles.sectionTitle, styles.sectionSpaced]}>Integrations</Text>
+            <Card padded={false}>
+              <EmptyState
+                title="No integrations set up yet"
+                subtitle="Connect IoT devices and POS systems to automate your parking facility"
+                action="Add New Integration"
+                onAction={() => setShowAddModal(true)}
+                tone="peach"
+              />
+            </Card>
+          </>
         ) : (
           <>
             {/* IoT Section */}
-            {integrations.filter(int => int.category === 'iot').length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <MaterialCommunityIcons name="access-point" size={20} color={theme.info} />
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>IoT Devices</Text>
-                </View>
-                {integrations
-                  .filter(int => int.category === 'iot')
-                  .map(integration => (
-                    <IntegrationCard
-                      key={integration.id}
-                      integration={integration}
-                      isExpanded={expandedId === integration.id}
-                      onToggle={handleToggle}
-                      onExpand={handleExpand}
-                      onSettingsChange={handleSettingsChange}
-                      theme={theme}
-                    />
-                  ))}
-              </View>
+            {iotIntegrations.length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, styles.sectionSpaced]}>IoT Devices</Text>
+                <View style={styles.cardList}>{iotIntegrations.map(renderIntegrationCard)}</View>
+              </>
             )}
 
             {/* POS Section */}
-            {integrations.filter(int => int.category === 'pos').length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Ionicons name="card-outline" size={20} color={theme.success} />
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>POS Systems</Text>
-                </View>
-                {integrations
-                  .filter(int => int.category === 'pos')
-                  .map(integration => (
-                    <IntegrationCard
-                      key={integration.id}
-                      integration={integration}
-                      isExpanded={expandedId === integration.id}
-                      onToggle={handleToggle}
-                      onExpand={handleExpand}
-                      onSettingsChange={handleSettingsChange}
-                      theme={theme}
-                    />
-                  ))}
-              </View>
+            {posIntegrations.length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, styles.sectionSpaced]}>POS Systems</Text>
+                <View style={styles.cardList}>{posIntegrations.map(renderIntegrationCard)}</View>
+              </>
             )}
           </>
         )}
@@ -1124,44 +1038,35 @@ export default function IoTIntegrationsScreen() {
         <Animated.View
           entering={FadeIn.duration(200)}
           exiting={FadeOut.duration(200)}
-          style={[styles.bottomBar, { backgroundColor: theme.surface, paddingBottom: insets.bottom + spacing[4] }]}
+          style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}
         >
-          <Pressable
+          <PillButton
+            label="Cancel"
+            variant="grey"
             onPress={handleCancel}
-            style={[styles.cancelButton, { borderColor: theme.border }]}
-            accessibilityLabel="Cancel changes"
-            accessibilityRole="button"
-          >
-            <Text style={[styles.cancelButtonText, { color: theme.textSecondary }]}>Cancel</Text>
-          </Pressable>
-          <Pressable
+            style={styles.flex1}
+          />
+          <PillButton
+            label="Save Changes"
+            icon="check"
+            variant="ink"
             onPress={handleSaveAll}
-            disabled={saving}
-            style={[styles.saveButton, { backgroundColor: theme.primary, opacity: saving ? 0.7 : 1 }]}
-            accessibilityLabel="Save all changes"
-            accessibilityRole="button"
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </>
-            )}
-          </Pressable>
+            loading={saving}
+            style={styles.flex1}
+          />
         </Animated.View>
       )}
 
       {/* FAB for adding integrations */}
-      <Pressable
+      <TouchableOpacity
         onPress={() => setShowAddModal(true)}
-        style={[styles.fab, { backgroundColor: theme.primary, bottom: hasChanges ? 100 + insets.bottom : 24 + insets.bottom }]}
+        activeOpacity={0.85}
+        style={[styles.fab, { bottom: hasChanges ? 100 + insets.bottom : 24 + insets.bottom }]}
         accessibilityLabel="Add new integration"
         accessibilityRole="button"
       >
-        <Ionicons name="add" size={28} color="#FFFFFF" />
-      </Pressable>
+        <Ionicons name="add" size={28} color={palette.textInverse} />
+      </TouchableOpacity>
 
       {/* Modals */}
       <AddIntegrationModal
@@ -1169,12 +1074,10 @@ export default function IoTIntegrationsScreen() {
         onClose={() => setShowAddModal(false)}
         onAdd={handleAddIntegration}
         existingIds={existingIds}
-        theme={theme}
       />
       <InfoModal
         visible={showInfoModal}
         onClose={() => setShowInfoModal(false)}
-        theme={theme}
       />
       <PairDeviceModal
         visible={showPairModal}
@@ -1184,7 +1087,6 @@ export default function IoTIntegrationsScreen() {
         setDeviceId={setNewDeviceId}
         deviceName={newDeviceName}
         setDeviceName={setNewDeviceName}
-        theme={theme}
       />
 
       {/* Snackbar */}
@@ -1194,224 +1096,293 @@ export default function IoTIntegrationsScreen() {
         type={snackbar.type}
         onDismiss={dismissSnackbar}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: palette.bg,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing[4],
+    gap: 16,
   },
   loadingText: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.textMuted,
   },
-  subtitleContainer: {
-    marginBottom: spacing[4],
-  },
-  subtitle: {
-    fontSize: fontSize.sm,
-  },
-
-  // Empty state
-  emptyState: {
+  flex1: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[16],
-    paddingHorizontal: spacing[6],
   },
-  emptyIconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing[5],
-  },
-  emptyTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold as any,
-    textAlign: 'center',
-    marginBottom: spacing[2],
-  },
-  emptySubtitle: {
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-    marginBottom: spacing[6],
-    lineHeight: fontSize.sm * 1.5,
-  },
-  emptyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[5],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
-  },
-  emptyButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+  divider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
   },
 
-  // Section
-  section: {
-    marginBottom: spacing[5],
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    marginBottom: spacing[3],
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-  },
-
-  // Integration Card
-  integrationCard: {
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[3],
+  // Hero
+  hero: {
+    minHeight: 220,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+  },
+  heroText: {
+    maxWidth: '62%',
+  },
+  heroSub: {
+    marginTop: 8,
+    color: palette.inkSoft,
+  },
+  heroStats: {
+    flexDirection: 'row',
+    gap: 28,
+    marginTop: 'auto',
+    paddingTop: 20,
+  },
+  heroStatValue: {
+    ...fonts.semibold,
+    fontSize: 34,
+    letterSpacing: -1,
+    color: palette.text,
+  },
+  heroStatLabel: {
+    ...fonts.medium,
+    fontSize: 12.5,
+    color: palette.inkSoft,
+  },
+  heroArt: {
+    position: 'absolute',
+    right: -30,
+    bottom: -26,
+  },
+
+  // Sections
+  sectionTitle: {
+    ...fonts.medium,
+    fontSize: 19,
+    letterSpacing: -0.2,
+    color: palette.text,
+  },
+  sectionSpaced: {
+    marginTop: 28,
+    marginBottom: 12,
+  },
+  cardList: {
+    gap: 12,
+  },
+  hardwareHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 28,
+    marginBottom: 12,
+    gap: 8,
+  },
+  hardwareHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    gap: 8,
+  },
+  devicesLoader: {
+    marginVertical: 16,
+  },
+
+  // Shared icon circle
+  iconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: palette.fill,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconCircleActive: {
+    backgroundColor: palette.peachSoft,
+  },
+
+  // Device card
+  deviceCard: {
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 18,
+  },
+  deviceCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deviceTitleBlock: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  deviceTitle: {
+    ...fonts.semibold,
+    fontSize: 16,
+    color: palette.text,
+  },
+  deviceIdText: {
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
+    marginTop: 2,
+  },
+  telemetryGrid: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
+  },
+  deviceActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  unpairButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.dangerSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Integration card
+  integrationCard: {
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 18,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing[4],
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   cardContent: {
     flex: 1,
-    marginHorizontal: spacing[3],
+    marginHorizontal: 12,
   },
   cardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    marginBottom: 2,
+    gap: 8,
   },
   cardTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-  categoryBadge: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold as any,
+    ...fonts.semibold,
+    flexShrink: 1,
+    fontSize: 16,
+    color: palette.text,
   },
   cardDescription: {
-    fontSize: fontSize.xs,
-    marginBottom: spacing[1],
+    ...fonts.medium,
+    fontSize: 13,
+    lineHeight: 18,
+    color: palette.textMuted,
+    marginTop: 3,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
   },
   lastConnected: {
-    fontSize: 11,
+    ...fonts.medium,
+    flex: 1,
+    fontSize: 12,
+    color: palette.textMuted,
   },
-  toggleContainer: {
-    marginLeft: spacing[2],
-  },
-  expandIndicator: {
+  chevronCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: palette.fill,
     alignItems: 'center',
-    paddingBottom: spacing[2],
+    justifyContent: 'center',
   },
-
-  // Expanded content
   expandedContent: {
-    borderTopWidth: 1,
-    padding: spacing[4],
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
   },
-  sectionLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[3],
+  expandedLabel: {
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
+    marginBottom: 6,
   },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing[3],
+    paddingVertical: 8,
+    gap: 12,
   },
   settingLabel: {
-    fontSize: fontSize.sm,
+    ...fonts.medium,
     flex: 1,
+    fontSize: 14,
+    color: palette.text,
   },
   settingInput: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    fontSize: fontSize.sm,
-    width: 80,
+    ...fonts.semibold,
+    minWidth: 72,
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+    fontSize: 14,
+    color: palette.text,
     textAlign: 'center',
   },
   settingInputWide: {
-    width: 150,
+    minWidth: 150,
     textAlign: 'left',
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing[3],
-    borderRadius: borderRadius.md,
-    gap: spacing[2],
-    marginTop: spacing[2],
-    marginBottom: spacing[3],
+    alignSelf: 'flex-start',
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 14,
+    paddingHorizontal: 14,
+    height: 34,
+    borderRadius: radii.pill,
+    backgroundColor: palette.fill,
+  },
+  statusRowActive: {
+    backgroundColor: palette.successSoft,
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: palette.textMuted,
+  },
+  statusDotActive: {
+    backgroundColor: palette.success,
   },
   statusText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.textMuted,
   },
-  saveSettingsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
-  },
-  saveSettingsText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
+  statusTextActive: {
+    color: palette.success,
   },
 
   // Bottom bar
@@ -1421,91 +1392,58 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: 'row',
-    padding: spacing[4],
-    gap: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
-  },
-  saveButton: {
-    flex: 2,
-    flexDirection: 'row',
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    gap: 12,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    ...shadow.lifted,
   },
 
   // FAB
   fab: {
     position: 'absolute',
-    right: spacing[4],
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    right: 20,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: palette.ink,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
+    ...shadow.lifted,
   },
 
   // Snackbar
   snackbar: {
     position: 'absolute',
     bottom: 100,
-    left: spacing[4],
-    right: spacing[4],
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing[4],
-    borderRadius: borderRadius.lg,
-    gap: spacing[3],
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: palette.ink,
+    gap: 12,
+    ...shadow.lifted,
+  },
+  snackbarIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   snackbarText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
     flex: 1,
+    fontSize: 14,
+    color: palette.textInverse,
   },
 
-  // Modal styles
+  // Sheets
   modalOverlay: {
     // Absolutely positioned rather than flex:1 — no longer inside a
     // <Modal>, which does not present on this build.
@@ -1516,406 +1454,155 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9999,
     elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    borderTopLeftRadius: borderRadius['2xl'],
-    borderTopRightRadius: borderRadius['2xl'],
-    maxHeight: '80%',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 16,
-      },
-    }),
+  modalBackdrop: {
+    flex: 1,
   },
-  modalHeader: {
+  sheet: {
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    maxHeight: '85%',
+  },
+  grabber: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.line,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing[4],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
+    gap: 12,
+    paddingTop: 4,
+    paddingBottom: 14,
   },
-  modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-  },
-  categoryTabs: {
-    flexDirection: 'row',
-    padding: spacing[4],
-    gap: spacing[3],
-  },
-  categoryTab: {
+  sheetTitle: {
+    ...fonts.semibold,
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    gap: spacing[2],
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: palette.text,
   },
-  categoryTabText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+  sheetSegmented: {
+    marginBottom: 8,
   },
   integrationsList: {
-    paddingHorizontal: spacing[4],
-    paddingBottom: spacing[6],
+    flexGrow: 0,
   },
   integrationOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing[4],
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[3],
-    gap: spacing[3],
-  },
-  optionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingVertical: 14,
   },
   optionContent: {
     flex: 1,
+    marginHorizontal: 12,
   },
   optionTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium as any,
-    marginBottom: 2,
+    ...fonts.semibold,
+    fontSize: 15.5,
+    color: palette.text,
   },
   optionDescription: {
-    fontSize: fontSize.xs,
-  },
-  noIntegrationsAvailable: {
-    alignItems: 'center',
-    paddingVertical: spacing[10],
-    gap: spacing[3],
-  },
-  noIntegrationsText: {
-    fontSize: fontSize.sm,
-  },
-
-  // Info modal
-  infoModalOverlay: {
-    // Absolutely positioned rather than flex:1 — no longer inside a
-    // <Modal>, which does not present on this build.
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 9999,
-    elevation: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing[6],
-  },
-  infoModalContent: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: borderRadius.xl,
-    padding: spacing[6],
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
-  infoIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing[4],
-  },
-  infoTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold as any,
-    marginBottom: spacing[3],
-  },
-  infoText: {
-    fontSize: fontSize.sm,
-    lineHeight: fontSize.sm * 1.6,
-    textAlign: 'left',
-  },
-  infoButton: {
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[8],
-    borderRadius: borderRadius.lg,
-    marginTop: spacing[5],
-  },
-  infoButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
-
-  // Smart Barriers (ESP32) Styles
-  hardwareHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing[3],
-  },
-  hardwareHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  hardwareCountBadge: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: 2,
-    borderRadius: borderRadius.full,
-    marginLeft: spacing[1],
-  },
-  hardwareCountBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold as any,
-  },
-  pairHardwareSmallBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0D7377',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.lg,
-    gap: spacing[1],
-  },
-  pairHardwareSmallBtnText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-  },
-  hardwareEmptyCard: {
-    padding: spacing[6],
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  hardwareEmptyTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-    marginTop: spacing[2],
-  },
-  hardwareEmptyText: {
-    fontSize: fontSize.xs,
-    textAlign: 'center',
-    lineHeight: 18,
-    maxWidth: 280,
-  },
-  deviceCard: {
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    padding: spacing[4],
-    marginBottom: spacing[3],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  deviceCardHeader: {
-    marginBottom: spacing[3],
-  },
-  deviceCardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  deviceIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deviceTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold as any,
-  },
-  deviceIdText: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: palette.textMuted,
     marginTop: 2,
   },
-  onlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-    gap: 5,
-  },
-  onlineBadgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#16A34A',
-  },
-  onlineBadgeText: {
-    color: '#16A34A',
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-  },
-  offlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-    gap: 5,
-  },
-  offlineBadgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#94A3B8',
-  },
-  offlineBadgeText: {
-    color: '#64748B',
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
-  },
-  deviceTelemetryGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: spacing[3],
-  },
-  telemetryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  telemetryLabel: {
-    fontSize: fontSize.xs,
-    marginBottom: 2,
-  },
-  telemetryValue: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
-  },
-  deviceActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  cmdBtnOpen: {
-    flex: 1,
-    flexDirection: 'row',
+  addCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: palette.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
-    paddingVertical: 10,
-    borderRadius: borderRadius.lg,
-    gap: spacing[1],
-  },
-  cmdBtnClose: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0D7377',
-    paddingVertical: 10,
-    borderRadius: borderRadius.lg,
-    gap: spacing[1],
-  },
-  cmdBtnStop: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: 10,
-    backgroundColor: '#E2E8F0',
-    borderRadius: borderRadius.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  cmdBtnUnpair: {
-    padding: 10,
-    borderRadius: borderRadius.lg,
-    backgroundColor: '#FEE2E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cmdBtnText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold as any,
   },
 
-  // Pair Modal Extra Styles
+  // Info sheet
+  infoBody: {
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  infoIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: palette.peachSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  infoTitle: {
+    ...fonts.semibold,
+    fontSize: 22,
+    letterSpacing: -0.4,
+    color: palette.text,
+    textAlign: 'center',
+  },
+  infoText: {
+    ...fonts.medium,
+    fontSize: 14.5,
+    lineHeight: 21,
+    color: palette.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  infoBlock: {
+    alignSelf: 'stretch',
+    marginTop: 18,
+    padding: 16,
+    borderRadius: radii.lg,
+    backgroundColor: palette.fill,
+  },
+  infoBlockTitle: {
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
+  },
+  infoBlockText: {
+    ...fonts.medium,
+    fontSize: 13.5,
+    lineHeight: 19,
+    color: palette.textMuted,
+    marginTop: 4,
+  },
+  infoBlockDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: palette.line,
+    marginVertical: 12,
+  },
+  infoButton: {
+    alignSelf: 'stretch',
+    marginTop: 20,
+  },
+
+  // Pair sheet
+  pairBody: {
+    paddingBottom: 4,
+  },
   pairModalSubtitle: {
-    fontSize: fontSize.xs,
-    lineHeight: 18,
-    marginBottom: spacing[4],
+    ...fonts.medium,
+    fontSize: 14,
+    lineHeight: 20,
+    color: palette.textMuted,
+    marginBottom: 16,
   },
-  inputLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-    marginBottom: spacing[1],
-  },
-  pairInput: {
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing[3],
-    paddingVertical: 10,
-    fontSize: fontSize.sm,
+  fieldGap: {
+    marginTop: 14,
   },
   pairModalActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing[3],
-    marginTop: spacing[5],
-    marginBottom: spacing[2],
-  },
-  pairCancelBtn: {
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: spacing[4],
-    borderRadius: borderRadius.lg,
-  },
-  pairCancelBtnText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
-  },
-  pairSubmitBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: spacing[4],
-    borderRadius: borderRadius.lg,
-    gap: 6,
-  },
-  pairSubmitBtnText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold as any,
+    gap: 12,
+    marginTop: 22,
   },
 });

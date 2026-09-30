@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useCallback } from 'react';
+import React, { memo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,8 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize, fontWeight } from '../../../theme/typography';
+import { palette, radii, fonts } from '../../../theme/kit';
+import { StatusTag } from '../../../components/ui';
 import type {
   EarningsTransaction,
   TransactionStatus,
@@ -22,18 +21,18 @@ import type {
 } from '../../../types/models';
 
 // Status config
-const STATUS_CONFIG: Record<TransactionStatus, { color: string; bgColor: string; label: string }> = {
-  completed: { color: '#059669', bgColor: '#ECFDF5', label: 'Completed' },
-  pending: { color: '#D97706', bgColor: '#FFFBEB', label: 'Pending' },
-  failed: { color: '#DC2626', bgColor: '#FEF2F2', label: 'Failed' },
-  refunded: { color: '#6366F1', bgColor: '#EEF2FF', label: 'Refunded' },
+const STATUS_CONFIG: Record<TransactionStatus, { tone: string; color: string; label: string }> = {
+  completed: { tone: 'success', color: palette.success, label: 'Completed' },
+  pending: { tone: 'warning', color: palette.warning, label: 'Pending' },
+  failed: { tone: 'danger', color: palette.danger, label: 'Failed' },
+  refunded: { tone: 'grey', color: palette.textMuted, label: 'Refunded' },
 };
 
 // Payout status config
-const PAYOUT_CONFIG: Record<PayoutStatus, { color: string; bgColor: string; label: string }> = {
-  paid: { color: '#059669', bgColor: '#ECFDF5', label: 'Paid' },
-  unpaid: { color: '#D97706', bgColor: '#FFFBEB', label: 'Unpaid' },
-  processing: { color: '#0D7377', bgColor: '#E8F5F4', label: 'Processing' },
+const PAYOUT_CONFIG: Record<PayoutStatus, { tone: string; label: string }> = {
+  paid: { tone: 'ink', label: 'Paid' },
+  unpaid: { tone: 'grey', label: 'Unpaid' },
+  processing: { tone: 'warning', label: 'Processing' },
 };
 
 // Transaction type config
@@ -83,8 +82,6 @@ function TransactionItem({
   isLast = false,
   testID,
 }: TransactionItemProps) {
-  const theme = useMemo(() => getTheme(false), []);
-
   // Animation
   const scale = useSharedValue(1);
 
@@ -107,55 +104,45 @@ function TransactionItem({
 
   // Determine amount color
   const isNegative = transaction.amount < 0;
-  const amountColor = isNegative ? theme.danger : theme.success;
+  const amountColor = isNegative ? palette.danger : palette.text;
   const amountPrefix = isNegative ? '-' : '+';
 
   return (
-    <Animated.View style={animatedStyle}>
+    <Animated.View style={[styles.outer, animatedStyle]}>
       <Pressable
         onPress={() => onPress(transaction)}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        style={[
-          styles.container,
-          { backgroundColor: theme.surface },
-          !isLast && [styles.border, { borderBottomColor: theme.borderLight }],
-        ]}
+        style={[styles.container, isLast && styles.containerLast]}
         testID={testID}
       >
-        {/* Left: Status dot + Type icon */}
-        <View style={styles.leftSection}>
+        {/* Left: Type icon with status dot */}
+        <View style={styles.typeIcon}>
+          <Ionicons name={typeConfig.icon} size={20} color={palette.text} />
           <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
-          <View style={[styles.typeIcon, { backgroundColor: theme.borderLight }]}>
-            <Ionicons name={typeConfig.icon} size={18} color={theme.textSecondary} />
-          </View>
         </View>
 
         {/* Middle: Listing name + booking ref */}
         <View style={styles.middleSection}>
-          <Text style={[styles.listingName, { color: theme.text }]} numberOfLines={1}>
+          <Text style={styles.listingName} numberOfLines={1}>
             {transaction.listingName}
           </Text>
           <View style={styles.subRow}>
             {transaction.bookingRef && (
-              <Text style={[styles.bookingRef, { color: theme.textMuted }]}>
+              <Text style={styles.bookingRef}>
                 {transaction.bookingRef}
               </Text>
             )}
             {transaction.renterName && (
-              <Text style={[styles.renterName, { color: theme.textSecondary }]} numberOfLines={1}>
-                • {transaction.renterName}
+              <Text style={styles.renterName} numberOfLines={1}>
+                · {transaction.renterName}
               </Text>
             )}
           </View>
-          {/* Secondary row: payout badge + time */}
+          {/* Secondary row: payout tag + time */}
           <View style={styles.bottomRow}>
-            <View style={[styles.payoutBadge, { backgroundColor: payoutConfig.bgColor }]}>
-              <Text style={[styles.payoutText, { color: payoutConfig.color }]}>
-                {payoutConfig.label}
-              </Text>
-            </View>
-            <Text style={[styles.timeText, { color: theme.textMuted }]}>
+            <StatusTag label={payoutConfig.label} tone={payoutConfig.tone} style={styles.tag} />
+            <Text style={styles.timeText}>
               {formatTime(transaction.createdAt)}
             </Text>
           </View>
@@ -166,11 +153,7 @@ function TransactionItem({
           <Text style={[styles.amount, { color: amountColor }]}>
             {amountPrefix}{formatCurrency(transaction.amount, transaction.currency)}
           </Text>
-          <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
-            <Text style={[styles.statusText, { color: statusConfig.color }]}>
-              {statusConfig.label}
-            </Text>
-          </View>
+          <StatusTag label={statusConfig.label} tone={statusConfig.tone} style={[styles.tag, styles.tagRight]} />
         </View>
       </Pressable>
     </Animated.View>
@@ -178,89 +161,92 @@ function TransactionItem({
 }
 
 const styles = StyleSheet.create({
+  outer: {
+    marginHorizontal: 16,
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+    borderRadius: radii.lg,
+    backgroundColor: palette.surface,
   },
-  border: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  leftSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: spacing[3],
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: spacing[2],
+  containerLast: {
+    marginBottom: 4,
   },
   typeIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.md,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: palette.fill,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
+  },
+  statusDot: {
+    position: 'absolute',
+    top: 1,
+    right: 1,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: palette.surface,
   },
   middleSection: {
     flex: 1,
-    marginRight: spacing[2],
+    marginRight: 8,
   },
   listingName: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
     marginBottom: 2,
   },
   subRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing[1],
+    marginBottom: 6,
   },
   bookingRef: {
-    fontSize: fontSize.xs,
-    fontFamily: 'monospace',
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
   },
   renterName: {
-    fontSize: fontSize.xs,
-    marginLeft: spacing[1],
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
+    marginLeft: 4,
     flex: 1,
   },
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
+    gap: 8,
   },
-  payoutBadge: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: 2,
-    borderRadius: borderRadius.full,
-  },
-  payoutText: {
-    fontSize: 10,
-    fontWeight: fontWeight.medium as any,
+  tag: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
   },
   timeText: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textSubtle,
+  },
+  tagRight: {
+    alignSelf: 'flex-end',
   },
   rightSection: {
     alignItems: 'flex-end',
   },
   amount: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-    marginBottom: spacing[1],
-  },
-  statusBadge: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: 2,
-    borderRadius: borderRadius.full,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 16,
+    letterSpacing: -0.2,
+    marginBottom: 6,
   },
 });
 

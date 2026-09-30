@@ -1,5 +1,5 @@
 import React, { memo, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -9,10 +9,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { getTheme } from '../../theme/colors';
 import { spacing, borderRadius } from '../../theme/spacing';
+import { palette, radii, shadow } from '../../theme/kit';
 
 // Animated skeleton pulse component
 const SkeletonPulse = memo(({ style }: { style?: any }) => {
-  const theme = useMemo(() => getTheme(false), []);
   const pulse = useSharedValue(0);
 
   useEffect(() => {
@@ -30,7 +30,7 @@ const SkeletonPulse = memo(({ style }: { style?: any }) => {
   return (
     <Animated.View
       style={[
-        { backgroundColor: theme.border },
+        { backgroundColor: palette.fill },
         style,
         animatedStyle,
       ]}
@@ -151,21 +151,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   card: {
-    borderRadius: borderRadius.xl,
+    borderRadius: radii.xl,
     marginHorizontal: spacing[4],
     marginBottom: spacing[3],
     padding: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    ...shadow.soft,
   },
   topRow: {
     flexDirection: 'row',
@@ -174,7 +164,7 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: 72,
     height: 72,
-    borderRadius: borderRadius.lg,
+    borderRadius: radii.md,
     marginRight: spacing[3],
   },
   info: {
@@ -237,16 +227,16 @@ const styles = StyleSheet.create({
     marginTop: spacing[3],
     paddingTop: spacing[3],
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: palette.line,
   },
   vehicleRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   vehicleChip: {
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.md,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     marginRight: spacing[1],
   },
   capacitySkeleton: {
@@ -270,7 +260,7 @@ const styles = StyleSheet.create({
   kpiCard: {
     flex: 1,
     padding: spacing[3],
-    borderRadius: borderRadius.lg,
+    borderRadius: radii.lg,
     alignItems: 'center',
   },
   kpiLabelSkeleton: {
@@ -290,8 +280,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing[3],
   },
   searchBar: {
-    height: 44,
-    borderRadius: borderRadius.lg,
+    height: 52,
+    borderRadius: radii.pill,
   },
 });
 

@@ -5,7 +5,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
+  TouchableOpacity,
   Platform,
   Switch,
   ActivityIndicator,
@@ -22,10 +22,15 @@ import Animated, {
   FadeIn,
   FadeInDown,
 } from 'react-native-reanimated';
-import { getTheme } from '../../theme/colors';
-import { spacing, borderRadius } from '../../theme/spacing';
-import { fontSize, fontWeight } from '../../theme/typography';
-import AppHeader from '../../components/headers/AppHeader';
+import { palette, radii, fonts } from '../../theme/kit';
+import { ScreenHeader, PillButton, EmptyState } from '../../components/ui';
+
+// Ink toggle shared by every switch on this screen.
+const SWITCH_PROPS = {
+  trackColor: { false: palette.line, true: palette.ink },
+  thumbColor: palette.surface,
+  ios_backgroundColor: palette.line,
+};
 
 // Storage key
 const NOTIFICATION_PREFS_KEY = 'owners:notification_preferences';
@@ -255,53 +260,41 @@ interface ToggleItemProps {
   preference: NotificationPreference;
   onTogglePush: (id: string, value: boolean) => void;
   onToggleEmail: (id: string, value: boolean) => void;
-  theme: ReturnType<typeof getTheme>;
   isLast: boolean;
 }
 
-function ToggleItem({ preference, onTogglePush, onToggleEmail, theme, isLast }: ToggleItemProps) {
+function ToggleItem({ preference, onTogglePush, onToggleEmail, isLast }: ToggleItemProps) {
   return (
-    <View
-      style={[
-        styles.toggleItem,
-        !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.borderLight },
-      ]}
-    >
+    <View style={[styles.toggleItem, !isLast && styles.divider]}>
       <View style={styles.toggleItemHeader}>
-        <View style={[styles.toggleItemIcon, { backgroundColor: theme.primaryLight }]}>
-          <Ionicons name={preference.icon} size={18} color={theme.primary} />
+        <View style={styles.rowIcon}>
+          <Ionicons name={preference.icon} size={18} color={palette.text} />
         </View>
         <View style={styles.toggleItemText}>
-          <Text style={[styles.toggleItemTitle, { color: theme.text }]}>
-            {preference.title}
-          </Text>
-          <Text style={[styles.toggleItemDescription, { color: theme.textMuted }]} numberOfLines={2}>
+          <Text style={styles.toggleItemTitle}>{preference.title}</Text>
+          <Text style={styles.toggleItemDescription} numberOfLines={2}>
             {preference.description}
           </Text>
         </View>
       </View>
       <View style={styles.toggleItemControls}>
         <View style={styles.toggleControl}>
-          <Ionicons name="phone-portrait-outline" size={16} color={theme.textMuted} />
-          <Text style={[styles.toggleLabel, { color: theme.textSecondary }]}>Push</Text>
+          <Ionicons name="phone-portrait-outline" size={15} color={palette.textMuted} />
+          <Text style={styles.toggleLabel}>Push</Text>
           <Switch
             value={preference.pushEnabled}
             onValueChange={(value) => onTogglePush(preference.id, value)}
-            trackColor={{ false: theme.borderLight, true: theme.primaryLight }}
-            thumbColor={preference.pushEnabled ? theme.primary : theme.textMuted}
-            ios_backgroundColor={theme.borderLight}
+            {...SWITCH_PROPS}
             style={styles.switch}
           />
         </View>
-        <View style={[styles.toggleControl, styles.toggleControlLast]}>
-          <Ionicons name="mail-outline" size={16} color={theme.textMuted} />
-          <Text style={[styles.toggleLabel, { color: theme.textSecondary }]}>Email</Text>
+        <View style={styles.toggleControl}>
+          <Ionicons name="mail-outline" size={15} color={palette.textMuted} />
+          <Text style={styles.toggleLabel}>Email</Text>
           <Switch
             value={preference.emailEnabled}
             onValueChange={(value) => onToggleEmail(preference.id, value)}
-            trackColor={{ false: theme.borderLight, true: theme.primaryLight }}
-            thumbColor={preference.emailEnabled ? theme.primary : theme.textMuted}
-            ios_backgroundColor={theme.borderLight}
+            {...SWITCH_PROPS}
             style={styles.switch}
           />
         </View>
@@ -316,7 +309,6 @@ interface CategorySectionProps {
   preferences: NotificationPreference[];
   onTogglePush: (id: string, value: boolean) => void;
   onToggleEmail: (id: string, value: boolean) => void;
-  theme: ReturnType<typeof getTheme>;
   index: number;
 }
 
@@ -325,7 +317,6 @@ function CategorySection({
   preferences,
   onTogglePush,
   onToggleEmail,
-  theme,
   index,
 }: CategorySectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -333,45 +324,39 @@ function CategorySection({
   return (
     <Animated.View
       entering={FadeInDown.delay(100 + index * 100).duration(400)}
-      style={[styles.categorySection, { backgroundColor: theme.surface }]}
+      style={styles.card}
     >
       {/* Category Header */}
-      <Pressable
+      <TouchableOpacity
         onPress={() => setIsExpanded(!isExpanded)}
-        style={styles.categoryHeader}
+        activeOpacity={0.7}
+        style={[styles.categoryHeader, isExpanded && styles.divider]}
         accessibilityLabel={`${category.title} notifications section, ${isExpanded ? 'expanded' : 'collapsed'}`}
         accessibilityRole="button"
       >
-        <View style={styles.categoryHeaderLeft}>
-          <View style={[styles.categoryIcon, { backgroundColor: theme.primaryLight }]}>
-            <Ionicons name={category.icon} size={20} color={theme.primary} />
-          </View>
-          <View style={styles.categoryHeaderText}>
-            <Text style={[styles.categoryTitle, { color: theme.text }]}>
-              {category.title}
-            </Text>
-            <Text style={[styles.categoryDescription, { color: theme.textMuted }]}>
-              {category.description}
-            </Text>
-          </View>
+        <View style={styles.categoryIcon}>
+          <Ionicons name={category.icon} size={20} color={palette.text} />
+        </View>
+        <View style={styles.categoryHeaderText}>
+          <Text style={styles.categoryTitle}>{category.title}</Text>
+          <Text style={styles.categoryDescription}>{category.description}</Text>
         </View>
         <Ionicons
           name={isExpanded ? 'chevron-up' : 'chevron-down'}
           size={20}
-          color={theme.textMuted}
+          color={palette.textSubtle}
         />
-      </Pressable>
+      </TouchableOpacity>
 
       {/* Category Items */}
       {isExpanded && (
-        <View style={styles.categoryItems}>
+        <View>
           {preferences.map((pref, idx) => (
             <ToggleItem
               key={pref.id}
               preference={pref}
               onTogglePush={onTogglePush}
               onToggleEmail={onToggleEmail}
-              theme={theme}
               isLast={idx === preferences.length - 1}
             />
           ))}
@@ -387,7 +372,35 @@ interface GlobalToggleSectionProps {
   onToggleAllPush: (value: boolean) => void;
   onToggleAllEmail: (value: boolean) => void;
   onToggleQuietHours: (value: boolean) => void;
-  theme: ReturnType<typeof getTheme>;
+}
+
+function GlobalRow({
+  icon,
+  title,
+  description,
+  value,
+  onValueChange,
+  isLast,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  isLast?: boolean;
+}) {
+  return (
+    <View style={[styles.globalItem, !isLast && styles.divider]}>
+      <View style={styles.rowIcon}>
+        <Ionicons name={icon} size={18} color={palette.text} />
+      </View>
+      <View style={styles.globalItemText}>
+        <Text style={styles.globalItemTitle}>{title}</Text>
+        <Text style={styles.globalItemDescription}>{description}</Text>
+      </View>
+      <Switch value={value} onValueChange={onValueChange} {...SWITCH_PROPS} />
+    </View>
+  );
 }
 
 function GlobalToggleSection({
@@ -395,87 +408,32 @@ function GlobalToggleSection({
   onToggleAllPush,
   onToggleAllEmail,
   onToggleQuietHours,
-  theme,
 }: GlobalToggleSectionProps) {
   return (
-    <Animated.View
-      entering={FadeInDown.delay(50).duration(400)}
-      style={[styles.globalSection, { backgroundColor: theme.surface }]}
-    >
-      <View style={styles.globalHeader}>
-        <View style={[styles.globalIcon, { backgroundColor: theme.infoLight }]}>
-          <Ionicons name="options-outline" size={20} color={theme.info} />
-        </View>
-        <Text style={[styles.globalTitle, { color: theme.text }]}>
-          Global Settings
-        </Text>
-      </View>
-
-      {/* Master Push Toggle */}
-      <View style={[styles.globalItem, { borderBottomColor: theme.borderLight }]}>
-        <View style={styles.globalItemLeft}>
-          <Ionicons name="notifications-outline" size={20} color={theme.textSecondary} />
-          <View style={styles.globalItemText}>
-            <Text style={[styles.globalItemTitle, { color: theme.text }]}>
-              Push Notifications
-            </Text>
-            <Text style={[styles.globalItemDescription, { color: theme.textMuted }]}>
-              Receive push notifications on your device
-            </Text>
-          </View>
-        </View>
-        <Switch
-          value={settings.allPushEnabled}
-          onValueChange={onToggleAllPush}
-          trackColor={{ false: theme.borderLight, true: theme.primaryLight }}
-          thumbColor={settings.allPushEnabled ? theme.primary : theme.textMuted}
-          ios_backgroundColor={theme.borderLight}
-        />
-      </View>
-
-      {/* Master Email Toggle */}
-      <View style={[styles.globalItem, { borderBottomColor: theme.borderLight }]}>
-        <View style={styles.globalItemLeft}>
-          <Ionicons name="mail-outline" size={20} color={theme.textSecondary} />
-          <View style={styles.globalItemText}>
-            <Text style={[styles.globalItemTitle, { color: theme.text }]}>
-              Email Notifications
-            </Text>
-            <Text style={[styles.globalItemDescription, { color: theme.textMuted }]}>
-              Receive notifications via email
-            </Text>
-          </View>
-        </View>
-        <Switch
-          value={settings.allEmailEnabled}
-          onValueChange={onToggleAllEmail}
-          trackColor={{ false: theme.borderLight, true: theme.primaryLight }}
-          thumbColor={settings.allEmailEnabled ? theme.primary : theme.textMuted}
-          ios_backgroundColor={theme.borderLight}
-        />
-      </View>
-
-      {/* Quiet Hours Toggle */}
-      <View style={styles.globalItemLast}>
-        <View style={styles.globalItemLeft}>
-          <Ionicons name="moon-outline" size={20} color={theme.textSecondary} />
-          <View style={styles.globalItemText}>
-            <Text style={[styles.globalItemTitle, { color: theme.text }]}>
-              Quiet Hours
-            </Text>
-            <Text style={[styles.globalItemDescription, { color: theme.textMuted }]}>
-              Mute notifications from {settings.quietHoursStart} to {settings.quietHoursEnd}
-            </Text>
-          </View>
-        </View>
-        <Switch
-          value={settings.quietHoursEnabled}
-          onValueChange={onToggleQuietHours}
-          trackColor={{ false: theme.borderLight, true: theme.primaryLight }}
-          thumbColor={settings.quietHoursEnabled ? theme.primary : theme.textMuted}
-          ios_backgroundColor={theme.borderLight}
-        />
-      </View>
+    <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.card}>
+      <Text style={styles.cardTitle}>Global settings</Text>
+      <GlobalRow
+        icon="notifications-outline"
+        title="Push Notifications"
+        description="Receive push notifications on your device"
+        value={settings.allPushEnabled}
+        onValueChange={onToggleAllPush}
+      />
+      <GlobalRow
+        icon="mail-outline"
+        title="Email Notifications"
+        description="Receive notifications via email"
+        value={settings.allEmailEnabled}
+        onValueChange={onToggleAllEmail}
+      />
+      <GlobalRow
+        icon="moon-outline"
+        title="Quiet Hours"
+        description={`Mute notifications from ${settings.quietHoursStart} to ${settings.quietHoursEnd}`}
+        value={settings.quietHoursEnabled}
+        onValueChange={onToggleQuietHours}
+        isLast
+      />
     </Animated.View>
   );
 }
@@ -486,10 +444,10 @@ interface SnackbarProps {
   message: string;
   variant: 'success' | 'error' | 'info';
   onDismiss: () => void;
-  theme: ReturnType<typeof getTheme>;
+  bottom: number;
 }
 
-function Snackbar({ visible, message, variant, onDismiss, theme }: SnackbarProps) {
+function Snackbar({ visible, message, variant, onDismiss, bottom }: SnackbarProps) {
   const translateY = useSharedValue(100);
 
   useEffect(() => {
@@ -506,16 +464,16 @@ function Snackbar({ visible, message, variant, onDismiss, theme }: SnackbarProps
     transform: [{ translateY: translateY.value }],
   }));
 
-  const bgColor = variant === 'success' ? theme.success : variant === 'error' ? theme.danger : theme.primary;
+  const iconColor = variant === 'success' ? palette.success : variant === 'error' ? palette.danger : palette.peach;
 
   if (!visible) return null;
 
   return (
-    <Animated.View style={[styles.snackbar, { backgroundColor: bgColor }, animatedStyle]}>
+    <Animated.View style={[styles.snackbar, { bottom }, animatedStyle]}>
       <Ionicons
         name={variant === 'success' ? 'checkmark-circle' : variant === 'error' ? 'alert-circle' : 'information-circle'}
         size={20}
-        color="#FFFFFF"
+        color={iconColor}
       />
       <Text style={styles.snackbarText}>{message}</Text>
     </Animated.View>
@@ -526,7 +484,6 @@ function Snackbar({ visible, message, variant, onDismiss, theme }: SnackbarProps
 export default function NotificationPreferencesScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const theme = useMemo(() => getTheme(false), []);
 
   // State
   const [isLoading, setIsLoading] = useState(false);
@@ -652,26 +609,34 @@ export default function NotificationPreferencesScreen() {
     loadPreferences();
   }, [loadPreferences]);
 
+  const header = (withReset: boolean) => (
+    <ScreenHeader
+      title="Notifications"
+      onBack={() => navigation.goBack()}
+      right={
+        withReset ? (
+          <TouchableOpacity
+            onPress={handleResetToDefaults}
+            hitSlop={10}
+            activeOpacity={0.7}
+            accessibilityLabel="Reset to defaults"
+            accessibilityRole="button"
+          >
+            <Text style={styles.resetText}>Reset</Text>
+          </TouchableOpacity>
+        ) : null
+      }
+    />
+  );
+
   // Loading state
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <AppHeader
-          variant="standard"
-          title="Notifications"
-          leftAction={{
-            icon: 'back',
-            label: 'Back',
-            onPress: () => navigation.goBack(),
-            showBackground: true,
-          }}
-          showDivider={false}
-        />
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {header(false)}
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={[styles.loadingText, { color: theme.textMuted }]}>
-            Loading preferences...
-          </Text>
+          <ActivityIndicator size="large" color={palette.ink} />
+          <Text style={styles.loadingText}>Loading preferences...</Text>
         </View>
       </View>
     );
@@ -680,80 +645,38 @@ export default function NotificationPreferencesScreen() {
   // Error state
   if (error) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <AppHeader
-          variant="standard"
-          title="Notifications"
-          leftAction={{
-            icon: 'back',
-            label: 'Back',
-            onPress: () => navigation.goBack(),
-            showBackground: true,
-          }}
-          showDivider={false}
-        />
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {header(false)}
         <View style={styles.errorContainer}>
-          <View style={[styles.errorIcon, { backgroundColor: theme.dangerLight }]}>
-            <Ionicons name="alert-circle-outline" size={48} color={theme.danger} />
-          </View>
-          <Text style={[styles.errorTitle, { color: theme.text }]}>
-            Something went wrong
-          </Text>
-          <Text style={[styles.errorText, { color: theme.textMuted }]}>
-            {error}
-          </Text>
-          <Pressable
-            onPress={handleRetry}
-            style={[styles.retryButton, { backgroundColor: theme.primary }]}
-            accessibilityLabel="Retry loading"
-            accessibilityRole="button"
-          >
-            <Ionicons name="refresh" size={20} color="#FFFFFF" />
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </Pressable>
+          <EmptyState
+            tone="grey"
+            title="Something went wrong"
+            subtitle={error}
+            action="Try Again"
+            onAction={handleRetry}
+          />
         </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
-      <AppHeader
-        variant="standard"
-        title="Notifications"
-        subtitle="Manage your preferences"
-        leftAction={{
-          icon: 'back',
-          label: 'Back',
-          onPress: () => navigation.goBack(),
-          showBackground: true,
-        }}
-        rightActions={[
-          {
-            icon: 'refresh',
-            label: 'Reset to defaults',
-            onPress: handleResetToDefaults,
-          },
-        ]}
-        showDivider={false}
-      />
+      {header(true)}
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + (hasChanges ? 100 : spacing[6]) },
+          { paddingBottom: insets.bottom + (hasChanges ? 110 : 24) },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Info Banner */}
-        <Animated.View
-          entering={FadeIn.duration(400)}
-          style={[styles.infoBanner, { backgroundColor: theme.infoLight }]}
-        >
-          <Ionicons name="information-circle" size={20} color={theme.info} />
-          <Text style={[styles.infoBannerText, { color: theme.info }]}>
+        {/* Intro */}
+        <Animated.View entering={FadeIn.duration(400)} style={styles.intro}>
+          <Text style={styles.introTitle}>Stay in the loop</Text>
+          <Text style={styles.introText}>
             Configure how and when you receive notifications about your parking spaces.
           </Text>
         </Animated.View>
@@ -764,7 +687,6 @@ export default function NotificationPreferencesScreen() {
           onToggleAllPush={handleToggleAllPush}
           onToggleAllEmail={handleToggleAllEmail}
           onToggleQuietHours={handleToggleQuietHours}
-          theme={theme}
         />
 
         {/* Category Sections */}
@@ -775,7 +697,6 @@ export default function NotificationPreferencesScreen() {
             preferences={group.preferences}
             onTogglePush={handleTogglePush}
             onToggleEmail={handleToggleEmail}
-            theme={theme}
             index={index}
           />
         ))}
@@ -783,10 +704,10 @@ export default function NotificationPreferencesScreen() {
         {/* Privacy Note */}
         <Animated.View
           entering={FadeInDown.delay(500).duration(400)}
-          style={[styles.privacyNote, { borderColor: theme.borderLight }]}
+          style={styles.privacyNote}
         >
-          <Ionicons name="shield-checkmark-outline" size={18} color={theme.textMuted} />
-          <Text style={[styles.privacyNoteText, { color: theme.textMuted }]}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={palette.textMuted} />
+          <Text style={styles.privacyNoteText}>
             Your notification preferences are stored locally on your device. We respect your privacy and will only send notifications according to your settings.
           </Text>
         </Animated.View>
@@ -796,35 +717,16 @@ export default function NotificationPreferencesScreen() {
       {hasChanges && (
         <Animated.View
           entering={FadeIn.duration(300)}
-          style={[
-            styles.saveButtonContainer,
-            {
-              backgroundColor: theme.background,
-              paddingBottom: insets.bottom + spacing[4],
-              borderTopColor: theme.borderLight,
-            },
-          ]}
+          style={[styles.saveButtonContainer, { paddingBottom: insets.bottom + 16 }]}
         >
-          <Pressable
+          <PillButton
+            label="Save Changes"
+            icon="check"
+            variant="ink"
             onPress={savePreferences}
+            loading={isSaving}
             disabled={isSaving}
-            style={[
-              styles.saveButton,
-              { backgroundColor: theme.primary },
-              isSaving && { opacity: 0.7 },
-            ]}
-            accessibilityLabel="Save preferences"
-            accessibilityRole="button"
-          >
-            {isSaving ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </>
-            )}
-          </Pressable>
+          />
         </Animated.View>
       )}
 
@@ -834,7 +736,7 @@ export default function NotificationPreferencesScreen() {
         message={snackbar.message}
         variant={snackbar.variant}
         onDismiss={hideSnackbar}
-        theme={theme}
+        bottom={insets.bottom + (hasChanges ? 100 : 24)}
       />
     </View>
   );
@@ -843,177 +745,111 @@ export default function NotificationPreferencesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: palette.bg,
+  },
+  resetText: {
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[3],
+    gap: 12,
   },
   loadingText: {
-    fontSize: fontSize.base,
+    ...fonts.medium,
+    fontSize: 15,
+    color: palette.textMuted,
   },
   errorContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing[6],
-    gap: spacing[3],
-  },
-  errorIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[2],
-  },
-  errorTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold as any,
-    textAlign: 'center',
-  },
-  errorText: {
-    fontSize: fontSize.base,
-    textAlign: 'center',
-    marginBottom: spacing[2],
-  },
-  retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[5],
-    borderRadius: borderRadius.lg,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
-  // Info Banner
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing[2],
-    padding: spacing[3],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[4],
+  intro: {
+    paddingHorizontal: 4,
+    marginBottom: 18,
   },
-  infoBannerText: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    lineHeight: 20,
+  introTitle: {
+    ...fonts.semibold,
+    fontSize: 28,
+    letterSpacing: -0.6,
+    color: palette.text,
   },
-  // Global Section
-  globalSection: {
-    borderRadius: borderRadius.xl,
-    marginBottom: spacing[4],
+  introText: {
+    ...fonts.medium,
+    fontSize: 15,
+    lineHeight: 21,
+    color: palette.textMuted,
+    marginTop: 6,
+  },
+  card: {
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    paddingHorizontal: 16,
+    marginBottom: 14,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
   },
-  globalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    padding: spacing[4],
+  cardTitle: {
+    ...fonts.semibold,
+    fontSize: 17,
+    color: palette.text,
+    paddingTop: 18,
+    paddingBottom: 4,
+  },
+  divider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
+    borderBottomColor: palette.line,
   },
-  globalIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  rowIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  globalTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
-  },
+  // Global Section
   globalItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  globalItemLast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-  },
-  globalItemLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    marginRight: spacing[3],
+    paddingVertical: 14,
+    gap: 12,
   },
   globalItemText: {
     flex: 1,
     gap: 2,
   },
   globalItemTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
   },
   globalItemDescription: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
   },
   // Category Section
-  categorySection: {
-    borderRadius: borderRadius.xl,
-    marginBottom: spacing[4],
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
   categoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing[4],
-  },
-  categoryHeaderLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
+    paddingVertical: 16,
+    gap: 12,
   },
   categoryIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: palette.peachSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1022,62 +858,59 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   categoryTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.semibold,
+    fontSize: 16,
+    color: palette.text,
   },
   categoryDescription: {
-    fontSize: fontSize.xs,
-  },
-  categoryItems: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.08)',
+    ...fonts.medium,
+    fontSize: 13,
+    color: palette.textMuted,
   },
   // Toggle Item
   toggleItem: {
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
+    paddingVertical: 14,
   },
   toggleItemHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing[3],
-    marginBottom: spacing[3],
-  },
-  toggleItemIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 10,
   },
   toggleItemText: {
     flex: 1,
     gap: 2,
   },
   toggleItemTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 15,
+    color: palette.text,
   },
   toggleItemDescription: {
-    fontSize: fontSize.xs,
-    lineHeight: 16,
+    ...fonts.medium,
+    fontSize: 13,
+    lineHeight: 18,
+    color: palette.textMuted,
   },
   toggleItemControls: {
     flexDirection: 'row',
-    marginLeft: 44,
-    gap: spacing[4],
+    marginLeft: 52,
+    gap: 18,
   },
   toggleControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-  },
-  toggleControlLast: {
-    marginLeft: spacing[2],
+    gap: 6,
+    paddingLeft: 12,
+    paddingRight: 4,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surfaceDim,
   },
   toggleLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium as any,
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.text,
   },
   switch: {
     transform: Platform.OS === 'ios' ? [{ scaleX: 0.8 }, { scaleY: 0.8 }] : [],
@@ -1086,16 +919,18 @@ const styles = StyleSheet.create({
   privacyNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing[2],
-    padding: spacing[4],
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    marginTop: spacing[2],
+    gap: 10,
+    padding: 16,
+    borderRadius: radii.lg,
+    backgroundColor: palette.bgSoft,
+    marginTop: 4,
   },
   privacyNoteText: {
+    ...fonts.medium,
     flex: 1,
-    fontSize: fontSize.xs,
+    fontSize: 12,
     lineHeight: 18,
+    color: palette.textMuted,
   },
   // Save Button Container
   saveButtonContainer: {
@@ -1103,52 +938,27 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.lg,
-    minHeight: 52,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: palette.bg,
   },
   // Snackbar
   snackbar: {
     position: 'absolute',
-    bottom: 100,
-    left: spacing[4],
-    right: spacing[4],
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    borderRadius: borderRadius.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: radii.pill,
+    backgroundColor: palette.ink,
   },
   snackbarText: {
+    ...fonts.medium,
     flex: 1,
-    color: '#FFFFFF',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium as any,
+    color: palette.textInverse,
+    fontSize: 14,
   },
 });

@@ -3,11 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  Platform,
 } from 'react-native';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
-import { fontSize, fontWeight } from '../../../theme/typography';
+import { palette, radii, fonts } from '../../../theme/kit';
 import type { DailyEarnings } from '../../../types/models';
 
 // Format currency compact
@@ -35,8 +32,6 @@ function EarningsChart({
   title = 'Last 7 Days',
   testID,
 }: EarningsChartProps) {
-  const theme = useMemo(() => getTheme(false), []);
-
   // Calculate max value for scaling
   const maxValue = useMemo(() => {
     const max = Math.max(...dailyEarnings.map(d => d.net), 1);
@@ -48,17 +43,26 @@ function EarningsChart({
     return dailyEarnings.reduce((sum, d) => sum + d.net, 0);
   }, [dailyEarnings]);
 
+  const dense = dailyEarnings.length > 10;
+
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.surface }]}
-      testID={testID}
-    >
+    <View style={styles.container} testID={testID}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
-        <Text style={[styles.total, { color: theme.success }]}>
-          {formatCompact(total)}
-        </Text>
+        <View>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.total}>{formatCompact(total)}</Text>
+        </View>
+        <View style={styles.legend}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: palette.peach }]} />
+            <Text style={styles.legendText}>Previous</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: palette.ink }]} />
+            <Text style={styles.legendText}>Today</Text>
+          </View>
+        </View>
       </View>
 
       {/* Chart */}
@@ -73,37 +77,29 @@ function EarningsChart({
                 <View
                   style={[
                     styles.bar,
+                    dense && styles.barDense,
                     {
                       height: `${Math.max(height, 5)}%`,
-                      backgroundColor: isToday ? theme.primary : theme.primaryLight,
+                      backgroundColor: isToday ? palette.ink : palette.peach,
                     },
                   ]}
                 />
               </View>
-              <Text
-                style={[
-                  styles.dayLabel,
-                  { color: isToday ? theme.primary : theme.textMuted },
-                  isToday && styles.dayLabelActive,
-                ]}
-              >
-                {formatDayLabel(day.date)}
-              </Text>
+              {!dense || isToday || index % 5 === 0 ? (
+                <Text
+                  style={[
+                    styles.dayLabel,
+                    isToday && styles.dayLabelActive,
+                  ]}
+                >
+                  {formatDayLabel(day.date)}
+                </Text>
+              ) : (
+                <Text style={styles.dayLabel}> </Text>
+              )}
             </View>
           );
         })}
-      </View>
-
-      {/* Legend */}
-      <View style={styles.legend}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: theme.primaryLight }]} />
-          <Text style={[styles.legendText, { color: theme.textMuted }]}>Previous Days</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: theme.primary }]} />
-          <Text style={[styles.legendText, { color: theme.textMuted }]}>Today</Text>
-        </View>
       </View>
     </View>
   );
@@ -111,80 +107,76 @@ function EarningsChart({
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: spacing[4],
-    marginBottom: spacing[4],
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: radii.xl,
+    padding: 20,
+    backgroundColor: palette.surface,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: spacing[4],
+    marginBottom: 18,
   },
   title: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold as any,
+    ...fonts.medium,
+    fontSize: 14,
+    color: palette.textMuted,
   },
   total: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as any,
+    ...fonts.semibold,
+    fontSize: 26,
+    letterSpacing: -0.6,
+    color: palette.text,
+    marginTop: 2,
   },
   chartContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: 100,
-    paddingHorizontal: spacing[2],
+    height: 150,
   },
   barColumn: {
     flex: 1,
     alignItems: 'center',
   },
   barWrapper: {
-    height: 80,
+    height: 124,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingHorizontal: spacing[1],
+    paddingHorizontal: 2,
   },
   bar: {
-    width: '60%',
-    minHeight: 4,
-    borderRadius: borderRadius.sm,
+    width: '70%',
+    maxWidth: 30,
+    minHeight: 6,
+    borderRadius: 10,
+  },
+  barDense: {
+    width: '80%',
+    borderRadius: 4,
   },
   dayLabel: {
-    fontSize: 10,
-    fontWeight: fontWeight.medium as any,
-    marginTop: spacing[1],
+    ...fonts.medium,
+    fontSize: 11,
+    color: palette.textMuted,
+    marginTop: 8,
   },
   dayLabelActive: {
-    fontWeight: fontWeight.bold as any,
+    ...fonts.bold,
+    color: palette.text,
   },
   legend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing[4],
-    marginTop: spacing[3],
-    paddingTop: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E5E7EB',
+    alignItems: 'flex-end',
+    gap: 6,
+    paddingTop: 2,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
+    gap: 6,
   },
   legendDot: {
     width: 8,
@@ -192,7 +184,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   legendText: {
-    fontSize: fontSize.xs,
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
   },
 });
 

@@ -1,5 +1,5 @@
-import React, { memo, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import React, { memo, useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -7,12 +7,10 @@ import Animated, {
   withTiming,
   interpolate,
 } from 'react-native-reanimated';
-import { getTheme } from '../../../theme/colors';
-import { spacing, borderRadius } from '../../../theme/spacing';
+import { palette, radii } from '../../../theme/kit';
 
 // Animated skeleton pulse component
 const SkeletonPulse = memo(({ style }: { style?: any }) => {
-  const theme = useMemo(() => getTheme(false), []);
   const pulse = useSharedValue(0);
 
   useEffect(() => {
@@ -24,13 +22,13 @@ const SkeletonPulse = memo(({ style }: { style?: any }) => {
   }, [pulse]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(pulse.value, [0, 1], [0.4, 0.8]),
+    opacity: interpolate(pulse.value, [0, 1], [0.45, 0.9]),
   }));
 
   return (
     <Animated.View
       style={[
-        { backgroundColor: theme.border },
+        { backgroundColor: palette.bgSoft },
         style,
         animatedStyle,
       ]}
@@ -38,47 +36,26 @@ const SkeletonPulse = memo(({ style }: { style?: any }) => {
   );
 });
 
-// Single booking card skeleton
+// Single booking card skeleton — mirrors the tracking-style card
 export const BookingCardSkeleton = memo(() => {
-  const theme = useMemo(() => getTheme(false), []);
-
   return (
-    <View style={[styles.card, { backgroundColor: theme.surface }]}>
-      {/* Header Row */}
-      <View style={styles.headerRow}>
+    <View style={styles.card}>
+      <View style={styles.cardBody}>
         <SkeletonPulse style={styles.statusBadge} />
-        <View style={styles.priceContainer}>
-          <SkeletonPulse style={styles.priceSkeleton} />
-          <SkeletonPulse style={styles.priceLabelSkeleton} />
+        <SkeletonPulse style={styles.refSkeleton} />
+        <SkeletonPulse style={styles.trackSkeleton} />
+        <View style={styles.metaRow}>
+          <View>
+            <SkeletonPulse style={styles.metaTitle} />
+            <SkeletonPulse style={styles.metaSub} />
+          </View>
+          <View style={styles.metaRight}>
+            <SkeletonPulse style={styles.metaTitleShort} />
+            <SkeletonPulse style={styles.metaSub} />
+          </View>
         </View>
       </View>
-
-      {/* Listing Name */}
-      <SkeletonPulse style={styles.listingNameSkeleton} />
-
-      {/* Address */}
-      <SkeletonPulse style={styles.addressSkeleton} />
-
-      {/* Time Row */}
-      <View style={[styles.timeRow, { backgroundColor: theme.borderLight }]}>
-        <View style={styles.timeBlock}>
-          <SkeletonPulse style={styles.timeLabelSkeleton} />
-          <SkeletonPulse style={styles.timeValueSkeleton} />
-          <SkeletonPulse style={styles.dateSkeleton} />
-        </View>
-        <SkeletonPulse style={styles.durationSkeleton} />
-        <View style={styles.timeBlock}>
-          <SkeletonPulse style={styles.timeLabelSkeleton} />
-          <SkeletonPulse style={styles.timeValueSkeleton} />
-          <SkeletonPulse style={styles.dateSkeleton} />
-        </View>
-      </View>
-
-      {/* Info Row */}
-      <View style={styles.infoRow}>
-        <SkeletonPulse style={styles.infoSkeleton} />
-        <SkeletonPulse style={styles.infoSkeleton} />
-      </View>
+      <SkeletonPulse style={styles.artSkeleton} />
 
       {/* Action Row */}
       <View style={styles.actionRow}>
@@ -91,10 +68,8 @@ export const BookingCardSkeleton = memo(() => {
 
 // Tabs skeleton
 export const TabsSkeleton = memo(() => {
-  const theme = useMemo(() => getTheme(false), []);
-
   return (
-    <View style={[styles.tabsContainer, { backgroundColor: theme.surface }]}>
+    <View style={styles.tabsContainer}>
       {[1, 2, 3, 4].map((i) => (
         <SkeletonPulse key={i} style={styles.tabSkeleton} />
       ))}
@@ -104,10 +79,8 @@ export const TabsSkeleton = memo(() => {
 
 // Search bar skeleton
 export const SearchBarSkeleton = memo(() => {
-  const theme = useMemo(() => getTheme(false), []);
-
   return (
-    <View style={[styles.searchContainer, { backgroundColor: theme.surface }]}>
+    <View style={styles.searchContainer}>
       <SkeletonPulse style={styles.searchBar} />
     </View>
   );
@@ -141,8 +114,8 @@ function BookingsSkeleton({
   return (
     <View style={styles.container}>
       {showSearch && <SearchBarSkeleton />}
-      {showFilters && <FilterChipsSkeleton />}
       {showTabs && <TabsSkeleton />}
+      {showFilters && <FilterChipsSkeleton />}
       {Array.from({ length: count }).map((_, index) => (
         <BookingCardSkeleton key={index} />
       ))}
@@ -155,150 +128,93 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   card: {
-    borderRadius: borderRadius.xl,
-    marginHorizontal: spacing[4],
-    marginBottom: spacing[3],
-    padding: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    borderRadius: radii.xl,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 18,
+    backgroundColor: palette.surface,
+    overflow: 'hidden',
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing[3],
-  },
+  cardBody: { width: '62%' },
   statusBadge: {
     height: 24,
-    width: 80,
-    borderRadius: borderRadius.full,
+    width: 76,
+    borderRadius: radii.pill,
   },
-  priceContainer: {
-    alignItems: 'flex-end',
-  },
-  priceSkeleton: {
-    height: 20,
-    width: 60,
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing[1],
-  },
-  priceLabelSkeleton: {
-    height: 12,
-    width: 40,
-    borderRadius: borderRadius.sm,
-  },
-  listingNameSkeleton: {
-    height: 18,
+  refSkeleton: {
+    height: 26,
     width: '80%',
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing[2],
+    borderRadius: radii.xs,
+    marginTop: 12,
   },
-  addressSkeleton: {
-    height: 14,
-    width: '65%',
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing[3],
+  trackSkeleton: {
+    height: 8,
+    width: '100%',
+    borderRadius: radii.pill,
+    marginTop: 16,
   },
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing[3],
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing[3],
-  },
-  timeBlock: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  timeLabelSkeleton: {
-    height: 10,
-    width: 30,
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing[1],
-  },
-  timeValueSkeleton: {
-    height: 14,
-    width: 50,
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing[1],
-  },
-  dateSkeleton: {
-    height: 10,
-    width: 40,
-    borderRadius: borderRadius.sm,
-  },
-  durationSkeleton: {
-    height: 24,
-    width: 40,
-    borderRadius: borderRadius.sm,
-  },
-  infoRow: {
+  metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing[3],
+    marginTop: 14,
   },
-  infoSkeleton: {
-    height: 14,
-    width: 100,
-    borderRadius: borderRadius.sm,
+  metaRight: { alignItems: 'flex-end' },
+  metaTitle: { height: 13, width: 90, borderRadius: 6, marginBottom: 6 },
+  metaTitleShort: { height: 13, width: 50, borderRadius: 6, marginBottom: 6 },
+  metaSub: { height: 11, width: 60, borderRadius: 6 },
+  artSkeleton: {
+    position: 'absolute',
+    right: 18,
+    top: 44,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
   },
   actionRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing[2],
-    paddingTop: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#F1F5F9',
+    gap: 8,
+    marginTop: 16,
   },
   actionButtonSkeleton: {
-    height: 36,
-    width: 100,
-    borderRadius: borderRadius.lg,
+    height: 40,
+    width: 104,
+    borderRadius: radii.pill,
   },
   // Tabs styles
   tabsContainer: {
     flexDirection: 'row',
-    marginHorizontal: spacing[4],
-    marginBottom: spacing[3],
-    padding: spacing[1],
-    borderRadius: borderRadius.lg,
-    gap: spacing[1],
+    marginHorizontal: 16,
+    marginBottom: 14,
+    padding: 5,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surface,
+    gap: 4,
   },
   tabSkeleton: {
     flex: 1,
-    height: 40,
-    borderRadius: borderRadius.md,
+    height: 42,
+    borderRadius: radii.pill,
   },
   // Search styles
   searchContainer: {
-    marginHorizontal: spacing[4],
-    marginBottom: spacing[3],
+    marginHorizontal: 16,
+    marginBottom: 12,
   },
   searchBar: {
-    height: 44,
-    borderRadius: borderRadius.lg,
+    height: 52,
+    borderRadius: radii.pill,
   },
   // Filter chips styles
   chipsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: spacing[4],
-    marginBottom: spacing[3],
-    gap: spacing[2],
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    gap: 10,
   },
   chipSkeleton: {
-    height: 32,
-    width: 70,
-    borderRadius: borderRadius.full,
+    height: 42,
+    width: 76,
+    borderRadius: radii.pill,
   },
 });
 

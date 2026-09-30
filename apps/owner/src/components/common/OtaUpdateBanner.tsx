@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import * as otaService from '../../services/otaService';
+import { palette, radii, fonts, shadow } from '../../theme/kit';
 
 export const OtaUpdateBanner = () => {
   const [updateReady, setUpdateReady] = useState<any>(null);
@@ -45,7 +46,7 @@ export const OtaUpdateBanner = () => {
     <Animated.View style={[styles.container, { transform: [{ translateY: slideAnim }] }]}>
       <View style={styles.card}>
         <View style={styles.iconCircle}>
-          <Icon name="download-cloud" size={16} color="#FFFFFF" />
+          <Icon name="download-cloud" size={16} color={palette.textInverse} />
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.title}>Update Available (v{updateReady.bundleVersion})</Text>
@@ -71,7 +72,7 @@ export const OtaUpdateBanner = () => {
           }}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Icon name="x" size={16} color="#9CA3AF" />
+          <Icon name="x" size={16} color={palette.textMuted} />
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -89,23 +90,18 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    backgroundColor: palette.surface,
+    borderRadius: radii.lg,
+    paddingLeft: 10,
+    paddingRight: 10,
     paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 6,
+    ...shadow.lifted,
   },
   iconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#0D7377',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.ink,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -115,28 +111,35 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   title: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1A1A2E',
+    ...fonts.semibold,
+    fontSize: 14,
+    color: palette.text,
   },
   subtitle: {
-    fontSize: 11,
-    color: '#6B7280',
+    ...fonts.medium,
+    fontSize: 12,
+    color: palette.textMuted,
     marginTop: 1,
   },
   restartButton: {
-    backgroundColor: '#0D7377',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    backgroundColor: palette.ink,
+    paddingHorizontal: 14,
+    height: 34,
+    justifyContent: 'center',
+    borderRadius: radii.pill,
     marginRight: 6,
   },
   restartText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    ...fonts.semibold,
+    fontSize: 13,
+    color: palette.textInverse,
   },
   dismissButton: {
-    padding: 4,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: palette.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { resolveImageUri } from '../../utils/imageUri';
 import { pickAndUploadImage, handleMediaUploadError } from '../../utils/mediaUpload';
 import MediaPickerSheet from '../common/MediaPickerSheet';
 import { AppAlert } from '../common/AppAlert';
+import { palette, radii, fonts } from '../../theme/kit';
 
 interface Props {
   images: string[];
@@ -50,22 +51,34 @@ export default function PhotoGrid({ images, onChange, maxCount = 10 }: Props) {
         {images.map((uri, idx) => (
           <View key={`${uri}-${idx}`} style={styles.tile}>
             <Image source={{ uri: resolveImageUri(uri) }} style={styles.image} />
-            <Pressable style={styles.removeBtn} onPress={() => remove(uri)} hitSlop={6}>
-              <Ionicons name="close-circle" size={22} color="#EF4444" />
-            </Pressable>
+            <TouchableOpacity
+              style={styles.removeBtn}
+              onPress={() => remove(uri)}
+              hitSlop={6}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={16} color={palette.text} />
+            </TouchableOpacity>
           </View>
         ))}
         {images.length < maxCount ? (
-          <Pressable style={[styles.tile, styles.addTile]} onPress={openPicker} disabled={busy}>
+          <TouchableOpacity
+            style={[styles.tile, styles.addTile]}
+            onPress={openPicker}
+            disabled={busy}
+            activeOpacity={0.8}
+          >
             {busy ? (
-              <ActivityIndicator color="#0D7377" />
+              <ActivityIndicator color={palette.ink} />
             ) : (
               <>
-                <Ionicons name="add" size={32} color="#0D7377" />
+                <View style={styles.addIcon}>
+                  <Ionicons name="add" size={22} color={palette.textInverse} />
+                </View>
                 <Text style={styles.addText}>Add photo</Text>
               </>
             )}
-          </Pressable>
+          </TouchableOpacity>
         ) : null}
       </View>
 
@@ -84,25 +97,37 @@ const styles = StyleSheet.create({
   tile: {
     width: TILE_SIZE,
     height: TILE_SIZE,
-    borderRadius: 10,
+    borderRadius: radii.md,
     overflow: 'hidden',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: palette.fill,
   },
   addTile: {
-    borderWidth: 2,
-    borderColor: '#0D7377',
+    borderWidth: 1.5,
+    borderColor: palette.peachDeep,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#E8F5F4',
+    backgroundColor: palette.peachSoft,
   },
-  addText: { fontSize: 12, color: '#0D7377', marginTop: 4, fontWeight: '500' },
+  addIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: palette.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addText: { ...fonts.semibold, fontSize: 12, color: palette.text, marginTop: 6 },
   image: { width: '100%', height: '100%' },
   removeBtn: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 11,
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.surface,
   },
 });

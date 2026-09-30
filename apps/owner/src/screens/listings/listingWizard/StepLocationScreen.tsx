@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import WizardHeader from '../../../components/wizard/WizardHeader';
@@ -14,6 +14,7 @@ import { usePropertyWizard } from '../../../context/ListingWizardContext';
 import { useAuth } from '../../../context/AuthContext';
 import { listingService } from '../../../services/listingService';
 import { useScrollToInput } from '../../../hooks/useScrollToInput';
+import { palette, radii, fonts } from '../../../theme/kit';
 
 // The Property backend model stores `address` as a single string. The
 // PincodeAddressBlock widget exposes line1 + line2 separately, so we
@@ -139,7 +140,7 @@ export default function StepLocationScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <View style={styles.screen}>
       <WizardHeader
         title={editPropertyId ? 'Edit Property' : 'Add Property'}
         step={1}
@@ -147,59 +148,70 @@ export default function StepLocationScreen() {
         onBack={() => navigation.goBack()}
       />
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.h1}>Where is your parking property?</Text>
           <Text style={styles.sub}>This is the physical address. You'll add individual parking spaces next.</Text>
 
           {user?.addressLine1 ? (
-            <Pressable onPress={useProfileAddress} style={styles.profileBtn}>
-              <Ionicons name="person-circle-outline" size={18} color="#0D7377" />
+            <TouchableOpacity onPress={useProfileAddress} style={styles.profileBtn} activeOpacity={0.8}>
+              <Ionicons name="person-circle-outline" size={18} color={palette.text} />
               <Text style={styles.profileBtnText}>Use my profile address</Text>
-            </Pressable>
+            </TouchableOpacity>
           ) : null}
 
-          <FormTextInput
-            label="Property name"
-            required
-            value={data.propertyName}
-            onChangeText={(v) => updateField('propertyName', v)}
-            placeholder="e.g., Indiranagar Home Parking"
-            error={errors.propertyName}
-            containerStyle={styles.input}
-          />
+          <View style={styles.card}>
+            <FormTextInput
+              label="Property name"
+              required
+              value={data.propertyName}
+              onChangeText={(v) => updateField('propertyName', v)}
+              placeholder="e.g., Indiranagar Home Parking"
+              error={errors.propertyName}
+              containerStyle={styles.firstInput}
+            />
 
-          <PincodeAddressBlock
-            value={addr}
-            onChange={setAddr}
-            errors={{
-              pincode: errors.pincode,
-              state: errors.state,
-              city: errors.city,
-              addressLine1: errors.addressLine1,
-            }}
-            required
-          />
+            <PincodeAddressBlock
+              value={addr}
+              onChange={setAddr}
+              errors={{
+                pincode: errors.pincode,
+                state: errors.state,
+                city: errors.city,
+                addressLine1: errors.addressLine1,
+              }}
+              required
+            />
+          </View>
 
-          <Text style={styles.sectionTitle}>Map location</Text>
-          <Text style={styles.hint}>Tap or drag the pin to place it on your property.</Text>
-          <LocationPickerMap
-            value={{ lat: data.locationLat, lng: data.locationLng }}
-            onChange={({ lat, lng }) => {
-              updateField('locationLat', lat);
-              updateField('locationLng', lng);
-            }}
-            seedRegion={
-              data.locationLat != null && data.locationLng != null
-                ? { lat: data.locationLat, lng: data.locationLng }
-                : undefined
-            }
-          />
-          {errors.locationLat ? <Text style={styles.errorText}>{errors.locationLat}</Text> : null}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Map location</Text>
+            <Text style={styles.hint}>Tap or drag the pin to place it on your property.</Text>
+            <View style={styles.mapWrap}>
+              <LocationPickerMap
+                value={{ lat: data.locationLat, lng: data.locationLng }}
+                onChange={({ lat, lng }) => {
+                  updateField('locationLat', lat);
+                  updateField('locationLng', lng);
+                }}
+                seedRegion={
+                  data.locationLat != null && data.locationLng != null
+                    ? { lat: data.locationLat, lng: data.locationLng }
+                    : undefined
+                }
+              />
+            </View>
+            {errors.locationLat ? <Text style={styles.errorText}>{errors.locationLat}</Text> : null}
+          </View>
 
-          <View onLayout={registerField('access')} style={styles.input}>
+          <View onLayout={registerField('access')} style={styles.card}>
             <FormTextInput
               label="Access instructions (optional)"
               value={data.accessInstructions}
@@ -217,22 +229,31 @@ export default function StepLocationScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: palette.bg },
+  flex: { flex: 1 },
+  h1: { ...fonts.semibold, fontSize: 26, letterSpacing: -0.6, color: palette.text, marginBottom: 6 },
+  sub: { ...fonts.medium, fontSize: 14.5, lineHeight: 20, color: palette.textMuted, marginBottom: 18 },
+  card: {
+    backgroundColor: palette.surface,
+    borderRadius: radii.xl,
+    padding: 18,
+    marginBottom: 12,
+  },
+  cardTitle: { ...fonts.semibold, fontSize: 17, color: palette.text, marginBottom: 4 },
   content: { padding: 16, paddingBottom: 200 },
-  h1: { fontSize: 22, fontWeight: '700', color: '#1F2937', marginBottom: 6 },
-  sub: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginTop: 16, marginBottom: 4 },
-  hint: { fontSize: 12, color: '#6B7280', marginBottom: 8 },
-  input: { marginTop: 16 },
-  errorText: { color: '#EF4444', fontSize: 12, marginTop: 6 },
+  hint: { ...fonts.medium, fontSize: 13, color: palette.textMuted, marginBottom: 12 },
+  mapWrap: { borderRadius: radii.lg, overflow: 'hidden' },
+  firstInput: { marginBottom: 16 },
+  errorText: { ...fonts.medium, color: palette.danger, fontSize: 12.5, marginTop: 8 },
   profileBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#E8F5F4',
-    borderRadius: 8,
-    marginBottom: 16,
+    paddingHorizontal: 16,
+    height: 40,
+    backgroundColor: palette.surface,
+    borderRadius: radii.pill,
+    marginBottom: 14,
   },
-  profileBtnText: { color: '#0D7377', fontSize: 13, fontWeight: '500', marginLeft: 6 },
+  profileBtnText: { ...fonts.semibold, color: palette.text, fontSize: 14, marginLeft: 8 },
 });
