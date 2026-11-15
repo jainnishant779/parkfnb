@@ -181,6 +181,14 @@ def heading_from_trajectory(
 # make_ground_footprint is imported from occupancy.py (single source of truth)
 
 
+def _box_iou(a, b) -> float:
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
 class VehicleMOTTracker:
     """
     Multi-Object Tracking manager.
@@ -197,11 +205,30 @@ class VehicleMOTTracker:
         self.max_lost_seconds = max_lost_seconds
         self.tracks: dict[int, TrackedVehicle] = {}
         self._next_synthetic_id = 9000
+        # ultralytics keeps ONE set of ByteTrack trackers on the model's predictor, however many cameras share the model: a second camera
+        # (the gate phone) or a re-marked layout would carry the first one's associations and track ids.  Each of these keeps its own and
+        # puts it on the predictor for the length of its own call.
+        self._ult_trackers = None
 
     def reset(self):
         """Clears all tracking history."""
         self.tracks.clear()
         self._next_synthetic_id = 9000
+        self._ult_trackers = None                         # a new ByteTrack on the next picture
+
+    def _use_own_trackers(self) -> None:
+        pred = getattr(self.model, "predictor", None)
+        if pred is None:
+            return                                        # the first call: ultralytics makes the predictor and the trackers
+        if self._ult_trackers is not None:
+            pred.trackers = self._ult_trackers
+        elif hasattr(pred, "trackers"):
+            del pred.trackers                             # someone else's: this one starts clean
+
+    def _keep_own_trackers(self) -> None:
+        pred = getattr(self.model, "predictor", None)
+        if pred is not None and hasattr(pred, "trackers"):
+            self._ult_trackers = pred.trackers
 
     def track_frame(self, frame: np.ndarray, conf: float = 0.10,
                     imgsz: int = 1280) -> list[TrackedVehicle]:
@@ -209,6 +236,7 @@ class VehicleMOTTracker:
         Runs YOLO with ByteTrack on the frame and returns updated persistent vehicle tracks.
         """
         now = time.time()
+        self._use_own_trackers()
         results = self.model.track(
             source=frame,
             persist=True,
@@ -217,6 +245,7 @@ class VehicleMOTTracker:
             imgsz=imgsz,
             verbose=False
         )
+        self._keep_own_trackers()
 
         active_track_ids = set()
         current_vehicles: list[TrackedVehicle] = []
@@ -313,6 +342,55 @@ class VehicleMOTTracker:
         # Handle vehicle-to-vehicle occlusion and lost tracks
         self._evaluate_occlusion_and_prune(active_track_ids, current_vehicles, now)
         return current_vehicles
+
+    EXTRA_ID_BASE = 50000          # ids of vehicles that only the second model saw, apart from ByteTrack's
+    EXTRA_MATCH_IOU = 0.3          # the same extra vehicle from one refresh to the next
+
+    def add_extra(self, boxes: list[tuple[float, float, float, float, float]], tracked: list[TrackedVehicle],
+                  now: float | None = None) -> list[TrackedVehicle]:
+        """
+        Vehicles the tracking model missed but a second model found (`boxes`: x1, y1, x2, y2, confidence), typically a car
+        half hidden behind another one.  Each becomes a TrackedVehicle with a stable id of its own (matched to the previous
+        refresh by overlap), so the bays see it like any other car.  Returns those vehicles; `tracked` is not changed.
+        """
+        now = time.time() if now is None else now
+        if not hasattr(self, "_extra"):
+            self._extra: dict[int, TrackedVehicle] = {}
+            self._next_extra_id = self.EXTRA_ID_BASE
+        out, used = [], set()
+        for x1, y1, x2, y2, conf in boxes:
+            best, best_iou = None, self.EXTRA_MATCH_IOU
+            for tid, tv in self._extra.items():
+                if tid in used:
+                    continue
+                iou = _box_iou((x1, y1, x2, y2), tv.bbox)
+                if iou >= best_iou:
+                    best, best_iou = tid, iou
+            if best is None:
+                best = self._next_extra_id
+                self._next_extra_id += 1
+                self._extra[best] = TrackedVehicle(
+                    track_id=best, cls_id=0, cls_name="vehicle", bbox=(x1, y1, x2, y2), confidence=conf,
+                    footprint=make_ground_footprint(x1, y1, x2, y2, self.footprint_fraction, angle_deg=0.0),
+                    first_seen=now, last_seen=now, centroid_history=deque([((x1 + x2) / 2, (y1 + y2) / 2, now)], maxlen=30))
+            tv = self._extra[best]
+            tv.bbox, tv.confidence, tv.last_seen = (x1, y1, x2, y2), conf, now
+            tv.footprint = make_ground_footprint(x1, y1, x2, y2, self.footprint_fraction, angle_deg=tv.orientation_degrees)
+            tv.occlusion_state = OCCLUSION_VISIBLE
+            setattr(tv, "source", "seg")
+            used.add(best)
+            out.append(tv)
+        for tid in [t for t in self._extra if t not in used and now - self._extra[t].last_seen > self.max_lost_seconds]:
+            del self._extra[tid]
+        # a vehicle found only by the second model is usually the one behind: mark it hidden like any other
+        for tv in out:
+            for other in tracked:
+                ix = max(0.0, min(tv.x2, other.x2) - max(tv.x1, other.x1))
+                iy = max(0.0, min(tv.y2, other.y2) - max(tv.y1, other.y1))
+                share = ix * iy / tv.area if tv.area > 0 else 0.0
+                if share > 0.20 and tv.y2 < other.y2:
+                    tv.occlusion_state = OCCLUSION_HEAVY if share > 0.45 else OCCLUSION_PARTIAL
+        return out
 
     def _evaluate_occlusion_and_prune(self, active_track_ids: set[int],
                                      current_vehicles: list[TrackedVehicle],

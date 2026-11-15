@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ParkFNB Operator Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+  :root {
+    --bg: #eef1fb; --card: #ffffff; --ink: #0f1b3d; --muted: #5d6988; --line: #e1e6f4;
+    --navy: #0b1d3f; --navy-2: #12306b; --navy-ink: #e8edfb; --navy-muted: #9aa8cc;
+    --blue: #2563eb; --red: #e5484d; --amber: #f5a524;
+    --shadow: 0 1px 2px rgba(15,27,61,.06), 0 8px 24px rgba(15,27,61,.06); --radius: 16px;
+  }
+  :root:not([data-theme="light"]) { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #080f20; --card: #101a33; --ink: #e8edfb; --muted: #9aa8cc; --line: #1d2a4d; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .box { width: 100%; max-width: 380px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .top { background: linear-gradient(135deg, var(--navy), var(--navy-2)); color: var(--navy-ink); padding: 18px 20px; display: flex; gap: 12px; align-items: center; }
+  .logo { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-weight: 800; font-size: 20px; color: #fff; background: linear-gradient(135deg, #22c55e, #2563eb); }
+  .top b { display: block; letter-spacing: .16em; font-size: 16px; line-height: 1.1; } .top small { color: var(--navy-muted); font-size: 12px; }
+  form { padding: 20px; display: grid; gap: 14px; }
+  h1 { margin: 0; font-size: 18px; }
+  label { display: grid; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 500; }
+  input { font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); min-height: 44px; }
+  input:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+  button { font: inherit; font-weight: 700; font-size: 15px; min-height: 44px; border: 0; border-radius: 10px; background: var(--blue); color: #fff; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  .msg { padding: 10px 12px; border-radius: 10px; font-size: 14px; background: color-mix(in srgb, var(--red) 12%, var(--card)); border: 1px solid color-mix(in srgb, var(--red) 45%, transparent); }
+  .msg.lock { background: color-mix(in srgb, var(--amber) 14%, var(--card)); border-color: color-mix(in srgb, var(--amber) 50%, transparent); }
+  .back { text-align: center; font-size: 13px; padding: 0 20px 18px; } .back a { color: var(--blue); text-decoration: none; }
+</style>
+</head>
+<body>
+<main class="box">
+  <div class="top"><div class="logo" aria-hidden="true">P</div><div><b>PARKFNB</b><small>Operator sign in</small></div></div>
+  <form method="post" action="/admin" id="f" autocomplete="on">
+    <h1>Sign in</h1>
+    <div class="msg" id="msg" role="alert" hidden></div>
+    <label>ID <input name="user" id="user" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="64" required autofocus></label>
+    <label>Password <input name="password" id="pw" type="password" autocomplete="current-password" maxlength="256" required></label>
+    <input type="hidden" name="next" id="next" value="">
+    <button type="submit" id="go">Sign in</button>
+  </form>
+  <div class="back"><a href="/live">&larr; Back to the live view</a></div>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search), msg = document.getElementById("msg");
+  document.getElementById("next").value = q.get("next") || "";
+  var err = q.get("error");
+  if (err === "wrong") { msg.textContent = "Wrong ID or password."; msg.hidden = false; }
+  else if (err === "locked") {
+    var w = parseInt(q.get("wait"), 10) || 15;
+    msg.textContent = "Too many wrong tries. Please wait about " + w + " minute" + (w === 1 ? "" : "s") + " and try again.";
+    msg.className = "msg lock"; msg.hidden = false;
+  }
+  document.getElementById("f").addEventListener("submit", function () { document.getElementById("go").disabled = true; });
+})();
+</script>
+</body>
+</html>

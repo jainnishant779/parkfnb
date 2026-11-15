@@ -18,6 +18,7 @@ Formal 7-State Product Contract:
 from __future__ import annotations
 
 import math
+import os
 import time
 from collections import deque, Counter
 from dataclasses import dataclass, field, asdict
@@ -29,7 +30,7 @@ from shapely.geometry import Polygon, box as shapely_box
 from shapely.validation import make_valid
 from calibration import SiteCalibration, fit_site_calibration
 from contact import (
-    DOOR_GAP_M, STALL_LENGTH_M, STALL_WIDTH_M, BayFrame, analyse_contact, bay_frame, to_other_stall,
+    DOOR_GAP_M, STALL_LENGTH_M, STALL_WIDTH_M, BayFrame, analyse_contact, bay_frame, resolve_contact_height_m, to_other_stall,
 )
 from detector import normalise_plate
 from intelligence import (
@@ -42,10 +43,11 @@ from intelligence import (
 )
 
 # --- tuning constants & legacy aliases ---------------------------------------
-OCCUPIED_AT = 0.50          # coverage >= this -> occupied
-EMPTY_AT = 0.20             # coverage <= this -> empty
+OCCUPIED_AT = 0.50          # coverage >= this -> occupied   (not read by the current engine; kept for old imports)
+EMPTY_AT = 0.20             # coverage <= this -> empty      (not read by the current engine; kept for old imports)
 FOOTPRINT_FRACTION = 0.28   # default bottom slice of box on tarmac
 FOOTPRINT_BLEND_DEG = 12.0  # straight-on slice -> angled chassis, blended over this many degrees
+GROUND_ASSIGN_MIN_SHARE = 0.25   # a car goes by its ground footprint when at least this much of it is inside some bay
 
 # Two-wheeler heuristic
 TWO_WHEELER_MAX_AREA_RATIO = 0.22   # box area vs bay area
@@ -180,6 +182,19 @@ def ground_footprint(x1: float, y1: float, x2: float, y2: float,
     return affinity.rotate(rect, angle_deg, origin=(cx, cy_ground))
 
 
+ASSIGN_STICKY_MARGIN = 0.15      # a car keeps the bay it was in unless another bay holds this much MORE of it
+
+
+def sticky_owner(scores: dict, best, previous):
+    """The bay a car belongs to: the best one, except that a car which stands over two bays almost equally (30 Oct: a Fortuner, 64 % in
+    Bay-05 and 51 % in Bay-06) stays in the one it already had.  Without this its bay flipped from picture to picture, and every flip was
+    a car leaving one bay and "arriving" in the next, with its plate written down twice."""
+    if (best is not None and previous in scores and previous != best and scores[previous] >= GROUND_ASSIGN_MIN_SHARE
+            and scores[previous] >= scores[best] - ASSIGN_STICKY_MARGIN):
+        return previous
+    return best
+
+
 def coverage(bay: Polygon, vehicle_footprint: Polygon) -> float:
     """Fraction of the bay polygon covered by the vehicle's ground footprint."""
     if bay.area <= 0:
@@ -229,6 +244,8 @@ class Detection:
     # the parking verdict falls back to the box-slice estimate.
     contact_shape: object = None
     contact_source: str | None = None
+    vehicle_type: str | None = None
+    contact_height_m: float | None = None
 
     @property
     def width(self) -> float:
@@ -327,6 +344,8 @@ class BayState:
     # The car relative to its bay in metres (contact.bay_relation); None when the
     # verdict came from the box-slice estimate.
     bay_relation: dict | None = None
+    # Whether the latest frame saw a vehicle in this bay, whatever the held state says.
+    seen_vehicle: bool = False
 
     def dict(self):
         d = asdict(self)
@@ -357,6 +376,26 @@ def import_optimizer_layout(layout_data: dict, calibrator=None) -> tuple[dict[st
         camera_id=layout_data.get("camera_id", "default"),
         version=str(layout_data.get("version", "1.0"))
     )
+
+    # GeoJSON FeatureCollection support
+    if isinstance(layout_data, dict) and layout_data.get("type") == "FeatureCollection" and "features" in layout_data:
+        bays = {}
+        for idx, f in enumerate(layout_data.get("features", []), 1):
+            props = f.get("properties") or {}
+            geom = f.get("geometry") or {}
+            sid = str(props.get("bay_id") or props.get("id") or f.get("id") or f"Bay-{idx:02d}")
+            if geom.get("type") == "Polygon" and geom.get("coordinates"):
+                ring = [[float(p[0]), float(p[1])] for p in geom["coordinates"][0]]
+                if len(ring) == 5 and ring[0] == ring[-1]:
+                    ring = ring[:4]
+                corder = props.get("corner_order") or []
+                if list(corder) == ["far_left", "far_right", "near_right", "near_left"] and len(ring) == 4:
+                    coords = [ring[3], ring[2], ring[1], ring[0]]
+                else:
+                    coords = ring
+                bays[sid] = coords
+                registry.add_slot(SlotDefinition(slot_id=sid, polygon=coords))
+        return bays, registry
 
     slots_raw = layout_data.get("slots") or layout_data.get("bays")
     if not slots_raw and "result" in layout_data and isinstance(layout_data["result"], dict):
@@ -391,7 +430,14 @@ def import_optimizer_layout(layout_data: dict, calibrator=None) -> tuple[dict[st
                         ))
     elif isinstance(slots_raw, dict):
         for k, v in slots_raw.items():
-            coords = list(v)
+            if isinstance(v, dict) and "points" in v:
+                pts = [[float(p[0]), float(p[1])] for p in v.get("points", [])]
+                if len(pts) == 4 and layout_data.get("schema") == "parkfnb.camera_bays.v1":
+                    coords = [pts[3], pts[2], pts[1], pts[0]]
+                else:
+                    coords = pts
+            else:
+                coords = [list(map(float, p)) for p in v]
             bays[str(k)] = coords
             registry.add_slot(SlotDefinition(slot_id=str(k), polygon=coords))
     elif isinstance(layout_data, dict) and not any(k in layout_data for k in ("slots", "result", "bays")):
@@ -492,16 +538,62 @@ class BayMap:
             bid: [coverage(poly, fp) for fp in footprints]
             for bid, poly in self.polygons.items()
         }
+        # The verdict below is worked out on a footprint turned to the bay's own axis.  On a camera that looks along
+        # slanted bays (axis 25-45 degrees in the picture) the turned footprint can land mostly in the NEXT bay: on
+        # 28 Oct a car lying over Bay-04/05 went to Bay-04 on the flat footprint (0.275 v 0.252), was then turned to
+        # Bay-04's axis, covered 2% of Bay-04, and every bay read Free.  So a bay a car touches is scored on the footprint
+        # that bay will use, and the car goes to the bay that footprint covers most.
+        # Which bay a car belongs to is the bay holding most of THE CAR's footprint.  `coverage` is a share of the BAY, and a bay far
+        # from the camera is small in the picture, so the same overlap is a bigger share of it: a car straddling two bays went to the
+        # smaller, farther one.  On 29 Oct that put three of four cars one bay to the right (the Range Rover in Bay-03 was Bay-04's,
+        # the black car in Bay-06 was Bay-07's) and every verdict, plate and "blocked" followed the wrong bay.
+        car_share: dict[str, list[float]] = {bid: [0.0] * len(dets) for bid in self.polygons}
+        for vi, d in enumerate(dets):
+            for bid, poly in self.polygons.items():
+                if grid[bid][vi] > 0:
+                    turned = ground_footprint(d.x1, d.y1, d.x2, d.y2, fraction, angle_deg=self.axes.get(bid, 0.0))
+                    grid[bid][vi] = coverage(poly, turned)
+                    car_share[bid][vi] = poly.intersection(turned).area / turned.area if turned.area > 0 else 0.0
+
+        cal = self.calibration(image_size) if image_size is not None else None
+
+        # The box says only where the car is in the PICTURE; the ground it stands on is not where its box is (a tall car's box leans
+        # over the next bay).  When the car has a silhouette and the camera is known, the bay is the one holding most of the footprint
+        # reconstructed on the ground (the same footprint the verdict uses): on 29 Oct the box-slice put the Range Rover in Bay-04
+        # (the ground footprint: 70 % in Bay-03) and the black car in Bay-07 (76 % in Bay-06).
+        ground_share: dict[int, dict[str, float]] = {}
+        if cal is not None and image_size is not None:
+            for vi, d in enumerate(dets):
+                shape = getattr(d, "contact_shape", None)
+                if shape is None:
+                    continue
+                box_poly = shapely_box(d.x1, d.y1, d.x2, d.y2)
+                h_m = resolve_contact_height_m(getattr(d, "vehicle_type", None), getattr(d, "contact_height_m", None))
+                for bid, poly in self.polygons.items():
+                    if grid[bid][vi] <= 0 or bid not in cal.frames or not poly.intersects(box_poly):
+                        continue
+                    try:
+                        rep = analyse_contact(shape, bid, cal.frames, image_size, contact_height_m=h_m,
+                                              min_crossing_m=cfg.line_crossing_min_m, poses=cal.poses)
+                    except Exception:
+                        continue
+                    if rep.camera_recovered and rep.footprint_stall is not None:
+                        ground_share.setdefault(vi, {})[bid] = max(0.0, 1.0 - rep.outside_ratio)
 
         # Greedy / Hungarian 1-Car-to-1-Bay Assignment
         owner: dict[int, str] = {}
         for vi in range(len(dets)):
-            scores = {bid: grid[bid][vi] for bid in self.polygons}
+            scores = {bid: (car_share[bid][vi] if grid[bid][vi] > 0 else 0.0) for bid in self.polygons}
+            ground = ground_share.get(vi)
+            if ground and max(ground.values()) >= GROUND_ASSIGN_MIN_SHARE:
+                scores = ground
             best = max(scores, key=scores.get) if scores else None
+            tid = getattr(dets[vi], "track_id", None)
+            hist = self.vehicle_state_manager.get(tid) if tid is not None else None
+            best = sticky_owner(scores, best, getattr(hist, "slot_id", None))
             if best is not None and scores[best] > 0:
                 owner[vi] = best
 
-        cal = self.calibration(image_size) if image_size is not None else None
         out: list[BayObservation] = []
         for bid, poly in self.polygons.items():
             mine = [vi for vi, b in owner.items() if b == bid]
@@ -558,7 +650,10 @@ class BayMap:
             contact = None
             shape = getattr(det, "contact_shape", None)
             if shape is not None and cal is not None and bid in cal.frames:
+                contact_h = resolve_contact_height_m(getattr(det, "vehicle_type", None),
+                                                     getattr(det, "contact_height_m", None))
                 contact = analyse_contact(shape, bid, cal.frames, image_size,
+                                          contact_height_m=contact_h,
                                           min_crossing_m=cfg.line_crossing_min_m,
                                           poses=cal.poses)
                 # Without a recovered camera, contact points cannot be corrected
@@ -756,13 +851,20 @@ class ParkingIntelligenceEngine:
 
     def __init__(self, bay_map: BayMap, camera_profile: CameraProfile | None = None,
                  thresholds: ParkingThresholds | None = None, window: int = 6,
-                 occupy_votes: int = 3, free_votes: int = 5):
+                 occupy_votes: int | None = None, free_votes: int | None = None,
+                 min_dwell_s: float | None = None):
         self.map = bay_map
         self.profile = camera_profile or getattr(bay_map, "profile", CameraProfile())
         self.thresholds = thresholds or ParkingThresholds()
         self.window = window
-        self.occupy_votes = occupy_votes
-        self.free_votes = free_votes
+        # Defaults (3 readings to become taken, 5 to become free, no extra dwell) can be set per
+        # deployment with ANPR_OCCUPY_VOTES, ANPR_FREE_VOTES and ANPR_MIN_DWELL_S.
+        self.occupy_votes = int(os.environ.get("ANPR_OCCUPY_VOTES", 3)) if occupy_votes is None else occupy_votes
+        self.free_votes = int(os.environ.get("ANPR_FREE_VOTES", 5)) if free_votes is None else free_votes
+        # A bay that just became taken stays taken at least this long (stops flapping on a
+        # borderline detection).  0 = off.
+        self.min_dwell_s = (float(os.environ.get("ANPR_MIN_DWELL_S", 0.0))
+                            if min_dwell_s is None else min_dwell_s)
 
         self.history: dict[str, deque[BayObservation]] = {
             b: deque(maxlen=window) for b in bay_map.bay_ids
@@ -781,7 +883,12 @@ class ParkingIntelligenceEngine:
         return events
 
     def update(self, detections: Iterable, observations: list | None = None,
-               image_size: tuple[int, int] | None = None) -> dict[str, BayState]:
+               image_size: tuple[int, int] | None = None,
+               hold_free: bool = False) -> dict[str, BayState]:
+        """
+        `hold_free=True` is for frames the detector cannot be trusted to see an empty bay in
+        (too dark): a "free" observation is then not counted against a bay that holds a car.
+        """
         now = time.time()
         obs_list = observations if observations is not None else self.map.observe(
             detections, camera_profile=self.profile, thresholds=self.thresholds,
@@ -796,9 +903,12 @@ class ParkingIntelligenceEngine:
                 self.states[bid] = BayState(bid)
 
             hist = self.history[bid]
-            hist.append(obs)
             cur = self.states[bid]
             cur.changed = False
+            cur.seen_vehicle = obs.state not in (STATE_FREE, STATE_UNKNOWN)
+            if hold_free and obs.state == STATE_FREE and cur.state not in (STATE_FREE, STATE_UNKNOWN):
+                continue
+            hist.append(obs)
 
             if obs.plate and obs.state != STATE_FREE:
                 self.plate_history[bid].append(obs.plate)
@@ -874,6 +984,12 @@ class ParkingIntelligenceEngine:
                 new = STATE_FREE
                 cur.wrong_since = None
 
+            # a bay that has just become taken is not freed again before min_dwell_s is up (a car
+            # arriving is shown at once; only the flicker back to "free" is damped)
+            if (new == STATE_FREE and cur.state not in (STATE_FREE, STATE_UNKNOWN)
+                    and self.min_dwell_s > 0 and now - cur.since < self.min_dwell_s):
+                new = cur.state
+
             state_transition = (new != cur.state)
             if state_transition:
                 cur.previous_state = cur.state
@@ -882,29 +998,10 @@ class ParkingIntelligenceEngine:
                 cur.changed = True
 
             cur.status = "free" if cur.state == STATE_FREE else "occupied"
-            cur.coverage = obs.coverage
-            cur.straddles = obs.straddles
-            cur.two_wheeler = obs.two_wheeler
-            cur.parking_quality = obs.parking_quality
-            cur.lateral_offset = obs.lateral_offset
-            cur.encroachments = obs.encroachments
-            cur.quality_note = obs.quality_note
-            cur.outside_slot_percent = obs.outside_slot_percent
-            cur.angle_error_deg = obs.angle_error_deg
-            cur.double_parking = obs.double_parking
-            cur.vehicle_id = obs.vehicle_track_id
-            cur.occlusion_state = obs.occlusion_state
-            cur.occlusion_level = obs.occlusion_level
-            cur.visible_geometry_confidence = obs.visible_geometry_confidence
-            cur.parking_confidence = obs.parking_confidence
-            cur.reason = obs.reason
-            cur.geometry_source = obs.geometry_source
-            cur.line_crossing_m = obs.line_crossing_m
-            cur.line_crossing_possible_m = obs.line_crossing_possible_m
-            cur.crossing_side = obs.crossing_side
-            cur.skew_deg = obs.skew_deg
-            cur.reason_codes = list(obs.reason_codes)
-            cur.bay_relation = obs.bay_relation
+            # A held state keeps the details of the last frame that agreed with it, so a taken
+            # bay never shows "Slot is empty" (and a free one never a car's numbers).
+            if (obs.state == STATE_FREE) == (cur.state == STATE_FREE) or cur.state == STATE_UNKNOWN:
+                self._copy_details(cur, obs)
 
             # Plate consensus
             voted_plate = consensus_plate(self.plate_history[bid])
@@ -927,6 +1024,7 @@ class ParkingIntelligenceEngine:
                         "coverage": cur.coverage,
                         "outside_percent": cur.outside_slot_percent,
                         "parking_confidence": cur.parking_confidence,
+                        "previous": cur.previous_state,      # "unknown" = the first reading since start-up, not a change
                         "timestamp": now,
                     })
                 elif cur.state == STATE_FREE and cur.previous_state != STATE_FREE:
@@ -935,6 +1033,7 @@ class ParkingIntelligenceEngine:
                         "bay_id": bid,
                         "track_id": cur.vehicle_id,
                         "plate": cur.plate,
+                        "previous": cur.previous_state,
                         "timestamp": now,
                     })
 
@@ -962,6 +1061,43 @@ class ParkingIntelligenceEngine:
                 self.plate_history[bid].clear()
 
         return self.states
+
+    def agreement(self, bay_id: str) -> float | None:
+        """Share of the last few readings (the vote window) that agree the bay is free / taken as
+        it is now.  A real, defined measure of how settled the bay is; None before any reading."""
+        hist = self.history.get(bay_id)
+        cur = self.states.get(bay_id)
+        if not hist or cur is None or cur.state == STATE_UNKNOWN:
+            return None
+        free = cur.state == STATE_FREE
+        agree = sum(1 for o in hist if (o.state == STATE_FREE) == free)
+        return round(agree / len(hist), 2)
+
+    @staticmethod
+    def _copy_details(cur: BayState, obs) -> None:
+        cur.coverage = obs.coverage
+        cur.straddles = obs.straddles
+        cur.two_wheeler = obs.two_wheeler
+        cur.parking_quality = obs.parking_quality
+        cur.lateral_offset = obs.lateral_offset
+        cur.encroachments = obs.encroachments
+        cur.quality_note = obs.quality_note
+        cur.outside_slot_percent = obs.outside_slot_percent
+        cur.angle_error_deg = obs.angle_error_deg
+        cur.double_parking = obs.double_parking
+        cur.vehicle_id = obs.vehicle_track_id
+        cur.occlusion_state = obs.occlusion_state
+        cur.occlusion_level = obs.occlusion_level
+        cur.visible_geometry_confidence = obs.visible_geometry_confidence
+        cur.parking_confidence = obs.parking_confidence
+        cur.reason = obs.reason
+        cur.geometry_source = obs.geometry_source
+        cur.line_crossing_m = obs.line_crossing_m
+        cur.line_crossing_possible_m = obs.line_crossing_possible_m
+        cur.crossing_side = obs.crossing_side
+        cur.skew_deg = obs.skew_deg
+        cur.reason_codes = list(obs.reason_codes)
+        cur.bay_relation = obs.bay_relation
 
     def summary(self) -> dict:
         s = list(self.states.values())

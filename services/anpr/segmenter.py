@@ -106,10 +106,48 @@ def attach_silhouettes(detections, silhouettes: list[Silhouette]) -> int:
     return n
 
 
+EXTRA_MIN_CONF = float(os.getenv("ANPR_SEG_EXTRA_CONF", "0.4"))
+EXTRA_MAX_IOU = 0.5            # overlapping a tracked car this much: it is that car
+EXTRA_MAX_INSIDE = 0.7         # mostly inside a tracked car's box: part of that car, not another one
+
+
+EXTRA_MIN_W_FRAC, EXTRA_MIN_H_FRAC = 0.05, 0.04      # a car is at least this share of the picture across / high
+
+
+def unmatched_boxes(silhouettes: list[Silhouette], detections, min_conf: float = EXTRA_MIN_CONF, image_size=None):
+    """
+    Vehicles the segmentation model found that the tracking model did not: (x1, y1, x2, y2, confidence) for each
+    confident silhouette that is neither the same car as a detection (IoU) nor a piece of one (mostly inside its box).
+    The tracking model was trained on close-up plate pictures and misses a car half hidden behind another one;
+    the COCO model sees it.
+    """
+    dets = [(float(d.x1), float(d.y1), float(d.x2), float(d.y2)) for d in detections]
+    out = []
+    for s in silhouettes:
+        if s.confidence < min_conf:
+            continue
+        b = s.box
+        if image_size and ((b[2] - b[0]) < EXTRA_MIN_W_FRAC * image_size[0] or (b[3] - b[1]) < EXTRA_MIN_H_FRAC * image_size[1]):
+            continue            # 28 Oct: a 30 x 15 px plastic wrapper on the grass was "a car" and made a ghost 3D box and a violation
+        area = max(1e-6, (b[2] - b[0]) * (b[3] - b[1]))
+        same = False
+        for d in dets:
+            ix = max(0.0, min(b[2], d[2]) - max(b[0], d[0]))
+            iy = max(0.0, min(b[3], d[3]) - max(b[1], d[1]))
+            if _iou(b, d) >= EXTRA_MAX_IOU or ix * iy / area >= EXTRA_MAX_INSIDE:
+                same = True
+                break
+        if not same:
+            out.append((b[0], b[1], b[2], b[3], s.confidence))
+    return out
+
+
 class Segmenter:
     def __init__(self, weights: str | Path | None = None, interval_s: float | None = None,
                  enabled: str | None = None):
         self.weights = Path(weights or os.getenv("ANPR_SEG_WEIGHTS") or DEFAULT_WEIGHTS)
+        # 960, not the model's 640: at 640 a car half hidden behind another one is only found in pieces
+        self.imgsz = int(os.getenv("ANPR_SEG_IMGSZ", "960"))
         self.interval_s = float(interval_s if interval_s is not None
                                 else os.getenv("ANPR_SEG_INTERVAL", "3"))
         mode = (enabled or os.getenv("ANPR_SEG", "auto")).lower()
@@ -143,7 +181,7 @@ class Segmenter:
         with self._lock:
             try:
                 model = self._load()
-                r = model.predict(frame, classes=VEHICLE_CLASSES, verbose=False)[0]
+                r = model.predict(frame, classes=VEHICLE_CLASSES, imgsz=self.imgsz, verbose=False)[0]
             except (MemoryError, RuntimeError) as e:     # torch reports OOM as RuntimeError
                 self._disabled_until = now + OOM_COOLDOWN_S
                 self._model = None

@@ -23,6 +23,7 @@ rejected bay falls back to the box-slice estimate.
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -45,6 +46,7 @@ GOOD, DEGRADED, REJECTED = "good", "degraded", "rejected"
 
 # Bays that must fit the shared camera well before its metres are trusted.
 MIN_GOOD_BAYS = 2
+MIN_FOCAL_FRAC = float(os.getenv("ANPR_MIN_FOCAL_FRAC", "0.28"))     # smallest believable focal length, as a share of the picture width
 
 
 @dataclass
@@ -279,7 +281,10 @@ def _plausible(cam: Camera, image_size) -> bool:
     """The same plausibility gates as single-bay recovery (contact.camera_pose)."""
     w_img, h_img = image_size
     vp = cam.vanishing_uv
-    return (0.35 * w_img <= cam.focal_px <= 2.2 * w_img and 2.0 <= cam.height_m <= 25.0
+    # The lower focal bound admits an ultra-wide phone lens (the 0.5x camera is about 110-120 degrees across: a focal
+    # length of 0.33 x the width).  At 0.35 it refused the best fit of a layout measured on the ground (corner error
+    # 2.6-9 px, f = 0.33 x width) and left that site with no 3D camera at all.
+    return (MIN_FOCAL_FRAC * w_img <= cam.focal_px <= 2.2 * w_img and 2.0 <= cam.height_m <= 25.0
             and vp[1] > h_img and -w_img <= vp[0] <= 2 * w_img)
 
 

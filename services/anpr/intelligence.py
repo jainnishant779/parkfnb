@@ -23,6 +23,7 @@ Quantifies parking correctness via:
 from __future__ import annotations
 
 import math
+import os
 import time
 from dataclasses import dataclass, field, asdict
 from typing import Sequence, Iterable, Dict, List, Any
@@ -96,7 +97,8 @@ class ParkingThresholds:
     min_persistence_seconds: float = 5.0     # Time violation must persist before WRONG alert
     min_free_persistence_seconds: float = 4.0 # Time bay must remain empty before FREE
     occlusion_threshold: float = 0.35        # >= 35% bbox masked by foreground vehicle -> occluded
-    line_crossing_min_m: float = 0.10        # ground-contact overshoot past a stall line
+    line_crossing_min_m: float = 0.10        # ground-contact overshoot past a side line (into the next bay)
+    end_line_tolerance_m: float = float(os.getenv("ANPR_END_LINE_TOLERANCE_M", "0.40"))   # past the front/back line: bumper overhang
 
     def dict(self) -> dict:
         return asdict(self)
@@ -407,6 +409,39 @@ def compute_inter_vehicle_occlusion(
     return max_mask_ratio, "visible"
 
 
+LINE_NAMES = {"left": "left line", "right": "right line", "near": "front line (road side)", "far": "back line"}
+
+
+def _per_side(per_side, side, value) -> dict:
+    """Metres past each line.  A report built without the per-side figures falls back to its single worst side."""
+    if per_side:
+        return {k: float(v) for k, v in per_side.items()}
+    return {side: float(value)} if side and value else {}
+
+
+def _worst(d: dict, names) -> tuple[float, str | None]:
+    best, which = 0.0, None
+    for n in names:
+        if d.get(n, 0.0) > best:
+            best, which = d[n], n
+    return best, which
+
+
+GROUND_OCCUPIED_MIN_SHARE = 0.25     # this much of a car's ground footprint inside a bay and the bay is not "free" (same as a car "across" two)
+
+
+def _reported_crossing(contact, cfg: "ParkingThresholds") -> tuple[float, str | None]:
+    """The crossing worth showing: the side whose overshoot is furthest past what its kind of line allows (a side
+    line 0.12 m over matters more than a front line 0.30 m over, which is only bumper overhang)."""
+    cert = _per_side(contact.crossing_per_side, contact.crossing_side, contact.crossing_m)
+    best, which, best_excess = contact.crossing_m, contact.crossing_side, float("-inf")
+    for name, v in cert.items():
+        excess = v - (cfg.end_line_tolerance_m if name in ("near", "far") else cfg.line_crossing_min_m)
+        if v > 0 and excess > best_excess:
+            best, which, best_excess = v, name, excess
+    return best, which
+
+
 def _classify_from_contact(contact, cfg: "ParkingThresholds") -> tuple[str, str, list[str]]:
     """
     Verdict from ground-contact evidence.
@@ -416,41 +451,59 @@ def _classify_from_contact(contact, cfg: "ParkingThresholds") -> tuple[str, str,
     crossing that only appears when points are assumed to sit on the tarmac, one
     inferred from the vehicle-length prior, or a rotated car with no crossing at
     all, is at most SUSPICIOUS.
+
+    Two kinds of line are judged differently.  The side lines lead into the next bay, so a crossing there needs
+    to clear the calibration error plus `line_crossing_min_m`.  The front (road side) and back lines only get
+    "bumper overhang" past them, so those need to clear the error plus `end_line_tolerance_m` (0.40 m): a car
+    whose nose is a hand-span past the chalk is parked correctly.
     """
-    thr = cfg.line_crossing_min_m
-    # A bay the shared camera fits only loosely: its metres are approximate.  A
-    # crossing still counts as a violation if it survives that error -- the
-    # corner fit error converted to metres at this bay, taken off the crossing.
-    # Without that figure, a crossing on such a bay is only ever a warning.
-    if getattr(contact, "calibration_status", "good") != "good":
-        margin = getattr(contact, "calibration_margin_m", None)
-        deepest = max([contact.crossing_m, *contact.straddle.values()])
-        if margin is None or deepest - margin <= thr:
-            if contact.straddle or contact.crossing_m > thr or contact.crossing_upper_m > thr:
-                return STATE_SUSPICIOUS, "suspicious", [
-                    "Possible line crossing; this bay's calibration is approximate (edge of lens?)"]
-        elif contact.crossing_m - margin > thr:
-            return STATE_WRONG, "wrong", [
-                f"Over the {contact.crossing_side} line by {contact.crossing_m:.2f} m "
-                f"(clear of this bay's ±{margin:.2f} m calibration error)"]
-        else:
-            bays = ", ".join(f"{b} ({d:.2f} m)" for b, d in contact.straddle.items())
-            return STATE_WRONG, "wrong", [
-                f"Occupying another bay: {bays} inside it (clear of ±{margin:.2f} m calibration error)"]
-    if contact.straddle:
+    thr, tol = cfg.line_crossing_min_m, cfg.end_line_tolerance_m
+    status = getattr(contact, "calibration_status", "good")
+    margin = getattr(contact, "calibration_margin_m", None)
+    approx = status != "good"
+    # A bay the shared camera fits only loosely: its metres are approximate.  Whatever its grade, a crossing only
+    # counts once it survives that error -- the corner fit error converted to metres at this bay.  Without that
+    # figure, a crossing on a loosely fitted bay is only ever a warning.
+    if approx and margin is None:
+        if contact.straddle or contact.crossing_m > thr or contact.crossing_upper_m > thr:
+            return STATE_SUSPICIOUS, "suspicious", [
+                "Possible line crossing; this bay's calibration is approximate (edge of lens?)"]
+    m = margin or 0.0
+    note = f" (clear of this bay's ±{m:.2f} m calibration error)" if m else ""
+
+    cert = _per_side(contact.crossing_per_side, contact.crossing_side, contact.crossing_m)
+    up = _per_side(contact.upper_per_side, contact.crossing_upper_side, contact.crossing_upper_m)
+    inf = _per_side(contact.inferred_per_side, "left", contact.inferred_crossing_m)
+    deepest = max(contact.straddle.values(), default=0.0)
+    side_m, side_name = _worst(cert, ("left", "right"))
+    end_m, end_name = _worst(cert, ("near", "far"))
+
+    if contact.straddle and deepest - m > thr:
         bays = ", ".join(f"{b} ({d:.2f} m)" for b, d in contact.straddle.items())
-        return STATE_WRONG, "wrong", [f"Occupying another bay: tyres/bumper {bays} inside it"]
-    if contact.crossing_m > thr:
-        return STATE_WRONG, "wrong", [
-            f"Over the {contact.crossing_side} line by {contact.crossing_m:.2f} m"]
+        return STATE_WRONG, "wrong", [f"Occupying another bay: tyres/bumper {bays} inside it{note}"]
+    if side_name and side_m - m > thr:
+        return STATE_WRONG, "wrong", [f"Over the {LINE_NAMES[side_name]} by {side_m:.2f} m{note}"]
+    if end_name and end_m - m > tol:
+        return STATE_WRONG, "wrong", [f"Over the {LINE_NAMES[end_name]} by {end_m:.2f} m{note}"]
+
     # Warnings are cumulative so the operator sees every reason, not just the first.
     warnings = []
-    if contact.crossing_upper_m > thr:
-        warnings.append(
-            f"Possibly on the {contact.crossing_upper_side} line (up to {contact.crossing_upper_m:.2f} m)")
-    if contact.inferred_crossing_m > thr:
+    if contact.straddle and deepest > thr:
+        warnings.append("Touching the next bay (within this bay's calibration error)")
+    if side_name and side_m > thr:
+        warnings.append(f"Touching the {LINE_NAMES[side_name]} ({side_m:.2f} m, within this bay's calibration error)")
+    if end_name and end_m > tol:
+        warnings.append(f"Reaching past the {LINE_NAMES[end_name]} ({end_m:.2f} m, within this bay's calibration error)")
+    # The front and back lines are judged only by the certain bound above.  The "possible" bound assumes every contact
+    # point lies on the tarmac, but the points nearest the road are the bumper (0.2-0.3 m up), so it over-reports
+    # there by 0.5 m or more on a car that is parked correctly (measured live: "up to 0.69 m" beside a certain 0.16 m).
+    up_side, up_side_name = _worst(up, ("left", "right"))
+    if up_side - m > thr:
+        warnings.append(f"Possibly on the {LINE_NAMES[up_side_name]} (up to {up_side:.2f} m)")
+    inf_side, _ = _worst(inf, ("left", "right"))
+    if inf_side - m > thr:
         # From a car-length prior, so it over-reaches on small cars: warn only.
-        warnings.append(f"Hidden side may be over a line (estimated {contact.inferred_crossing_m:.2f} m)")
+        warnings.append(f"Hidden side may be over a line (estimated {inf_side:.2f} m)")
     if contact.skew_deg is not None and contact.skew_deg > cfg.angle_error_suspicious:
         warnings.append(f"Parked at {contact.skew_deg:.0f}° to the bay, inside its lines")
     if warnings:
@@ -563,8 +616,15 @@ def evaluate_parking_intelligence(
     slot_cov = compute_slot_coverage(fp, slot_polygon)
     outside_ratio = compute_outside_ratio(fp, slot_polygon)
 
+    # The box-slice footprint is a thin strip along the bottom of the car's box; for a car parked at an angle (30 Oct: a Fortuner across
+    # Bay-05/06) it lies mostly outside the bay, and this shortcut called the bay free under a car plainly standing in it.  When the
+    # silhouette gives the car's real footprint on the ground (contact.py) and enough of it is inside this bay, the bay is not free.
+    ground_inside = None
+    if contact is not None and getattr(contact, "footprint_stall", None) is not None and getattr(contact, "n_points", 0) > 0:
+        ground_inside = 1.0 - float(getattr(contact, "outside_ratio", 1.0))
+
     # If coverage is below empty threshold, slot is effectively free
-    if slot_cov <= cfg.empty_coverage_max and outside_ratio > 0.85:
+    if slot_cov <= cfg.empty_coverage_max and outside_ratio > 0.85 and not (ground_inside is not None and ground_inside >= GROUND_OCCUPIED_MIN_SHARE):
         return SlotIntelligenceReport(
             slot_id=slot_id,
             state=STATE_FREE,
@@ -704,9 +764,10 @@ def evaluate_parking_intelligence(
         reason="; ".join(reasons),
         plate=getattr(assigned_vehicle, "plate", ""),
         geometry_source="mask" if use_contact else "bbox",
-        line_crossing_m=contact.crossing_m if use_contact else 0.0,
+        line_crossing_m=_reported_crossing(contact, cfg)[0] if use_contact else 0.0,
         line_crossing_possible_m=contact.crossing_upper_m if use_contact else 0.0,
-        crossing_side=(contact.crossing_side or contact.crossing_upper_side) if use_contact else None,
+        crossing_side=((_reported_crossing(contact, cfg)[1] or contact.crossing_side or contact.crossing_upper_side)
+                       if use_contact else None),
         skew_deg=contact.skew_deg if use_contact else None,
         reason_codes=list(contact.reason_codes) if use_contact else ["BBOX_FOOTPRINT_ONLY"],
     )

@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ParkFNB Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+  :root {
+    --bg: #eef1fb; --card: #ffffff; --ink: #0f1b3d; --muted: #5d6988; --line: #e1e6f4;
+    --navy: #0b1d3f; --navy-2: #12306b; --navy-ink: #e8edfb; --navy-muted: #9aa8cc;
+    --blue: #2563eb; --green: #16a34a; --red: #e5484d; --amber: #f5a524; --grey: #8a94b0; --teal: #0ea5a4;
+    --shadow: 0 1px 2px rgba(15,27,61,.06), 0 8px 24px rgba(15,27,61,.06);
+    --radius: 16px; --gap: 14px;
+  }
+  :root:not([data-theme="light"]) { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #080f20; --card: #101a33; --ink: #e8edfb; --muted: #9aa8cc; --line: #1d2a4d;
+            --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); }
+  }
+  :root[data-theme="dark"] { --bg: #080f20; --card: #101a33; --ink: #e8edfb; --muted: #9aa8cc; --line: #1d2a4d;
+            --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }       /* the rules below set display, which would otherwise win over `hidden` */
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .app { max-width: 1360px; margin: 0 auto; padding: 16px; }
+
+  /* ---- header ---- */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+         background: linear-gradient(135deg, var(--navy), var(--navy-2)); color: var(--navy-ink);
+         border-radius: var(--radius); padding: 10px 18px; box-shadow: var(--shadow); }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-weight: 800; font-size: 20px;
+          color: #fff; background: linear-gradient(135deg, #22c55e, #2563eb); box-shadow: 0 4px 14px rgba(37,99,235,.45); }
+  .brand b { display: block; letter-spacing: .16em; font-size: 17px; line-height: 1.1; }
+  .brand small { color: var(--navy-muted); font-size: 11px; }
+  .top-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .chip { padding: 5px 12px; border-radius: 999px; background: rgba(255,255,255,.1); font-size: 13px; }
+  .clock { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; color: var(--navy-ink); }
+  .pill { font-size: 13px; padding: 5px 12px; border-radius: 999px; font-weight: 600; white-space: nowrap;
+          background: rgba(255,255,255,.1); color: var(--navy-ink); }
+  .pill::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px;
+                  background: var(--grey); vertical-align: 1px; }
+  .pill.on { background: rgba(34,197,94,.18); color: #86efac; } .pill.on::before { background: #22c55e; }
+  .pill.warn { background: rgba(245,165,36,.2); color: #fcd34d; } .pill.warn::before { background: var(--amber); }
+  .pill.off { background: rgba(229,72,77,.2); color: #fca5a5; } .pill.off::before { background: var(--red); }
+
+  /* ---- banner: one sentence about the state of the feed, only when something needs saying ---- */
+  .banner { margin-top: var(--gap); padding: 10px 16px; border-radius: 12px; font-size: 14px; display: flex; gap: 10px; align-items: center;
+            background: color-mix(in srgb, var(--c, var(--amber)) 14%, var(--card)); border: 1px solid color-mix(in srgb, var(--c, var(--amber)) 45%, transparent); }
+  .banner::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--amber)); }
+  .banner.err { --c: var(--red); } .banner.info { --c: var(--blue); }
+
+  /* ---- layout ---- */
+  .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(340px, 1fr); gap: var(--gap); margin-top: var(--gap); align-items: start; }
+  .col { display: grid; gap: var(--gap); min-width: 0; }
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--line); }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 11px 16px; background: var(--navy); color: var(--navy-ink);
+          border-radius: var(--radius) var(--radius) 0 0; }
+  .head h2, .head h3 { margin: 0; font-size: 15px; font-weight: 600; } .head span, .head .sub { font-size: 12px; color: var(--navy-muted); }
+
+  /* ---- camera ---- */
+  .camwrap { position: relative; background: #000; aspect-ratio: 16 / 9; width: 100%; overflow: hidden; }
+  .camwrap img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+  .camwrap svg.hit { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .camwrap svg.hit polygon { fill: transparent; stroke: transparent; stroke-width: 3; cursor: pointer; pointer-events: all; vector-effect: non-scaling-stroke; }
+  .camwrap svg.hit polygon:hover { stroke: rgba(255,255,255,.55); }
+  .camwrap svg.hit polygon.sel { stroke: #fff; stroke-width: 4; }
+  .ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--navy-muted); font-size: 14px; text-align: center; padding: 16px; }
+  .fs { position: absolute; right: 10px; bottom: 10px; border: 0; width: 34px; height: 34px; border-radius: 8px; background: rgba(8,21,48,.78); color: #fff; cursor: pointer; font-size: 16px; }
+  .cam-note { position: absolute; left: 10px; top: 10px; background: rgba(8,21,48,.82); color: #fff; font-size: 12px; padding: 5px 10px; border-radius: 8px; }
+  .camwrap.stale img { filter: grayscale(.85) brightness(.7); }
+  .health { display: flex; flex-wrap: wrap; gap: 8px 8px; padding: 10px 14px 12px; }
+  .hc { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; background: color-mix(in srgb, var(--c, var(--grey)) 12%, transparent); color: var(--ink); }
+  .hc small { color: var(--muted); font-size: 11.5px; } .hc b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hc.ok { --c: var(--green); } .hc.warn { --c: var(--amber); } .hc.bad { --c: var(--red); }
+
+  /* ---- KPI cards ---- */
+  .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; transition: opacity .3s; }
+  .kpi { padding: 12px 14px; min-width: 0; border-left: 4px solid var(--c, var(--grey)); }
+  .kpi .lab { color: var(--muted); font-size: 12.5px; font-weight: 500; }
+  .kpi .num { font-size: 28px; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .kpi .sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
+  .kpi.total { --c: var(--blue); } .kpi.occ { --c: var(--red); } .kpi.vac { --c: var(--green); } .kpi.rev { --c: var(--amber); }
+  .dim { opacity: .5; }
+  body.loading .num, body.loading .sub { color: transparent !important; border-radius: 6px;
+        background: linear-gradient(90deg, var(--line), transparent, var(--line)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ---- gate ---- */
+  .gate { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 14px; }
+  .gate div { text-align: center; border-radius: 12px; padding: 8px 4px; background: color-mix(in srgb, var(--c) 12%, transparent); }
+  .gate b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; color: var(--c); line-height: 1.1; } .gate span { font-size: 12px; color: var(--muted); }
+
+  /* ---- zone (always dark, like the design) ---- */
+  .zone { background: linear-gradient(160deg, var(--navy), #081530); color: var(--navy-ink); overflow: hidden; border: 0; }
+  .zone .head { background: transparent; border-bottom: 1px solid rgba(255,255,255,.07); }
+  .tabs { display: inline-flex; background: rgba(255,255,255,.08); border-radius: 10px; padding: 3px; }
+  .tabs button { border: 0; background: transparent; color: var(--navy-muted); font-size: 13px; padding: 6px 14px; border-radius: 8px; cursor: pointer; min-height: 32px; }
+  .tabs button[aria-selected="true"] { background: var(--blue); color: #fff; }
+  .stage { position: relative; min-height: 200px; padding: 10px 12px 6px; transition: opacity .3s; }
+  .stage svg { width: 100%; height: auto; display: block; max-height: 420px; }
+  .empty { padding: 44px 20px; text-align: center; color: var(--navy-muted); }
+  .empty b { display: block; color: var(--navy-ink); font-size: 16px; margin-bottom: 4px; }
+  .bay-poly { stroke-width: 2.5; transition: fill .4s, stroke .4s; stroke-linejoin: round; cursor: pointer; }
+  .bay-poly.vacant { fill: rgba(34,197,94,.22); stroke: #22c55e; }
+  .bay-poly.occupied { fill: rgba(229,72,77,.28); stroke: #ef4444; }
+  .bay-poly.uncertain { fill: rgba(245,165,36,.16); stroke: #f5a524; stroke-dasharray: 7 5; }
+  .bay-poly.stale { fill: rgba(148,160,196,.14); stroke: #8a94b0; stroke-dasharray: 3 5; }
+  .bay-poly.sel { stroke: #fff; stroke-width: 4; }
+  .car-body { fill: rgba(255,255,255,.82); } .car-glass { fill: rgba(8,21,48,.6); }
+  .bay-car { transition: opacity .3s; pointer-events: none; }
+  .bay-name { fill: #fff; font-weight: 700; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: rgba(8,21,48,.8); stroke-width: 3.5px; stroke-linejoin: round; pointer-events: none; }
+  .bay-flag { fill: #f5a524; stroke: rgba(8,21,48,.85); stroke-width: 2.5px; paint-order: stroke; font-weight: 800; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .bay-flag.v-correct { fill: #22c55e; } .bay-flag.v-over_line { fill: #ef4444; } .bay-flag.v-close_to_line { fill: #f5a524; } .bay-flag.v-not_judged { fill: #9aa8cc; }
+  .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; padding: 4px 4px 12px; }
+  .lcard { text-align: left; border: 0; cursor: pointer; background: rgba(255,255,255,.07); border-left: 4px solid var(--grey); border-radius: 10px; padding: 9px 12px; color: var(--navy-ink); }
+  .lcard b { display: block; font-size: 16px; } .lcard span { font-size: 12.5px; color: var(--navy-muted); }
+  .lcard.vacant { border-color: #22c55e; } .lcard.occupied { border-color: #ef4444; } .lcard.uncertain { border-color: #f5a524; } .lcard.stale { border-color: #8a94b0; }
+  .lcard.sel { outline: 2px solid #fff; }
+  .legend { display: flex; gap: 8px 16px; flex-wrap: wrap; padding: 10px 16px 14px; font-size: 12.5px; color: var(--navy-muted); border-top: 1px solid rgba(255,255,255,.07); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; background: var(--grey); }
+  .dot.vacant { background: #22c55e; } .dot.occupied { background: #ef4444; } .dot.uncertain { background: #f5a524; } .dot.stale { background: #8a94b0; }
+
+  /* ---- selected bay ---- */
+  .detail { padding: 14px 16px 16px; }
+  .detail .none { color: var(--muted); font-size: 13.5px; padding: 6px 0; }
+  .detail h3 { margin: 0 0 8px; font-size: 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .tag { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; color: #fff; background: var(--grey); }
+  .tag.vacant { background: var(--green); } .tag.occupied { background: var(--red); } .tag.uncertain { background: #b7791f; } .tag.stale { background: var(--grey); }
+  .tag.flag { background: transparent; color: var(--amber); border: 1px solid var(--amber); }
+  .tag.ok { background: var(--green); } .tag.flag.bad { color: var(--red); border-color: var(--red); } .tag.flag.mute { color: var(--muted); border-color: var(--line); }
+  .rows { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13.5px; margin: 0; }
+  .rows dt { color: var(--muted); } .rows dd { margin: 0; }
+  .bar { height: 8px; border-radius: 6px; background: var(--line); overflow: hidden; margin-top: 6px; }
+  .bar i { display: block; height: 100%; background: var(--blue); }
+  .ops { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .ops small { flex-basis: 100%; color: var(--muted); }
+  .btn { border: 1px solid var(--line); background: var(--card); padding: 7px 12px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; min-height: 36px; }
+  .btn:hover { border-color: var(--blue); } .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  select.btn { font-weight: 500; }
+
+  /* ---- timeline ---- */
+  .head a { color: #9ec2ff; text-decoration: none; } .head a:hover { text-decoration: underline; }
+  .act { list-style: none; margin: 0; padding: 4px 0; max-height: 320px; overflow: auto; }
+  .act li { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--line); }
+  .act li:last-child { border-bottom: 0; }
+  .act .ai { flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+  .act .tx { flex: 1; min-width: 0; } .act .tx b { display: block; font-size: 14px; } .act .tx small { color: var(--muted); }
+  .act .tm { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .act .none { color: var(--muted); justify-content: center; padding: 24px; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; padding: 18px 8px 8px; }
+  .oplink { text-align: center; font-size: 12px; padding: 0 8px 18px; } .oplink a { color: var(--muted); }
+
+  /* one column on tablet and phone: the camera first, then the numbers, the zone, the selected bay, and the activity last */
+  @media (max-width: 1100px) {
+    .grid { grid-template-columns: minmax(0, 1fr); }
+    .col { display: contents; }
+    .o1 { order: 1; } .o2 { order: 2; } .o3 { order: 3; } .o4 { order: 4; } .o5 { order: 5; } .o6 { order: 6; } .o7 { order: 7; }
+  }
+  @media (max-width: 560px) {
+    .app { padding: 10px; } .grid, .col { gap: 10px; } .kpi .num { font-size: 24px; }
+    .clock, .chip { display: none; } .top { padding: 8px 12px; } .health { padding: 8px 10px 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body class="loading">
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">P</div>
+      <div><b>PARKFNB</b><small>Smart Parking. Smarter Cities.</small></div>
+    </div>
+    <div class="top-right">
+      <span class="chip" id="site">Live monitor</span>
+      <span class="clock" id="clock"></span>
+      <span id="status" class="pill" role="status">Connecting…</span>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" role="status" aria-live="polite" hidden></div>
+
+  <div class="grid">
+    <div class="col">
+      <section class="card o1" aria-label="Live camera">
+        <div class="head"><h2>Live camera</h2><span id="cam-name"></span></div>
+        <div class="camwrap" id="cam">
+          <img id="frame" alt="Live view of the parking area" hidden>
+          <svg class="hit" id="hit" aria-hidden="true" hidden></svg>
+          <div class="ph" id="cam-ph">Connecting to the camera…</div>
+          <div class="cam-note" id="cam-note" hidden></div>
+          <button class="fs" id="fs" type="button" title="Full screen" aria-label="Full screen" hidden>⛶</button>
+        </div>
+        <div class="health" id="health" aria-label="Camera health"></div>
+      </section>
+
+      <section class="card o7" aria-label="Recent activity">
+        <div class="head"><h3>Activity</h3>
+          <span>latest first<span id="logLinks" hidden> · <a id="logPage" href="#">Full log</a> · <a id="logCsv" href="#" download>CSV</a></span></span>
+        </div>
+        <ul class="act" id="events"><li class="none">Nothing yet</li></ul>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="kpis o2" id="kpis" aria-label="Summary">
+        <div class="card kpi total"><div class="lab">Total bays</div><div class="num" id="k-total">–</div><div class="sub" id="s-total">Marked on this camera</div></div>
+        <div class="card kpi occ"><div class="lab">Occupied</div><div class="num" id="k-occ">–</div><div class="sub" id="s-occ">A car is in the bay</div></div>
+        <div class="card kpi vac"><div class="lab">Available</div><div class="num" id="k-vac">–</div><div class="sub" id="s-vac">Verified empty</div></div>
+        <div class="card kpi unc"><div class="lab">Unclear</div><div class="num" id="k-unc">–</div><div class="sub" id="s-unc">View obstructed / low light</div></div>
+      </section>
+
+      <section class="card o3" id="gateCard" aria-label="Cars at the gate" hidden>
+        <div class="head"><h3>Gate Tripwire Counter</h3><span>Session total · independent of bays</span></div>
+        <div class="gate">
+          <div style="--c: var(--green)"><b id="g-in">–</b><span>IN</span></div>
+          <div style="--c: var(--amber)"><b id="g-out">–</b><span>OUT</span></div>
+          <div style="--c: var(--blue)"><b id="g-inside">–</b><span>Inside</span></div>
+        </div>
+      </section>
+
+      <section class="card zone o4" aria-label="Parking zone">
+        <div class="head">
+          <h3>Parking zone</h3>
+          <div class="tabs" role="tablist" aria-label="View">
+            <button role="tab" id="tab-map" aria-selected="true" type="button">Map</button>
+            <button role="tab" id="tab-list" aria-selected="false" type="button">List</button>
+          </div>
+        </div>
+        <div class="stage" id="stage"><div class="empty"><b>Connecting…</b>Bays appear here once they are marked.</div></div>
+        <div class="legend" id="legend"></div>
+      </section>
+
+      <section class="card o5" aria-label="Selected bay">
+        <div class="head"><h3>Selected bay</h3><span>pick one on the map, list or camera</span></div>
+        <div class="detail" id="detail"><div class="none">No bay selected.</div></div>
+      </section>
+
+      <section class="card o6" id="platesCard" hidden>
+        <div class="head"><h3>Number plates</h3><span>this computer only</span></div>
+        <ul class="act" id="plates"></ul>
+      </section>
+    </div>
+  </div>
+  <footer id="foot">Updates every couple of seconds. Counts restart when the system is reset.</footer>
+  <div class="oplink"><a id="consoleLink" href="/" hidden>Management console</a><span id="consoleSep" hidden> · </span><a id="opLink" href="/admin?next=/live">Operator sign in</a></div>
+</div>
+
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var cam = params.get("camera_id") || "phone-1";
+  var camQ = encodeURIComponent(cam);
+  var siteName = (params.get("name") || "").slice(0, 60);
+  var showPlates = params.get("plates") === "1";     // honoured only for requests from the server's own computer
+  var $ = function (id) { return document.getElementById(id); };
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var view = params.get("view") === "list" ? "list" : "map";
+  var selected = null, last = null, lastAt = 0, mapSig = "", hitSig = "", bayEls = {}, listEls = {};
+  var shownSeq = -1, wantSeq = -1, imgUrl = null, failures = 0, firstDone = false;
+  var BACKOFF = [1500, 3000, 6000, 12000];
+
+  $("site").textContent = siteName || cam;
+  $("cam-name").textContent = cam;
+
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function svg(tag, attrs) { var e = document.createElementNS(SVGNS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+  function setText(id, v) { $(id).textContent = (v === null || v === undefined) ? "–" : String(v); }
+  function bayLabel(id) { return /^\d+$/.test(id) ? "P" + id : id; }
+  function clockOf(t) { return new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+  function span(s) {                                   // 95 -> "1 min", 7300 -> "2 h 2 min"
+    s = Math.max(0, Math.round(s));
+    if (s < 60) return s + " s";
+    if (s < 3600) return Math.round(s / 60) + " min";
+    return Math.floor(s / 3600) + " h " + Math.round((s % 3600) / 60) + " min";
+  }
+
+  // ---- what each status is called and drawn as
+  var WORD = { VACANT: "Available", OCCUPIED: "Occupied", UNCERTAIN: "Unclear", STALE: "No signal" };
+  function cls(b) { return (b.status || "UNCERTAIN").toLowerCase(); }
+  function ghost(b) { return b.status === "STALE" ? (b.last_status || "UNCERTAIN") : b.status; }       // what the bay last was, for stale ones
+  // How the car is parked, as the server judged it: correct | close_to_line | over_line | not_judged (null when there is no car or no 3D data).
+  // An older server only sends the flag, which then still reads as before.
+  function parkingVerdict(b) {
+    if (b.parking && b.parking.verdict) return b.parking.verdict;
+    return b.flag === "wrong" ? "over_line" : b.flag === "suspicious" ? "close_to_line" : null;
+  }
+  var MARK = { correct: "✓", over_line: "!", close_to_line: "!", not_judged: "?" };
+  function taken(b) { return ghost(b) === "OCCUPIED"; }
+
+  // ---- clock
+  function tickClock() {
+    var d = new Date();
+    $("clock").textContent = d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + "  " +
+                             d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  tickClock(); setInterval(tickClock, 15000);
+
+  // ---- the proper map: bays as equal rectangles, in rows, the way they lie on the ground ----------
+  // The camera sees the lot at an angle, so its bay outlines are slanted and of different sizes.
+  // Here they are put back in order: along the row's own direction (left to right), rows from far
+  // to near, every stall drawn the same size.  A schematic, not a survey: it shows which bay is
+  // next to which, not exact distances.
+  function bbox(pts) {
+    var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
+    return { x1: Math.min.apply(null, xs), y1: Math.min.apply(null, ys), x2: Math.max.apply(null, xs), y2: Math.max.apply(null, ys) };
+  }
+  function planRows(layout) {
+    var ids = Object.keys(layout.bays), n = ids.length;
+    var C = ids.map(function (id) { var b = bbox(layout.bays[id]); return { id: id, x: (b.x1 + b.x2) / 2, y: (b.y1 + b.y2) / 2, pts: layout.bays[id] }; });
+    var mx = 0, my = 0; C.forEach(function (c) { mx += c.x / n; my += c.y / n; });
+    var sxx = 0, syy = 0, sxy = 0;
+    C.forEach(function (c) { var dx = c.x - mx, dy = c.y - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; });
+    var ang = n < 2 ? 0 : 0.5 * Math.atan2(2 * sxy, sxx - syy);          // direction the bays are lined up in
+    var ux = Math.cos(ang), uy = Math.sin(ang); if (ux < 0) { ux = -ux; uy = -uy; }
+    var vx = -uy, vy = ux; if (vy < 0) { vx = -vx; vy = -vy; }            // across the rows, pointing toward the camera
+    C.forEach(function (c) {
+      c.a = (c.x - mx) * ux + (c.y - my) * uy; c.b = (c.x - mx) * vx + (c.y - my) * vy;
+      var proj = c.pts.map(function (p) { return (p[0] - mx) * vx + (p[1] - my) * vy; });
+      c.depth = Math.max.apply(null, proj) - Math.min.apply(null, proj);
+    });
+    var depths = C.map(function (c) { return c.depth; }).sort(function (p, q) { return p - q; });
+    var gap = 0.7 * depths[Math.floor(depths.length / 2)];                // a bigger jump across the rows means a new row
+    C.sort(function (p, q) { return p.b - q.b; });
+    var rows = [], cur = [C[0]];
+    for (var i = 1; i < C.length; i++) {
+      if (C[i].b - C[i - 1].b > gap) { rows.push(cur); cur = []; }
+      cur.push(C[i]);
+    }
+    rows.push(cur);
+    rows.forEach(function (r) { r.sort(function (p, q) { return p.a - q.a; }); });
+    return rows;
+  }
+
+  function pick(id) { selected = (selected === id) ? null : id; paintSelection(); renderDetail(); }
+  function onKey(id) { return function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(id); } }; }
+
+  function buildPlan(layout) {
+    var stage = $("stage"); clear(stage); bayEls = {}; listEls = {};
+    var rows = planRows(layout);
+    var SW = 100, SL = 190, G = 10, LANE = 60, PAD = 26;
+    var cols = Math.max.apply(null, rows.map(function (r) { return r.length; }));
+    var w = cols * (SW + G) - G + 2 * PAD, h = rows.length * SL + (rows.length - 1) * LANE + 2 * PAD + 22;
+    var s = svg("svg", { viewBox: "0 0 " + w + " " + h, role: "group", "aria-label": "Parking bays in rows, coloured by state" });
+    var defs = svg("defs", {});
+    var g = svg("linearGradient", { id: "asphalt", x1: "0", y1: "0", x2: "0", y2: "1" });
+    g.appendChild(svg("stop", { offset: "0", "stop-color": "#101b36" })); g.appendChild(svg("stop", { offset: "1", "stop-color": "#0a1429" }));
+    defs.appendChild(g); s.appendChild(defs);
+    s.appendChild(svg("rect", { x: 0, y: 0, width: w, height: h, rx: 14, fill: "url(#asphalt)" }));
+    rows.forEach(function (row, ri) {
+      var y0 = PAD + ri * (SL + LANE), x0 = (w - (row.length * (SW + G) - G)) / 2;
+      s.appendChild(svg("rect", { x: PAD / 2, y: y0 - 6, width: w - PAD, height: SL + 12, rx: 10, fill: "rgba(255,255,255,.035)" }));
+      row.forEach(function (c, ci) {
+        var x = x0 + ci * (SW + G);
+        var poly = svg("rect", { x: x, y: y0, width: SW, height: SL, rx: 8, "class": "bay-poly stale", tabindex: 0, role: "button" });
+        poly.addEventListener("click", function () { pick(c.id); });
+        poly.addEventListener("keydown", onKey(c.id));
+        var cw = SW * 0.56, ch = SL * 0.6, cx0 = x + (SW - cw) / 2, cy0 = y0 + SL * 0.26, r = cw * 0.22;
+        var car = svg("g", { "class": "bay-car", opacity: 0 });
+        car.appendChild(svg("rect", { x: cx0, y: cy0, width: cw, height: ch, rx: r, "class": "car-body" }));
+        car.appendChild(svg("rect", { x: cx0 + cw * 0.12, y: cy0 + ch * 0.2, width: cw * 0.76, height: ch * 0.2, rx: r * 0.4, "class": "car-glass" }));
+        car.appendChild(svg("rect", { x: cx0 + cw * 0.14, y: cy0 + ch * 0.7, width: cw * 0.72, height: ch * 0.14, rx: r * 0.4, "class": "car-glass" }));
+        var txt = svg("text", { x: x + SW / 2, y: y0 + 26, "class": "bay-name", "font-size": 24 });
+        txt.textContent = bayLabel(c.id);
+        var flag = svg("text", { x: x + SW - 16, y: y0 + SL - 18, "class": "bay-flag", "font-size": 26 });
+        flag.setAttribute("opacity", 0);
+        s.appendChild(poly); s.appendChild(car); s.appendChild(txt); s.appendChild(flag);
+        bayEls[c.id] = { poly: poly, car: car, flag: flag };
+      });
+    });
+    var cap = svg("text", { x: w / 2, y: h - 9, fill: "rgba(232,237,251,.5)", "font-size": 10, "text-anchor": "middle" });
+    cap.textContent = "Schematic: the bays in the order they stand.";
+    s.appendChild(cap);
+    stage.appendChild(s);
+  }
+
+  function buildList(slots) {
+    var stage = $("stage"); clear(stage); bayEls = {}; listEls = {};
+    var wrap = el("div", "list");
+    slots.slice().sort(function (a, b) { return a.id.localeCompare(b.id, undefined, { numeric: true }); }).forEach(function (b) {
+      var c = el("button", "lcard"); c.type = "button";
+      c.appendChild(el("b", "", bayLabel(b.id))); var sp = el("span", ""); c.appendChild(sp);
+      c.addEventListener("click", function () { pick(b.id); });
+      wrap.appendChild(c); listEls[b.id] = { card: c, sp: sp };
+    });
+    stage.appendChild(wrap);
+  }
+
+  // ---- the camera picture and its clickable bay outlines (same frame size, so they line up)
+  function buildHit(layout) {
+    var h = $("hit"); clear(h);
+    var sz = layout.size;
+    h.setAttribute("viewBox", "0 0 " + sz[0] + " " + sz[1]); h.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    $("cam").style.aspectRatio = sz[0] + " / " + sz[1];
+    Object.keys(layout.bays).forEach(function (id) {
+      var p = svg("polygon", { points: layout.bays[id].map(function (q) { return q[0] + "," + q[1]; }).join(" "), "data-id": id });
+      var t = svg("title", {}); t.textContent = "Bay " + bayLabel(id); p.appendChild(t);
+      p.addEventListener("click", function () { pick(id); });
+      h.appendChild(p);
+    });
+    h.hidden = false;
+  }
+
+  function paintSelection() {
+    Object.keys(bayEls).forEach(function (id) { bayEls[id].poly.classList.toggle("sel", id === selected); });
+    Object.keys(listEls).forEach(function (id) { listEls[id].card.classList.toggle("sel", id === selected); });
+    var polys = $("hit").querySelectorAll("polygon");
+    for (var i = 0; i < polys.length; i++) polys[i].classList.toggle("sel", polys[i].getAttribute("data-id") === selected);
+  }
+
+  function renderStage(s) {
+    var slots = s.slots || [], stage = $("stage");
+    if (!slots.length) {
+      mapSig = ""; clear(stage); bayEls = {}; listEls = {};
+      var e = el("div", "empty");
+      var none = s.stream_status === "not_started" || s.frames_received === 0;
+      e.appendChild(el("b", "", none ? "Waiting for the camera" : "Layout not set up"));
+      e.appendChild(document.createTextNode(none ? "Bays appear here once the camera starts." : "No bays have been marked for this camera yet."));
+      stage.appendChild(e); return;
+    }
+    if (view === "list" || !s.layout) {
+      var sigL = "L:" + slots.map(function (b) { return b.id; }).join(",");
+      if (sigL !== mapSig) { mapSig = sigL; buildList(slots); paintSelection(); }
+      slots.forEach(function (b) {
+        var e = listEls[b.id]; if (!e) return;
+        e.card.className = "lcard " + cls(b) + (b.id === selected ? " sel" : "");
+        var word = b.status === "STALE" ? "No signal" : WORD[b.status];
+        var pv = b.status === "OCCUPIED" ? parkingVerdict(b) : null;
+        e.sp.textContent = word + (pv === "correct" ? " · ✓ correct" : pv === "over_line" ? " · over the line" : pv === "close_to_line" ? " · check" : "") +
+                           (b.flag === "operator" ? " · operator" : "");
+      });
+      return;
+    }
+    var sig = "M:" + JSON.stringify(s.layout);
+    if (sig !== mapSig) { mapSig = sig; buildPlan(s.layout); paintSelection(); }
+    slots.forEach(function (b) {
+      var e = bayEls[b.id]; if (!e) return;
+      e.poly.setAttribute("class", "bay-poly " + cls(b) + (b.id === selected ? " sel" : ""));
+      e.poly.setAttribute("aria-label", "Bay " + bayLabel(b.id) + ", " + WORD[b.status].toLowerCase());
+      e.car.setAttribute("opacity", taken(b) ? (b.status === "STALE" ? 0.35 : 0.9) : 0);
+      var pv = b.status === "OCCUPIED" ? parkingVerdict(b) : null;
+      e.flag.setAttribute("class", "bay-flag" + (pv ? " v-" + pv : ""));
+      e.flag.setAttribute("opacity", pv ? 1 : 0);
+      e.flag.textContent = pv ? MARK[pv] : "";
+    });
+  }
+
+  function setView(v) {
+    view = v; mapSig = "";
+    ["map", "list"].forEach(function (t) { $("tab-" + t).setAttribute("aria-selected", v === t); });
+    if (last) renderStage(last);
+  }
+  $("tab-map").onclick = function () { setView("map"); };
+  $("tab-list").onclick = function () { setView("list"); };
+  ["map", "list"].forEach(function (t) { $("tab-" + t).setAttribute("aria-selected", view === t); });
+
+  // ---- the numbers: every one comes from slot_summary (or, with no signal, from what the bays last were)
+  function figures(s) {
+    var sum = s.slot_summary || {}, total = sum.total || 0, stale = sum.stale || 0;
+    var f = { total: total, stale: stale, dim: total > 0 && stale === total };
+    // an older server, or a camera with no 3D data at all, sends no parking verdicts: then the flag reads as it always did
+    f.hasParking = sum.parked_correctly !== undefined &&
+                   (sum.parked_correctly + sum.close_to_line + sum.over_line + sum.not_judged) > 0;
+    f.pc = f.over = f.close = f.nj = 0;
+    if (!f.dim) {
+      f.occ = sum.occupied_confirmed; f.vac = sum.vacant; f.rev = sum.review; f.unc = sum.uncertain; f.flagged = sum.flagged;
+      if (f.hasParking) { f.pc = sum.parked_correctly; f.over = sum.over_line; f.close = sum.close_to_line; f.nj = sum.not_judged; }
+      return f;
+    }
+    f.occ = f.vac = f.rev = f.unc = f.flagged = 0;
+    (s.slots || []).forEach(function (b) {
+      var g = ghost(b);
+      if (g === "OCCUPIED") { f.occ++; if (b.flag === "wrong" || b.flag === "suspicious") { f.flagged++; f.rev++; } }
+      else if (g === "VACANT") f.vac++; else { f.unc++; f.rev++; }
+    });
+    return f;
+  }
+
+  function renderKpis(s, unreachable) {
+    var f = figures(s), has = f.total > 0;
+    setText("k-total", has ? f.total : null);
+    setText("k-occ", has ? f.occ : null); setText("k-vac", has ? f.vac : null); setText("k-unc", has ? (f.unc || 0) : null);
+    var reporting = f.total - f.stale;
+    $("s-total").textContent = has ? "Marked on this camera" : "No bays marked yet";
+    var parts = [];
+    if (f.hasParking) {
+      if (f.pc) parts.push(f.pc + " parked correctly");
+      if (f.over) parts.push(f.over + " over the line");
+      if (f.close) parts.push(f.close + " close to the line");
+      if (f.occ && !parts.length && f.nj) parts.push("parking not judged yet");
+    }
+    var occSub = reporting > 0 ? Math.round(100 * f.occ / reporting) + "%" +
+      (f.hasParking ? (parts.length ? " · " + parts.join(" · ") : "") : (f.flagged ? " (" + f.flagged + " parked over line)" : "")) : "Last known";
+    $("s-occ").textContent = has ? occSub : "A car is in the bay";
+    $("s-vac").textContent = has ? (f.dim ? "Last known" : "Verified empty") : "Verified empty";
+    $("s-unc").textContent = has ? (f.unc ? f.unc + " bay(s) obscured" : "0 unclear (all clear)") : "View obstructed / low light";
+    $("kpis").classList.toggle("dim", f.dim || unreachable);
+    $("stage").classList.toggle("dim", f.dim || unreachable);
+
+    var lg = $("legend"); clear(lg);
+    if (has) {
+      [["vacant", "Available", f.vac], ["occupied", "Occupied", f.occ], ["uncertain", "Unclear", f.unc || 0], ["stale", "No signal", f.dim ? 0 : f.stale]]
+        .forEach(function (r) {
+          if (r[0] === "stale" && !r[2]) return;
+          var sp = el("span"); var d = el("i", "dot " + r[0]); sp.appendChild(d); sp.appendChild(document.createTextNode(r[1] + " (" + r[2] + ")")); lg.appendChild(sp);
+        });
+      if (f.hasParking && f.occ) {
+        var how = [];
+        if (f.pc) how.push(f.pc + " correct");
+        if (f.over) how.push(f.over + " over the line");
+        if (f.close) how.push(f.close + " close to the line");
+        if (f.nj) how.push(f.nj + " not judged");
+        if (how.length) lg.appendChild(el("span", "", "· of the occupied: " + how.join(", ")));
+      } else if (f.flagged) lg.appendChild(el("span", "", "· of the occupied, " + f.flagged + " parked badly"));
+    }
+  }
+
+  // ---- the picture is what is selected too: a bay is picked the same way from any of the three
+  function renderDetail() {
+    var box = $("detail"); clear(box);
+    var b = null;
+    if (last && selected) (last.slots || []).forEach(function (x) { if (x.id === selected) b = x; });
+    if (!b) { selected = null; box.appendChild(el("div", "none", "No bay selected.")); paintSelection(); return; }
+    var h = el("h3", "", "Bay " + bayLabel(b.id));
+    h.appendChild(el("span", "tag " + cls(b), WORD[b.status]));
+    var pk = b.parking || null, pv = b.status === "OCCUPIED" ? parkingVerdict(b) : null;
+    if (pv === "correct") h.appendChild(el("span", "tag ok", "Parked correctly"));
+    else if (pv === "over_line") h.appendChild(el("span", "tag flag bad", pk ? "Over the line" : "Parked badly"));
+    else if (pv === "close_to_line") h.appendChild(el("span", "tag flag", pk ? "Close to the line" : "Check parking"));
+    else if (pv === "not_judged") h.appendChild(el("span", "tag flag mute", "Parking not judged"));
+    if (b.flag === "operator") h.appendChild(el("span", "tag flag", "Set by operator"));
+    if (b.flag === "blocked") h.appendChild(el("span", "tag flag", "Blocked"));        // a car parked across it: nobody can park here
+    box.appendChild(h);
+    var dl = el("dl", "rows");
+    function row(k, v) { dl.appendChild(el("dt", "", k)); var dd = el("dd"); if (v && v.nodeType) dd.appendChild(v); else dd.textContent = v; dl.appendChild(dd); }
+    row("Status", b.reason_text || "");
+    if (pk && pv === "not_judged") row("Parking", pk.reason_text);
+    if (pk && pv && pv !== "not_judged") {
+      if (pk.skew_deg !== null && pk.skew_deg !== undefined && pk.skew_deg >= 3) row("Angle", Math.round(pk.skew_deg) + "° to the bay");
+      if (pk.calibration && pk.margin_m !== null && pk.margin_m !== undefined)
+        row("Bay accuracy", pk.calibration.charAt(0).toUpperCase() + pk.calibration.slice(1) + " (about ±" + pk.margin_m.toFixed(2) + " m)");
+    }
+    if (b.last_status && b.status !== b.last_status) row("Last reading", WORD[b.last_status] || b.last_status);
+    if (b.held_s !== null && b.held_s !== undefined) {
+      var at = new Date(lastAt - b.held_s * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      row("Since", span(b.held_s) + " (" + at + ")");
+    }
+    if (b.agreement !== null && b.agreement !== undefined) {
+      var wrap = el("div"); wrap.appendChild(document.createTextNode(Math.round(b.agreement * 100) + "% of recent readings agree"));
+      var bar = el("div", "bar"); var fill = el("i"); fill.style.width = Math.round(b.agreement * 100) + "%"; bar.appendChild(fill); wrap.appendChild(bar);
+      row("Reading", wrap);
+    }
+    if (b.override_until) row("Operator answer", "until " + new Date(b.override_until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+    box.appendChild(dl);
+    if (last && last.is_admin) box.appendChild(opsFor(b));
+    paintSelection();
+  }
+
+  // Operator review: only shown to a signed-in admin (and refused by the server to anyone else).
+  function opsFor(b) {
+    var ops = el("div", "ops");
+    var mins = el("select", "btn"); mins.setAttribute("aria-label", "How long");
+    [[15, "15 min"], [30, "30 min"], [60, "60 min"]].forEach(function (o) { var op = el("option", "", o[1]); op.value = o[0]; mins.appendChild(op); });
+    function send(status) {
+      var buttons = ops.querySelectorAll("button"); for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
+      fetch("/live/bay-override", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
+              body: JSON.stringify({ camera_id: cam, bay_id: b.id, status: status, minutes: Number(mins.value) }) })
+        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; }); })
+        .then(function () { clearTimeout(timer); tick(); })
+        .catch(function (e) { ops.appendChild(el("small", "", "Could not save: " + e.message)); for (var i = 0; i < buttons.length; i++) buttons[i].disabled = false; });
+    }
+    var v = el("button", "btn", "Mark available"); v.type = "button"; v.onclick = function () { send("VACANT"); };
+    var o = el("button", "btn", "Mark occupied"); o.type = "button"; o.onclick = function () { send("OCCUPIED"); };
+    var c = el("button", "btn", "Clear"); c.type = "button"; c.onclick = function () { send("CLEAR"); }; c.disabled = b.flag !== "operator";
+    ops.appendChild(v); ops.appendChild(o); ops.appendChild(mins); ops.appendChild(c);
+    ops.appendChild(el("small", "", "Your answer holds for the time chosen, or until the camera reads this bay differently."));
+    return ops;
+  }
+
+  // ---- activity
+  function activity(ev) {
+    var who = ev.bay_id !== undefined ? bayLabel(String(ev.bay_id)) : "";
+    switch (ev.type) {
+      case "in": return { c: "var(--green)", g: "→", t: "Car came in", s: "Car #" + ev.track_id };
+      case "out": return { c: "var(--amber)", g: "←", t: "Car went out", s: "Car #" + ev.track_id };
+      case "bay_occupied": return { c: "var(--red)", g: "●", t: who + " occupied", s: "A car parked" };
+      case "bay_freed": return { c: "var(--green)", g: "✓", t: who + " available", s: "The car left" };
+      case "parking_over_line": return { c: "var(--red)", g: "!", t: who + " parked over the line", s: ev.detail || "" };
+      case "parking_ok": return { c: "var(--green)", g: "✓", t: who + " parked correctly again", s: "" };
+      case "operator": return { c: "var(--blue)", g: "✎", t: who + (ev.status === "CLEARED" ? " answer cleared" : " marked " + (ev.status === "VACANT" ? "available" : "occupied")), s: "Set by an operator" };
+      case "feed_offline": return { c: "var(--red)", g: "✕", t: "Camera went offline", s: "No pictures arriving" };
+      case "feed_online": return { c: "var(--green)", g: "✓", t: "Camera back online", s: "Pictures are arriving again" };
+      case "low_light": return { c: "var(--amber)", g: "☾", t: "Too dark to judge bays", s: "Empty bays show as unclear" };
+      case "light_ok": return { c: "var(--green)", g: "☀", t: "Light is back", s: "Bays are being judged again" };
+      case "camera_moved": return { c: "var(--amber)", g: "⚠", t: "Camera view changed", s: "Bay layout needs a check" };
+      case "camera_ok": return { c: "var(--green)", g: "✓", t: "Camera view back in place", s: "" };
+    }
+    return { c: "var(--grey)", g: "•", t: ev.type, s: "" };
+  }
+  function renderEvents(events) {
+    var ul = $("events"); clear(ul);
+    var evs = (events || []).slice().reverse();
+    if (!evs.length) { ul.appendChild(el("li", "none", "Nothing yet")); return; }
+    evs.forEach(function (ev) {
+      var a = activity(ev), li = el("li");
+      var ic = el("div", "ai", a.g); ic.style.setProperty("--c", a.c); ic.setAttribute("aria-hidden", "true");
+      var tx = el("div", "tx"); tx.appendChild(el("b", "", a.t)); if (a.s) tx.appendChild(el("small", "", a.s));
+      li.appendChild(ic); li.appendChild(tx); li.appendChild(el("span", "tm", clockOf(ev.t)));
+      ul.appendChild(li);
+    });
+  }
+
+  // ---- health: the feed, the picture and the layout, in a line
+  function chip(label, value, level) {
+    var c = el("span", "hc" + (level ? " " + level : "")); c.appendChild(el("small", "", label)); c.appendChild(el("b", "", value)); return c;
+  }
+  var STREAM = { live: ["Live", "ok"], stale: ["Stalled", "bad"], offline: ["Offline", "bad"], error: ["Error", "bad"], not_started: ["Not started", "warn"] };
+  function renderHealth(s) {
+    var h = $("health"); clear(h);
+    var st = STREAM[s.stream_status] || ["–", ""];
+    h.appendChild(chip("Stream", st[0], st[1]));
+    h.appendChild(chip("Frame age", s.frame_age_s === null || s.frame_age_s === undefined ? "–" : span(s.frame_age_s), s.frame_age_s > 8 ? "warn" : ""));
+    h.appendChild(chip("Speed", (s.fps_processed || 0).toFixed(1) + " fps"));
+    h.appendChild(chip("Latency", s.ms_per_frame ? s.ms_per_frame + " ms" : "–"));
+    h.appendChild(chip("Light", s.light === "low" ? "Low" : "OK", s.light === "low" ? "warn" : "ok"));
+    h.appendChild(chip("View", s.calibration === "moved" ? "Moved" : "In place", s.calibration === "moved" ? "warn" : "ok"));
+    var sc = s.site_calibration;                                              // the operator's check that parking can be judged
+    if (s.is_admin && sc) {
+      h.appendChild(chip("3D", sc.ready ? "Ready · " + sc.good_bays + "/" + sc.total + " bays good" : "Not calibrated", sc.ready ? "ok" : "warn"));
+    }
+  }
+
+  // ---- one sentence about the feed, only when something needs saying
+  function banner(text, kind) {
+    var b = $("banner");
+    if (!text) { b.hidden = true; return; }
+    b.className = "banner" + (kind ? " " + kind : ""); b.textContent = text; b.hidden = false;
+  }
+
+  function render(s) {
+    last = s; lastAt = Date.now(); failures = 0;
+    document.body.classList.remove("loading"); firstDone = true;
+    var pill = $("status"), stale = false, text = "", kind = "";
+    switch (s.stream_status) {
+      case "live":
+        if (s.frozen) {                                      // pictures arrive but never change: the phone's camera has frozen
+          pill.className = "pill off"; pill.textContent = "Camera frozen"; stale = true;
+          text = "The camera keeps sending the same picture. Showing the last known state, not live."; kind = "err"; break;
+        }
+        if (s.age_s > 8) { pill.className = "pill warn"; pill.textContent = "Delayed · " + Math.round(s.age_s) + " s ago"; break; }
+        pill.className = "pill on"; pill.textContent = "Live · " + (s.age_s === null ? "" : Math.round(s.age_s) + " s ago"); break;
+      case "not_started": pill.className = "pill warn"; pill.textContent = "Camera not started"; text = "Waiting for the camera to start."; kind = "info"; break;
+      case "offline": pill.className = "pill off"; pill.textContent = "Camera offline"; stale = true;
+        text = "No picture for " + span(s.age_s || 0) + ". Showing the last known state, not live."; kind = "err"; break;
+      case "stale": pill.className = "pill off"; pill.textContent = "Processing stalled"; stale = true;
+        text = "The camera is sending, but nothing is being processed. Showing the last known state."; kind = "err"; break;
+      case "error": pill.className = "pill off"; pill.textContent = "Processing error"; stale = true;
+        text = "The picture could not be processed. Showing the last known state."; kind = "err"; break;
+      default: pill.className = "pill"; pill.textContent = "Connecting…";
+    }
+    if (!stale && s.calibration === "moved") { text = "The camera view has changed since the bays were marked. Bay positions may be wrong until the layout is checked."; kind = ""; }
+    else if (!stale && s.light === "low" && s.stream_status === "live") { text = "Night mode: bays the street light reaches are judged as usual; the ones in the dark show as unclear."; kind = "info"; }
+    banner(text, kind);
+
+    var c = s.counts, hasGate = !!s.line_set && c;
+    $("gateCard").hidden = !hasGate;
+    if (hasGate) { setText("g-in", c.in); setText("g-out", c.out); setText("g-inside", c.inside); }
+
+    renderKpis(s, false);
+    renderStage(s);
+    renderDetail();
+    renderEvents(s.events);
+    $("logLinks").hidden = !s.is_admin;                    // the full history is for the operator
+    $("consoleLink").hidden = $("consoleSep").hidden = !s.is_admin;      // the way back to the management console
+    $("opLink").textContent = s.is_admin ? "Sign out" : "Operator sign in";
+    $("opLink").href = (s.is_admin ? "/admin/logout" : "/admin") + "?next=" + encodeURIComponent("/live?camera_id=" + cam);
+    $("logPage").href = "/live/log?camera_id=" + camQ;
+    $("logCsv").href = "/live/log.csv?camera_id=" + camQ + "&days=30";
+    renderHealth(s);
+    $("cam").classList.toggle("stale", stale);
+    $("foot").textContent = "Last update " + new Date(lastAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) +
+                            ". Updates every couple of seconds. Counts restart when the system is reset.";
+
+    var seq = s.frame_seq !== undefined ? s.frame_seq : s.frames_processed;
+    var have = s.frames_processed > 0;
+    $("frame").hidden = !have; $("cam-ph").hidden = have; $("fs").hidden = !have;
+    if (have) {
+      if (s.layout && s.layout.size) { var hs = JSON.stringify(s.layout); if (hs !== hitSig) { hitSig = hs; buildHit(s.layout); paintSelection(); } }
+      else { $("hit").hidden = true; hitSig = ""; }
+      var note = $("cam-note");
+      note.hidden = !(s.light === "low");
+      note.textContent = "Night: low light";
+      if (seq !== wantSeq) { wantSeq = seq; loadFrame(seq); if (showPlates) loadPlates(); }
+    } else { $("hit").hidden = true; }
+  }
+
+  // The picture is fetched with its frame number, so an older picture never replaces a newer one.
+  function loadFrame(seq) {
+    fetch("/live/frame.jpg?camera_id=" + camQ + (showPlates ? "&plates=1" : "") + "&seq=" + seq, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); var n = Number(r.headers.get("X-Frame-Seq")); return r.blob().then(function (b) { return { n: isNaN(n) ? seq : n, b: b }; }); })
+      .then(function (x) {
+        if (x.n < shownSeq) return;
+        shownSeq = x.n;
+        var url = URL.createObjectURL(x.b), img = $("frame");
+        img.onload = function () { if (imgUrl) URL.revokeObjectURL(imgUrl); imgUrl = url; };
+        img.src = url;
+      })
+      .catch(function () { /* the next frame will try again */ });
+  }
+
+  $("fs").onclick = function () {
+    var box = $("cam");
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (box.requestFullscreen) box.requestFullscreen();
+  };
+
+  function loadPlates() {
+    fetch("/live/plates?camera_id=" + camQ, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (j) {
+        $("platesCard").hidden = false;
+        var ul = $("plates"); clear(ul);
+        if (!j.plates.length) { ul.appendChild(el("li", "none", j.read_plates === false ? "Plate reading is off" : "None read yet")); return; }
+        j.plates.forEach(function (p) {
+          var li = el("li"), ic = el("div", "ai", "#"); ic.style.setProperty("--c", p.valid ? "var(--blue)" : "var(--amber)");
+          var tx = el("div", "tx"); tx.appendChild(el("b", "", p.valid ? p.plate : p.plate + " ?"));
+          tx.appendChild(el("small", "", "car #" + p.track_id + (p.valid ? "" : " · unsure")));
+          li.appendChild(ic); li.appendChild(tx); ul.appendChild(li);
+        });
+      })
+      .catch(function () { $("platesCard").hidden = true; });
+  }
+
+  // ---- polling: waits longer after each failure (1.5 s, 3, 6, 12), gives up on a request after 8 s
+  var timer = null;
+  function tick() {
+    var ctl = ("AbortController" in window) ? new AbortController() : null;
+    var cut = ctl ? setTimeout(function () { ctl.abort(); }, 8000) : null;
+    fetch("/live/state?camera_id=" + camQ, { cache: "no-store", signal: ctl ? ctl.signal : undefined })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (s) {
+        if (cut) clearTimeout(cut);
+        try { render(s); } catch (e) { if (window.console) console.error("render failed", e); }   // a page bug is not a network failure
+      })
+      .catch(function () {
+        if (cut) clearTimeout(cut);
+        failures++;
+        var wait = BACKOFF[Math.min(failures - 1, BACKOFF.length - 1)];
+        $("status").className = "pill off"; $("status").textContent = "Server unreachable";
+        banner(last ? "Cannot reach the server. Showing the last update from " + new Date(lastAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) +
+                       ". Trying again in " + Math.round(wait / 1000) + " s." : "Cannot reach the server. Trying again in " + Math.round(wait / 1000) + " s.", "err");
+        if (last) renderKpis(last, true);
+        if (!firstDone) { document.body.classList.remove("loading"); }
+      })
+      .then(function () {
+        var wait = failures ? BACKOFF[Math.min(failures - 1, BACKOFF.length - 1)] : (document.hidden ? 5000 : 1500);
+        timer = setTimeout(tick, wait);
+      });
+  }
+  tick();
+})();
+</script>
+</body>
+</html>

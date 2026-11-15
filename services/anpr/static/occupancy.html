@@ -45,7 +45,7 @@
     border-radius: 8px; background: #080a0d; min-height: 480px;
     display: flex; justify-content: center; align-items: center;
   }
-  canvas { display: block; max-width: 100%; cursor: crosshair; }
+  canvas { display: block; max-width: 100%; height: auto; cursor: crosshair; }
 
   .toolbar {
     display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;
@@ -128,7 +128,7 @@
 <header>
   <h1>ParkFNB <span>Bay Positioning & Calibrator</span> <span class="tag">ANPR Service</span></h1>
   <div>
-    <a href="/" style="color: var(--muted); text-decoration: none; font-size: 13px;">&larr; Back to Gate ANPR</a>
+    <a href="/" style="color: var(--muted); text-decoration: none; font-size: 13px;">&larr; Back to the console</a>
   </div>
 </header>
 
@@ -139,11 +139,27 @@
       <button onclick="document.getElementById('fileInput').click()">Upload Frame / Photo</button>
       <input type="file" id="videoInput" accept="video/mp4,video/avi,video/mkv,video/webm" style="display:none">
       <button id="btnUploadVideo" style="background:#0284c7;" onclick="document.getElementById('videoInput').click()">📹 Upload CCTV Video</button>
+      <button id="btnLiveFrame" style="background:#0d9488;" title="Use the newest frame the phone sent as the drawing background">📱 Load Live Phone Frame</button>
+      <button id="btnHQ" style="background:#0f766e;" title="Look at the phone's newest full-resolution photo with your bays drawn on it, to check the chalk lines. Nothing is changed.">🔍 HQ photo check</button>
+      <button id="btnSetLine" style="background:#d97706;" title="Click 2 points on the entry line, then 1 point inside the lot">➖ Set IN/OUT Line</button>
+      <button id="btnOptBridge" style="background:#7c3aed;" title="Place a saved Space Optimizer layout onto this frame from 4 clicked corners">🧩 Bays from Optimizer</button>
       <button class="magic" id="btnImportOptimizer" style="background:#7c3aed;">📥 Import Space Optimizer</button>
+      <input type="file" id="bayConfigFileInput" accept=".json,.geojson" style="display:none">
+      <button class="ghost" id="btnImportConfigFile" style="border-color:#38bdf8;color:#38bdf8;" title="Import ParkFNB v1 JSON, GeoJSON, or Space Optimizer file">📂 Import JSON / GeoJSON</button>
       <button class="magic" id="btnAutoFit">🪄 Auto-Fit Bays</button>
       <button class="grid-tool" id="btnAutoGrid">📐 Auto-Grid Lane</button>
       <button class="ghost" id="btnNewBay">+ Draw Bay</button>
-      <button class="ghost" id="btnUndo">Undo</button>
+      <button class="ghost" id="btnEdit" title="Drag a corner to reshape a bay, drag inside to move it">✏️ Edit Bays</button>
+      <button class="ghost" id="btnBackups" title="Every save keeps the layout it replaced; put one back">↩ Earlier Layouts</button>
+      <button class="ghost" id="btnUndo" title="Undo (Ctrl+Z)">↩ Undo</button>
+      <button class="ghost" id="btnRedo" title="Redo (Ctrl+Y)">↪ Redo</button>
+      <div style="display:inline-flex;align-items:center;gap:4px;background:#1e293b;padding:2px 8px;border-radius:6px;border:1px solid #334155;">
+        <span style="font-size:12px;color:#94a3b8;">🔍</span>
+        <button class="ghost" id="btnZoomOut" style="padding:2px 8px;font-size:12px;" title="Zoom Out">-</button>
+        <span id="zoomLevelDisplay" style="font-size:12px;font-weight:600;min-width:40px;text-align:center;">100%</span>
+        <button class="ghost" id="btnZoomIn" style="padding:2px 8px;font-size:12px;" title="Zoom In">+</button>
+        <button class="ghost" id="btnZoomReset" style="padding:2px 6px;font-size:11px;" title="Reset Zoom">Fit</button>
+      </div>
       <button class="ghost danger" id="btnClearBays">Clear All</button>
       <div style="display:flex;align-items:center;gap:6px;background:#1e293b;padding:3px 8px;border-radius:6px;border:1px solid #334155;">
         <span style="font-size:12px;color:#94a3b8;">📷 Angle:</span>
@@ -166,12 +182,77 @@
         <span id="aiToggleIcon">👁️</span> <span id="aiToggleText">Hide AI Bounding Boxes</span>
       </button>
       <button id="btnRunCheck" style="background:#10b981;">&#9654; Run Occupancy Check</button>
+      <button id="btnCheck3D" style="background:#6366f1;" title="Fit the 3D camera to the bays as drawn: which bays are accurate enough for parking to be judged? Nothing is saved.">🧊 Check 3D</button>
     </div>
 
     <!-- Auto-Grid Interactive Guidance Banner -->
-    <div id="gridBanner" class="banner-info" style="display:none;">
-      <span>📐 <strong>Auto-Grid Lane Active:</strong> Click 4 corners of the parking lane polygon (<span id="gridPointCount">0/4 corners clicked</span>).</span>
+        <!-- Mode B: Perspective-Aware Auto-Grid Guidance Banner -->
+    <div id="gridBanner" class="banner-info" style="display:none; background:#1e1b4b; border-left:4px solid #6366f1;">
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="background:#6366f1; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700;">MODE B: Auto-Grid (Candidate Generator Only)</span>
+          <span style="color:#e2e8f0; font-size:12px;">Click 4 corners of the parking lane polygon (<span id="gridPointCount" style="font-weight:700; color:#a5b4fc;">0/4 corners clicked</span>).</span>
+        </div>
+        <div style="font-size:11px; color:#cbd5e1;">⚠️ <em>Drafting tool only: Generates preliminary candidate stalls. You must manually inspect and adjust dividers in Mode A against physical chalk markings.</em></div>
+      </div>
       <button class="ghost" id="btnCancelGrid" style="padding: 3px 10px; font-size: 12px;">Cancel</button>
+    </div>
+
+    <!-- Space Optimizer bridge: pick a project, see its outline, click the same corners on the frame -->
+    <div id="optBanner" class="banner-info" style="display:none; flex-direction:column; align-items:stretch; gap:8px;">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <strong>🧩 Bays from Space Optimizer</strong>
+        <select id="optProject" style="min-width:180px; padding:5px 8px; border-radius:6px; background:#0f172a; color:#e2e8f0; border:1px solid #334155;"></select>
+        <button id="btnOptPreview" style="padding:5px 12px; font-size:13px;">1. Show lot outline</button>
+        <input type="file" id="optGeo" accept=".geojson,.json,application/geo+json,application/json" style="display:none">
+        <button id="btnOptGeo" style="padding:5px 12px; font-size:13px; background:#0d9488;" title="Use the GeoJSON file exported from the optimizer instead of a saved project">or load a GeoJSON file</button>
+        <label style="font-size:12px; color:#94a3b8;">Corners
+          <input id="optCorners" value="1,2,3,4" size="9" title="Which four numbered corners of the outline you will click, in order (only needed when the outline has more than 4 corners)" style="padding:4px 6px; border-radius:6px; background:#0f172a; color:#e2e8f0; border:1px solid #334155;">
+        </label>
+        <button id="btnOptClick" style="padding:5px 12px; font-size:13px;" disabled>2. Click the corners on the frame</button>
+        <button class="ghost" id="btnOptClose" style="padding:3px 10px; font-size:12px;">Close</button>
+      </div>
+      <div style="display:flex; gap:12px; align-items:center;">
+        <canvas id="optPreview" width="240" height="180" style="display:none; background:#0f172a; border:1px solid #334155; border-radius:6px;"></canvas>
+        <div id="optMsg" style="font-size:13px; color:#cbd5e1; line-height:1.5;">Needs the Space Optimizer running (cd services/space-optimizer &amp;&amp; python app.py).</div>
+      </div>
+    </div>
+
+    <!-- Edit mode: pick a bay on the picture, then rename / copy / delete it here -->
+        <!-- Mode A: Manual Ground-Truth Bay Editor -->
+    <div id="editBanner" class="banner-info" style="display:none; flex-direction:column; align-items:stretch; gap:8px; background:#0f172a; border-left:4px solid #0284c7;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="background:#0284c7; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700;">MODE A: Ground-Truth Editor</span>
+          <span style="color:#e2e8f0; font-size:12px;">Authoritative calibration: drag corners to reshape, drag inside to move.</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; color:#38bdf8; font-weight:600;" title="Moving a shared divider corner automatically updates both adjacent bays">
+            <input type="checkbox" id="chkLinkDividers" checked style="accent-color:#38bdf8;"> Link Shared Dividers
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; color:#f59e0b; font-weight:600;" title="Flag rear corners as estimated behind parked vehicles">
+            <input type="checkbox" id="chkFlagEstimated" style="accent-color:#f59e0b;"> Flag Rear Corners as Estimated
+          </label>
+        </div>
+      </div>
+      <!-- Controls for selected bay -->
+      <div id="editSel" style="display:flex; visibility:hidden; gap:8px; align-items:center; flex-wrap:wrap; min-height:30px;">
+        <span id="editSelName" style="font-weight:700; color:#38bdf8;"></span>
+        <input id="editRename" size="10" maxlength="32" aria-label="Bay name" style="padding:4px 6px; border-radius:6px; background:#1e293b; color:#e2e8f0; border:1px solid #334155;">
+        <button id="btnRename" style="padding:4px 10px; font-size:12px;">Rename</button>
+        <button id="btnDuplicate" style="padding:4px 10px; font-size:12px; background:#0d9488;">Duplicate</button>
+        <button id="btnInsertBay" style="padding:4px 10px; font-size:12px; background:#4f46e5;">Insert Bay</button>
+        <button id="btnDeleteBay" class="danger" style="padding:4px 10px; font-size:12px;">Delete</button>
+        <div id="cornerCoordDisplay" style="font-family:monospace; font-size:11px; color:#94a3b8; background:#1e293b; padding:4px 8px; border-radius:4px; border:1px solid #334155;"></div>
+      </div>
+    </div>
+    <div id="backupPanel" class="banner-info" style="display:none; flex-direction:column; align-items:stretch; gap:6px;"></div>
+
+    <!-- what is wrong with the bays as drawn (same checks the server makes), and whether they are saved -->
+    <div id="layoutBar" style="display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap; font-size:12px; margin:6px 0; color:#cbd5e1;">
+      <span id="layoutNote"></span>
+      <span id="unsavedChip" style="display:none; background:#78350f; color:#fde68a; padding:1px 8px; border-radius:10px; font-weight:700;">● Unsaved changes</span>
+      <div id="issueList" style="flex-basis:100%;"></div>
     </div>
 
     <div class="canvas-wrap" id="canvasWrap">
@@ -234,22 +315,72 @@
   </div>
 </div>
 
+<script src="/static/bay-geometry.js"></script>
 <script>
+// Which camera's layout this page edits.  /occupancy?camera=phone-1 for the phone test;
+// no parameter keeps the existing "venue-lot" layout.
+const CAM = (new URLSearchParams(location.search).get('camera') || 'venue-lot')
+  .replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) || 'venue-lot';
 let img = null;
+let linePts = [];       // IN/OUT line being drawn: 2 line points, then a point inside the lot
+let savedLine = null;   // {p1, p2, in_point} once sent to the server
 let currentPoints = [];
 let gridPoints = [];
 let bays = {};
 let observations = {};
 let hideAiBoxes = false;
 let lastAnnotatedImg = null;
-let appMode = 'bay'; // 'bay' | 'grid'
+let appMode = 'bay'; // 'bay' | 'grid' | 'line' | 'corners' | 'edit'
+let selectedBay = null;   // edit mode: the bay being worked on
+let drag = null;          // edit mode: {id, vertex (null = whole bay), last: [x, y], moved}
+let unsaved = false;      // bays changed on this page and not yet sent to the server
+let savedSnapshot = '{}'; // the bays as the server has them, to tell what has changed here
+let savedFrameSize = null;
+let issues = {};          // bay id -> {errors, warnings}, from BayGeometry.validateAll
 
 const canvas = document.getElementById('mainCanvas');
 const ctx = canvas.getContext('2d');
 
+// Text that came from a bay id, a file or the server never goes into markup as it is.
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+function imgSize() { return img ? [img.width, img.height] : null; }
+
 bays = {};
 updateJson();
 renderBayList();
+
+// Start from what the server has, so opening this page never starts from an empty layout that a
+// careless "Apply to Server" would then save over the real one.
+async function loadSavedLayout() {
+  try {
+    const r = await fetch('/occupancy/bays?camera_id=' + encodeURIComponent(CAM));
+    const note = document.getElementById('layoutNote');
+    if (!r.ok) { note.textContent = 'No saved bays for this camera yet.'; return; }
+    const j = await r.json();
+    bays = j.bays || {};
+    savedSnapshot = JSON.stringify(bays);
+    savedLine = j.line && j.line.p1 ? { p1: j.line.p1, p2: j.line.p2, in_point: j.line.in_point } : null;
+    selectedBay = null;
+    updateJson();
+    renderBayList();
+    const when = j.saved_at ? ' (saved ' + j.saved_at.replace('T', ' ') + ')' : '';
+    const size = j.frame_size ? ', drawn on a ' + j.frame_size[0] + '×' + j.frame_size[1] + ' picture' : '';
+    note.textContent = 'Loaded ' + Object.keys(bays).length + ' saved bays' + when + size + '.';
+    savedFrameSize = j.frame_size || null;
+    if (!img) loadLiveFrame(true);
+    else redraw();
+  } catch (err) { /* offline or not signed in: the page simply starts empty */ }
+}
+
+function setUnsaved(v) {
+  unsaved = v;
+  document.getElementById('unsavedChip').style.display = v ? 'inline-block' : 'none';
+}
+window.addEventListener('beforeunload', (e) => {
+  if (unsaved) { e.preventDefault(); e.returnValue = ''; }
+});
 
 document.getElementById('fileInput').addEventListener('change', (e) => {
   const f = e.target.files[0];
@@ -267,6 +398,289 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
   };
   reader.readAsDataURL(f);
 });
+
+// Phone test: draw bays and the entry line on the real frame the phone is sending.
+function loadLiveFrame(silent) {
+  const im = new Image();
+  im.onload = () => {
+    img = im;
+    canvas.width = im.width;
+    canvas.height = im.height;
+    lastAnnotatedImg = null;
+    updateJson();                      // the bays are now judged against this picture's size
+    redraw();
+  };
+  im.onerror = () => { if (!silent) alert("No live frame yet. Open the phone camera page and press Start first."); };
+  im.src = '/live/frame.jpg?raw=1&camera_id=' + encodeURIComponent(CAM) + '&t=' + Date.now();
+}
+document.getElementById('btnLiveFrame').onclick = () => loadLiveFrame(false);
+
+// The phone's full-resolution photo with the bays drawn on it.  The editor's own canvas is the size of the live
+// stream (the bays are in those pixels), so the sharp photo is looked at here, in a viewer that zooms the real pixels.
+document.getElementById('btnHQ').onclick = async () => {
+  const mk = (tag, css, text) => { const e = document.createElement(tag); e.style.cssText = css; if (text) e.textContent = text; return e; };
+  const box = mk('div', 'position:fixed;inset:0;z-index:9999;background:rgba(8,10,14,.96);display:flex;flex-direction:column;');
+  const bar = mk('div', 'display:flex;gap:8px;align-items:center;padding:10px 14px;color:#e8ebf0;flex-wrap:wrap;');
+  const info = mk('span', 'flex:1;min-width:200px;font-size:13px;', 'Loading the photo…');
+  const scroller = mk('div', 'flex:1;overflow:auto;');
+  const cv = document.createElement('canvas');
+  cv.style.cssText = 'display:block;';
+  scroller.appendChild(cv);
+  const btn = (label, fn) => { const b = mk('button', 'padding:8px 14px;', label); b.onclick = fn; return b; };
+  let bays_on = true, im = null, fit = true, zoom = 1;
+  const apply = () => {
+    if (!im) return;
+    cv.style.width = fit ? '100%' : (im.width * zoom) + 'px';
+  };
+  const paint = () => {
+    cv.width = im.width; cv.height = im.height;
+    const c = cv.getContext('2d');
+    c.drawImage(im, 0, 0);
+    if (!bays_on) return;
+    const s = im.width / canvas.width, lw = Math.max(2, 2 * s);
+    c.font = 'bold ' + Math.round(16 * s) + 'px sans-serif';
+    for (const [bid, pts] of Object.entries(bays)) {
+      if (!pts || pts.length < 3) continue;
+      c.beginPath();
+      pts.forEach((p, i) => (i ? c.lineTo(p[0] * s, p[1] * s) : c.moveTo(p[0] * s, p[1] * s)));
+      c.closePath();
+      c.strokeStyle = '#22d3ee'; c.lineWidth = lw; c.stroke();
+      c.fillStyle = '#22d3ee';
+      c.fillText(String(bid), pts[0][0] * s + 4 * s, pts[0][1] * s + 16 * s);
+    }
+  };
+  bar.append(info,
+    btn('Bays on/off', () => { bays_on = !bays_on; if (im) paint(); }),
+    btn('Fit', () => { fit = true; apply(); }),
+    btn('100%', () => { fit = false; zoom = 1; apply(); }),
+    btn('200%', () => { fit = false; zoom = 2; apply(); }),
+    btn('Close', () => box.remove()));
+  box.append(bar, scroller);
+  document.body.appendChild(box);
+  try {
+    const r = await fetch('/console/api/still.jpg?camera_id=' + encodeURIComponent(CAM) + '&t=' + Date.now());
+    if (!r.ok) throw new Error(r.status === 404 ? 'no full-resolution photo yet. The phone sends one about every 2 minutes while its camera page is running.' : r.status);
+    const age = parseFloat(r.headers.get('X-Still-Age') || '0');
+    im = await createImageBitmap(await r.blob());
+    paint(); apply();
+    info.textContent = im.width + '×' + im.height + ' photo, taken ' + Math.round(age) + ' s ago. Your bays are drawn on it; this view changes nothing.';
+  } catch (e) {
+    info.textContent = 'Could not load the photo: ' + e.message;
+  }
+};
+
+document.getElementById('btnSetLine').onclick = () => {
+  if (!img) { alert("Load a frame first (Upload, or Load Live Phone Frame)."); return; }
+  if (appMode === 'grid') exitGridMode();
+  if (appMode === 'edit') setEditMode(false);
+  currentPoints = [];
+  linePts = [];
+  appMode = 'line';
+  alert("Click 2 points along the entry line, then 1 point INSIDE the lot " +
+        "(the side cars go to when they come in).");
+  redraw();
+};
+
+async function finishLine() {
+  const [p1, p2, inside] = linePts;
+  appMode = 'bay';
+  linePts = [];
+  try {
+    const r = await fetch('/live/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, line: [p1, p2], in_point: inside })
+    });
+    if (!r.ok) throw new Error((await r.json()).error || r.status);
+    savedLine = { p1: p1, p2: p2, in_point: inside };
+  } catch (err) {
+    alert("Could not save the line: " + err.message);
+  }
+  redraw();
+}
+
+// ---- Space Optimizer bridge ------------------------------------------------------------
+// The optimizer's lot outline is shown as a map (north up) with its corners numbered.  The
+// operator clicks the same corners on the camera frame, in that order, going round the lot the
+// same way; the server then carries every stall across (see optimizer_bridge.py).
+let optSite = null;        // {layout_id, site: [[x, y] metres], slots: [ring]} for the chosen layout
+let cornerPts = [];        // corners clicked on the frame so far
+
+function optSay(text, isError) {
+  const el = document.getElementById('optMsg');
+  el.textContent = text;
+  el.style.color = isError ? '#fca5a5' : '#cbd5e1';
+}
+
+function closeOptBridge() {
+  if (appMode === 'corners') appMode = 'bay';
+  cornerPts = [];
+  document.getElementById('optBanner').style.display = 'none';
+  redraw();
+}
+
+async function loadOptProjects() {
+  const sel = document.getElementById('optProject');
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  try {
+    const r = await fetch('/optimizer/projects');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    if (!j.projects.length) { optSay('The optimizer has no saved projects. Save one there first.', true); return; }
+    j.projects.forEach((p) => {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = p.name;
+      sel.appendChild(o);
+    });
+    optSay('Pick a project and press 1.');
+  } catch (err) {
+    optSay(err.message + ' You can still use "or load a GeoJSON file".', true);
+  }
+}
+
+// "1,2,3,4" -> [0,1,2,3]; null (with a message) when it is not four different corners of the outline
+function optCornerIdx() {
+  const n = optSite ? optSite.site.length : 4;
+  const idx = document.getElementById('optCorners').value.split(',').map(s => parseInt(s.trim(), 10) - 1);
+  if (idx.length !== 4 || idx.some(i => !(i >= 0 && i < n)) || new Set(idx).size !== 4) {
+    optSay('Corners must be four different numbers from 1 to ' + n + ', like 1,2,3,4.', true);
+    return null;
+  }
+  return idx;
+}
+
+function drawOptPreview(site, slots, chosen) {
+  const c = document.getElementById('optPreview');
+  const g = c.getContext('2d');
+  c.style.display = 'block';
+  g.clearRect(0, 0, c.width, c.height);
+  const xs = site.map(p => p[0]), ys = site.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const pad = 22;
+  const s = Math.min((c.width - 2 * pad) / (maxX - minX || 1), (c.height - 2 * pad) / (maxY - minY || 1));
+  // north is up: canvas y grows downward, so flip
+  const tx = (p) => [pad + (p[0] - minX) * s, c.height - pad - (p[1] - minY) * s];
+  g.fillStyle = 'rgba(96,165,250,0.35)';
+  slots.forEach((ring) => {
+    g.beginPath();
+    ring.forEach((p, i) => { const q = tx(p); i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); });
+    g.closePath(); g.fill();
+  });
+  g.strokeStyle = '#f59e0b'; g.lineWidth = 2;
+  g.beginPath();
+  site.forEach((p, i) => { const q = tx(p); i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); });
+  g.closePath(); g.stroke();
+  g.font = 'bold 12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  site.forEach((p, i) => {
+    const q = tx(p);
+    const picked = chosen.indexOf(i);
+    g.fillStyle = picked >= 0 ? '#fbbf24' : '#64748b';
+    g.beginPath(); g.arc(q[0], q[1], 9, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#0f172a'; g.fillText(String(i + 1), q[0], q[1]);
+    if (picked >= 0) {                       // click order, so it is clear which comes first
+      g.fillStyle = '#fbbf24'; g.font = '10px sans-serif';
+      g.fillText('#' + (picked + 1), q[0], q[1] - 15); g.font = 'bold 12px sans-serif';
+    }
+  });
+}
+
+function showSite(j) {
+  optSite = j;
+  const idx = optCornerIdx() || [0, 1, 2, 3].slice(0, Math.min(4, j.site.length));
+  drawOptPreview(j.site, j.slots, idx);
+  document.getElementById('btnOptClick').disabled = false;
+  optSay('"' + j.name + '": ' + j.parkable_slots + ' stalls. Press 2, then click the yellow corners on the frame in the order #1, #2, #3, #4, going round the lot.' +
+         (j.site.length > 4 ? ' The outline has ' + j.site.length + ' corners: type the four real ones in the Corners box (like 1,3,4,6) and the preview updates.' : ''));
+}
+
+document.getElementById('optCorners').addEventListener('input', () => {
+  if (!optSite) return;
+  const idx = optCornerIdx();
+  if (idx) { drawOptPreview(optSite.site, optSite.slots, idx); optSay('Corners ' + idx.map(i => i + 1).join(', ') + ' selected.'); }
+});
+
+document.getElementById('btnOptGeo').onclick = () => document.getElementById('optGeo').click();
+document.getElementById('optGeo').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  let fc;
+  try { fc = JSON.parse(await f.text()); } catch (err) { optSay('That file is not valid JSON.', true); return; }
+  optSay('Reading ' + f.name + '…');
+  try {
+    const r = await fetch('/optimizer/site', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ geojson: fc, name: f.name })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    showSite(j);
+  } catch (err) {
+    optSay(err.message, true);
+  }
+});
+
+document.getElementById('btnOptBridge').onclick = () => {
+  if (!img) { alert("Load a frame first (Upload, or Load Live Phone Frame)."); return; }
+  if (appMode === 'grid') exitGridMode();
+  if (appMode === 'edit') setEditMode(false);
+  document.getElementById('optBanner').style.display = 'flex';
+  loadOptProjects();
+};
+document.getElementById('btnOptClose').onclick = closeOptBridge;
+
+document.getElementById('btnOptPreview').onclick = async () => {
+  const id = document.getElementById('optProject').value;
+  if (!id) { optSay('Choose a project first.', true); return; }
+  optSay('Running the optimizer…');
+  try {
+    const r = await fetch('/optimizer/site', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: Number(id) })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    showSite(j);
+  } catch (err) {
+    optSay(err.message, true);
+  }
+};
+
+document.getElementById('btnOptClick').onclick = () => {
+  if (!optCornerIdx()) return;
+  if (appMode === 'edit') setEditMode(false);
+  appMode = 'corners';
+  cornerPts = [];
+  optSay('Click corner #1 on the frame.');
+  redraw();
+};
+
+async function finishCorners() {
+  const pts = cornerPts;
+  appMode = 'bay';
+  cornerPts = [];
+  optSay('Placing stalls…');
+  try {
+    const r = await fetch('/occupancy/layout-from-optimizer', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, layout_id: optSite.layout_id, corners_px: pts,
+                             site_corner_idx: optCornerIdx(),
+                             image_size: [canvas.width, canvas.height] })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    bays = j.bays;
+    savedSnapshot = JSON.stringify(bays);        // the server saved them already
+    savedFrameSize = imgSize();
+    lastAnnotatedImg = null;
+    updateJson();
+    renderBayList();
+    optSay(j.count + ' bays placed from "' + j.project + '". ' + (j.warnings || []).join(' ') +
+           ' Check they sit on the real stalls; if not, press 2 and click the corners again.');
+  } catch (err) {
+    optSay(err.message, true);
+  }
+  redraw();
+}
 
 // Toggle Clean View vs AI Bounding Boxes
 document.getElementById('btnToggleAiBoxes').onclick = () => {
@@ -304,6 +718,7 @@ function enterGridMode() {
     alert("Please upload a parking frame or photo first!");
     return;
   }
+  if (appMode === 'edit') setEditMode(false);
   appMode = 'grid';
   gridPoints = [];
   currentPoints = [];
@@ -325,6 +740,7 @@ function exitGridMode() {
 
 document.getElementById('btnNewBay').onclick = () => {
   if (appMode === 'grid') exitGridMode();
+  if (appMode === 'edit') setEditMode(false);
   currentPoints = [];
   alert("Click 4 corners on the canvas to manually draw a parking bay polygon.");
 };
@@ -357,11 +773,23 @@ document.getElementById('btnAutoFit').onclick = async () => {
 
 canvas.addEventListener('click', (e) => {
   if (!img) return;
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const x = Math.round((e.clientX - rect.left) * scaleX);
-  const y = Math.round((e.clientY - rect.top) * scaleY);
+  if (appMode === 'edit') return;          // edit mode works with the mouse down / move / up below
+  const [x, y] = canvasPoint(e);
+
+  if (appMode === 'line') {
+    linePts.push([x, y]);
+    redraw();
+    if (linePts.length === 3) setTimeout(finishLine, 50);
+    return;
+  }
+
+  if (appMode === 'corners') {
+    cornerPts.push([x, y]);
+    optSay(cornerPts.length < 4 ? 'Click corner #' + (cornerPts.length + 1) + '.' : 'Placing stalls…');
+    redraw();
+    if (cornerPts.length === 4) setTimeout(finishCorners, 50);
+    return;
+  }
 
   if (appMode === 'grid') {
     gridPoints.push([x, y]);
@@ -377,7 +805,12 @@ canvas.addEventListener('click', (e) => {
     currentPoints.push([x, y]);
     if (currentPoints.length === 4) {
       const nextIdx = Object.keys(bays).length + 1;
-      const name = prompt("Enter Bay ID:", "Bay-0" + nextIdx) || ("Bay-0" + nextIdx);
+      const typed = (prompt("Enter Bay ID:", "Bay-0" + nextIdx) || ("Bay-0" + nextIdx)).trim().slice(0, 32);
+      let name = typed || ("Bay-0" + nextIdx);
+      if (name in bays && !confirm("A bay called '" + name + "' already exists. Replace it? (Cancel keeps both: this one becomes '" +
+                                   BayGeometry.uniqueId(bays, name) + "')")) {
+        name = BayGeometry.uniqueId(bays, name);
+      }
       bays[name] = [...currentPoints];
       currentPoints = [];
       lastAnnotatedImg = null;
@@ -390,7 +823,7 @@ canvas.addEventListener('click', (e) => {
 
 // Auto-Grid Lane Generator Dialog & Partition Execution
 function handleGridGeneration() {
-  const countStr = prompt("📐 Auto-Grid Lane: Enter number of bays to partition in this lane (e.g. 10):", "10");
+  const countStr = prompt("📐 Auto-Grid Lane: Enter number of bays to partition in this lane (e.g. 7):", "7");
   if (!countStr) {
     exitGridMode();
     return;
@@ -403,13 +836,20 @@ function handleGridGeneration() {
   }
 
   const prefix = prompt("Enter Bay ID prefix for this lane (e.g. Bay-, A-, Lane1-):", "Bay-") || "Bay-";
+  const gapStr = prompt("Optional inter-bay gap as fraction of stall (0 = contiguous chalk markings, 0.05 = 5% gap):", "0");
+  const gap = Math.max(0, Math.min(0.5, parseFloat(gapStr) || 0));
 
-  // Mathematically partition quadrilateral into n equal IRC-compliant bays
-  const partitionedBays = partitionLanePolygon(gridPoints, n);
+  // Split the row into n stalls of equal real width via projective homography
+  const partitionedBays = partitionLanePolygon(gridPoints, n, gap);
+  if (!partitionedBays.length) {
+    alert("Those 4 corners do not make a row. Click the 4 outer corners of the whole row of stalls.");
+    exitGridMode();
+    return;
+  }
 
   // Determine starting index to avoid ID collision
   let startNum = 1;
-  const regex = new RegExp(`^${prefix}(\\d+)$`);
+  const regex = new RegExp('^' + escapeRegExp(prefix) + '(\\d+)$');
   for (const bid of Object.keys(bays)) {
     const m = bid.match(regex);
     if (m) {
@@ -426,78 +866,27 @@ function handleGridGeneration() {
   const lastId = `${prefix}${String(startNum + n - 1).padStart(2, '0')}`;
 
   exitGridMode();
+  setEditMode(true);
   lastAnnotatedImg = null;
   updateJson();
   renderBayList();
   redraw();
 
-  alert(`✅ Generated ${n} IRC-compliant parking bays (${firstId} to ${lastId})!\nClick 'Run Occupancy Check' to detect occupancy and number plates.`);
+  alert(`✅ Generated ${n} perspective-aligned bays (${firstId} to ${lastId})!\nSwitched to Edit Mode: drag any corner or bay to fine-tune alignment.`);
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^$()|{}\[\]\\]/g, '\\$&');
 }
 
 /**
- * Mathematical Partitioning of a 4-corner Lane Quadrilateral into N equal bays.
- * 1. Orders corners clockwise to [TL, TR, BR, BL] regardless of click order.
- * 2. Determines lane longitudinal axis (horizontal-dominant vs vertical-dominant).
- * 3. Performs bilinear parametric interpolation across opposing edges:
- *    t_1 = i/N, t_2 = (i+1)/N for i in [0, N-1].
- * 4. Yields N uniform, non-overlapping, gapless bays with identical frontage.
+ * Split the 4 clicked corners of a row into n stalls of equal REAL width.  The corners are mapped to
+ * a flat strip by a homography and each stall is carried back (see static/bay-geometry.js), so stalls
+ * nearer the camera come out wider on the picture and far ones narrower, as painted stalls are.
+ * Returns [] when the corners cannot form a row.
  */
-function partitionLanePolygon(pts, n) {
-  const q = orderQuadrilateral(pts);
-
-  const dist = (p1, p2) => Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-  const lenA = (dist(q[0], q[1]) + dist(q[3], q[2])) / 2.0; // horizontal edges
-  const lenB = (dist(q[1], q[2]) + dist(q[0], q[3])) / 2.0; // vertical edges
-
-  const baysList = [];
-  if (lenA >= lenB) {
-    // Horizontal-dominant lane: partition along top edge (q0 -> q1) and bottom edge (q3 -> q2)
-    for (let i = 0; i < n; i++) {
-      const t1 = i / n;
-      const t2 = (i + 1) / n;
-      const pTl = [
-        Math.round((1 - t1) * q[0][0] + t1 * q[1][0]),
-        Math.round((1 - t1) * q[0][1] + t1 * q[1][1])
-      ];
-      const pTr = [
-        Math.round((1 - t2) * q[0][0] + t2 * q[1][0]),
-        Math.round((1 - t2) * q[0][1] + t2 * q[1][1])
-      ];
-      const pBr = [
-        Math.round((1 - t2) * q[3][0] + t2 * q[2][0]),
-        Math.round((1 - t2) * q[3][1] + t2 * q[2][1])
-      ];
-      const pBl = [
-        Math.round((1 - t1) * q[3][0] + t1 * q[2][0]),
-        Math.round((1 - t1) * q[3][1] + t1 * q[2][1])
-      ];
-      baysList.push([pTl, pTr, pBr, pBl]);
-    }
-  } else {
-    // Vertical-dominant lane: partition along left edge (q0 -> q3) and right edge (q1 -> q2)
-    for (let i = 0; i < n; i++) {
-      const t1 = i / n;
-      const t2 = (i + 1) / n;
-      const pTl = [
-        Math.round((1 - t1) * q[0][0] + t1 * q[3][0]),
-        Math.round((1 - t1) * q[0][1] + t1 * q[3][1])
-      ];
-      const pTr = [
-        Math.round((1 - t1) * q[1][0] + t1 * q[2][0]),
-        Math.round((1 - t1) * q[1][1] + t1 * q[2][1])
-      ];
-      const pBr = [
-        Math.round((1 - t2) * q[1][0] + t2 * q[2][0]),
-        Math.round((1 - t2) * q[1][1] + t2 * q[2][1])
-      ];
-      const pBl = [
-        Math.round((1 - t2) * q[0][0] + t2 * q[3][0]),
-        Math.round((1 - t2) * q[0][1] + t2 * q[3][1])
-      ];
-      baysList.push([pTl, pTr, pBr, pBl]);
-    }
-  }
-  return baysList;
+function partitionLanePolygon(pts, n, gap = 0) {
+  return BayGeometry.splitRow(pts, n, gap) || [];
 }
 
 /**
@@ -538,7 +927,16 @@ function orderQuadrilateral(pts) {
   ];
 }
 
-document.getElementById('btnUndo').onclick = () => {
+const undoStack = [];
+const redoStack = [];
+
+function pushHistory() {
+  undoStack.push(JSON.stringify(bays));
+  if (undoStack.length > 50) undoStack.shift();
+  redoStack.length = 0;
+}
+
+function doUndo() {
   if (appMode === 'grid' && gridPoints.length > 0) {
     gridPoints.pop();
     document.getElementById('gridPointCount').textContent = `${gridPoints.length}/4 corners clicked`;
@@ -550,17 +948,60 @@ document.getElementById('btnUndo').onclick = () => {
     redraw();
     return;
   }
-  const bayKeys = Object.keys(bays);
-  if (bayKeys.length > 0) {
-    const lastKey = bayKeys[bayKeys.length - 1];
-    delete bays[lastKey];
-    delete observations[lastKey];
+  if (undoStack.length > 0) {
+    redoStack.push(JSON.stringify(bays));
+    const prev = JSON.parse(undoStack.pop());
+    bays = prev;
+    selectedBay = null;
+    syncEditPanel();
     lastAnnotatedImg = null;
     updateJson();
     renderBayList();
     redraw();
   }
-};
+}
+
+function doRedo() {
+  if (redoStack.length > 0) {
+    undoStack.push(JSON.stringify(bays));
+    const next = JSON.parse(redoStack.pop());
+    bays = next;
+    selectedBay = null;
+    syncEditPanel();
+    lastAnnotatedImg = null;
+    updateJson();
+    renderBayList();
+    redraw();
+  }
+}
+
+document.getElementById('btnUndo').onclick = doUndo;
+document.getElementById('btnRedo').onclick = doRedo;
+
+let currentZoom = 1.0;
+function applyZoom(z) {
+  currentZoom = Math.max(0.5, Math.min(3.0, Math.round(z * 100) / 100));
+  const disp = document.getElementById('zoomLevelDisplay');
+  if (disp) disp.textContent = Math.round(currentZoom * 100) + '%';
+  if (canvas && img) {
+    if (Math.abs(currentZoom - 1.0) < 0.01) {
+      canvas.style.width = '';
+    } else {
+      canvas.style.width = (canvas.width * currentZoom) + 'px';
+    }
+  }
+}
+
+document.getElementById('btnZoomIn').onclick = () => applyZoom(currentZoom + 0.25);
+document.getElementById('btnZoomOut').onclick = () => applyZoom(currentZoom - 0.25);
+document.getElementById('btnZoomReset').onclick = () => applyZoom(1.0);
+
+canvas.addEventListener('wheel', (e) => {
+  if (e.ctrlKey || appMode === 'edit') {
+    e.preventDefault();
+    applyZoom(currentZoom + (e.deltaY < 0 ? 0.20 : -0.20));
+  }
+}, { passive: false });
 
 document.getElementById('btnClearBays').onclick = () => {
   if (confirm("Clear all defined bays?")) {
@@ -576,21 +1017,430 @@ document.getElementById('btnClearBays').onclick = () => {
   }
 };
 
+// ---- Edit mode: reshape, move, rename, copy and delete bays -----------------------------------
+function canvasPoint(e) {
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return [0, 0];
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = Math.min(canvas.width, Math.max(0, Math.round((e.clientX - rect.left) * scaleX)));
+  const y = Math.min(canvas.height, Math.max(0, Math.round((e.clientY - rect.top) * scaleY)));
+  return [x, y];
+}
+function hitRadius() {                      // about 12 screen pixels, whatever the picture is scaled to
+  const rect = canvas.getBoundingClientRect();
+  return 12 * canvas.width / (rect.width || canvas.width);
+}
+
+function setEditMode(on) {
+  if (on && !img) { alert("Load a frame first (Upload, or Load Live Phone Frame)."); return; }
+  if (on) {
+    if (appMode === 'grid') exitGridMode();
+    currentPoints = [];
+    appMode = 'edit';
+  } else if (appMode === 'edit') {
+    appMode = 'bay';
+  }
+  selectedBay = null;
+  drag = null;
+  const btn = document.getElementById('btnEdit');
+  btn.classList.toggle('active-tool', on);
+  btn.textContent = on ? '✏️ Done Editing' : '✏️ Edit Bays';
+  document.getElementById('editBanner').style.display = on ? 'flex' : 'none';
+  canvas.style.cursor = on ? 'default' : '';
+  syncEditPanel();
+  redraw();
+}
+document.getElementById('btnEdit').onclick = () => setEditMode(appMode !== 'edit');
+
+const estimatedBays = new Set(['Bay-04', 'Bay-05', 'Bay-06', 'Bay-07']);
+
+function syncEditPanel() {
+  const row = document.getElementById('editSel');
+  const on = appMode === 'edit' && selectedBay !== null && selectedBay in bays;
+  row.style.visibility = on ? 'visible' : 'hidden';
+  if (on) {
+    document.getElementById('editSelName').textContent = selectedBay;
+    document.getElementById('editRename').value = selectedBay;
+    const pts = bays[selectedBay];
+    if (pts && pts.length === 4) {
+      document.getElementById('cornerCoordDisplay').textContent =
+        `NL:[${pts[0][0]},${pts[0][1]}] NR:[${pts[1][0]},${pts[1][1]}] FR:[${pts[2][0]},${pts[2][1]}] FL:[${pts[3][0]},${pts[3][1]}]`;
+    }
+    const chk = document.getElementById('chkFlagEstimated');
+    if (chk) chk.checked = estimatedBays.has(selectedBay);
+  }
+}
+
+document.getElementById('chkFlagEstimated')?.addEventListener('change', (e) => {
+  if (!selectedBay) return;
+  if (e.target.checked) estimatedBays.add(selectedBay);
+  else estimatedBays.delete(selectedBay);
+  redraw();
+});
+
+function bayEdited(rebuildList) {
+  lastAnnotatedImg = null;
+  updateJson();
+  if (rebuildList) renderBayList();
+  redraw();
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (appMode !== 'edit' || !img) return;
+  const [x, y] = canvasPoint(e);
+  const hit = BayGeometry.hitTest(bays, x, y, hitRadius());
+  selectedBay = hit ? hit.id : null;
+  if (hit) {
+    pushHistory();
+    const linked = [];
+    if (hit.vertex !== null) {
+      const orig = bays[hit.id][hit.vertex];
+      for (const [bid, pts] of Object.entries(bays)) {
+        pts.forEach((p, vi) => {
+          if (Math.hypot(p[0] - orig[0], p[1] - orig[1]) <= 6) {
+            linked.push({ id: bid, vertex: vi });
+          }
+        });
+      }
+    }
+    drag = { id: hit.id, vertex: hit.vertex, linked: linked, last: [x, y], moved: false };
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* not every browser */ }
+  } else {
+    drag = null;
+  }
+  syncEditPanel();
+  redraw();
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (appMode !== 'edit' || !img) return;
+  const [x, y] = canvasPoint(e);
+  if (!drag) {
+    const h = BayGeometry.hitTest(bays, x, y, hitRadius());
+    canvas.style.cursor = !h ? 'default' : (h.vertex === null ? 'move' : 'crosshair');
+    return;
+  }
+  const clampX = Math.min(canvas.width, Math.max(0, x));
+  const clampY = Math.min(canvas.height, Math.max(0, y));
+
+  if (drag.vertex !== null) {
+    const linkChk = document.getElementById('chkLinkDividers');
+    if (linkChk && linkChk.checked && drag.linked && drag.linked.length > 1) {
+      drag.linked.forEach(target => {
+        if (bays[target.id]) {
+          bays[target.id][target.vertex] = [clampX, clampY];
+        }
+      });
+    } else {
+      bays[drag.id][drag.vertex] = [clampX, clampY];
+    }
+  } else {
+    bays[drag.id] = BayGeometry.translate(bays[drag.id], x - drag.last[0], y - drag.last[1]);
+  }
+  drag.last = [x, y];
+  drag.moved = true;
+  bayEdited(false);
+});
+
+function endDrag() {
+  if (drag && drag.moved) renderBayList();
+  drag = null;
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+function deleteSelected() {
+  if (selectedBay === null || !(selectedBay in bays)) return;
+  pushHistory();
+  delete bays[selectedBay];
+  delete observations[selectedBay];
+  selectedBay = null;
+  syncEditPanel();
+  bayEdited(true);
+}
+
+document.getElementById('btnDeleteBay').onclick = deleteSelected;
+
+document.getElementById('btnDuplicate').onclick = () => {
+  if (selectedBay === null || !(selectedBay in bays)) return;
+  pushHistory();
+  const id = BayGeometry.nextId(bays, selectedBay);
+  bays[id] = BayGeometry.duplicateBay(bays, selectedBay);
+  selectedBay = id;
+  syncEditPanel();
+  bayEdited(true);
+};
+
+document.getElementById('btnInsertBay').onclick = () => {
+  if (selectedBay === null || !(selectedBay in bays)) return;
+  pushHistory();
+  const newPoly = BayGeometry.insertBay(bays, selectedBay);
+  if (!newPoly) return;
+  const newId = BayGeometry.nextId(bays, selectedBay);
+  bays[newId] = newPoly;
+  selectedBay = newId;
+  syncEditPanel();
+  bayEdited(true);
+};
+
+document.getElementById('btnRename').onclick = () => {
+  if (selectedBay === null || !(selectedBay in bays)) return;
+  const name = document.getElementById('editRename').value.trim();
+  if (!name || name.length > 32) { alert("A bay name is 1 to 32 characters."); return; }
+  if (name === selectedBay) return;
+  if (name in bays) { alert("There is already a bay called '" + name + "'."); return; }
+  pushHistory();
+  const renamed = {};                      // keep the order the bays were in
+  for (const [id, pts] of Object.entries(bays)) renamed[id === selectedBay ? name : id] = pts;
+  if (selectedBay in observations) { observations[name] = observations[selectedBay]; delete observations[selectedBay]; }
+  bays = renamed;
+  selectedBay = name;
+  syncEditPanel();
+  bayEdited(true);
+};
+
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault();
+    if (e.shiftKey) doRedo();
+    else doUndo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+    e.preventDefault();
+    doRedo();
+    return;
+  }
+
+  if (appMode !== 'edit' || selectedBay === null || !(selectedBay in bays)) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
+  const s = e.shiftKey ? 10 : 1;
+  const d = { ArrowLeft: [-s, 0], ArrowRight: [s, 0], ArrowUp: [0, -s], ArrowDown: [0, s] }[e.key];
+  if (d) {
+    e.preventDefault();
+    pushHistory();
+    bays[selectedBay] = BayGeometry.translate(bays[selectedBay], d[0], d[1]);
+    bayEdited(false);
+  }
+});
+
+// On top of the picture: bays that cannot be saved in red, and handles on the selected bay.
+function drawEditOverlays() {
+  for (const [id, v] of Object.entries(issues)) {
+    const pts = bays[id];
+    if (!pts || pts.length < 3) continue;
+    if (!v.errors.length && !(v.warnings.length && appMode === 'edit')) continue;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.strokeStyle = v.errors.length ? '#ef4444' : '#f59e0b';
+    ctx.lineWidth = 4;
+    ctx.setLineDash(v.errors.length ? [] : [8, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (appMode !== 'edit') return;
+
+  // Detect shared vertices across bays to highlight divider points
+  const vertexCount = new Map();
+  for (const pts of Object.values(bays)) {
+    for (const p of pts) {
+      const key = `${Math.round(p[0])},${Math.round(p[1])}`;
+      vertexCount.set(key, (vertexCount.get(key) || 0) + 1);
+    }
+  }
+
+  for (const [id, pts] of Object.entries(bays)) {
+    const sel = id === selectedBay;
+    if (sel) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.closePath();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    const isEstimated = estimatedBays.has(id);
+    if (isEstimated && pts.length === 4) {
+      ctx.beginPath();
+      ctx.moveTo(pts[2][0], pts[2][1]);
+      ctx.lineTo(pts[3][0], pts[3][1]);
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    const cornerLabels = ['NL', 'NR', 'FR', 'FL'];
+    pts.forEach((p, idx) => {
+      const isRearEstimated = isEstimated && (idx === 2 || idx === 3);
+      const key = `${Math.round(p[0])},${Math.round(p[1])}`;
+      const isShared = (vertexCount.get(key) || 0) > 1;
+      const r = sel ? 6 : 4;
+
+      ctx.fillStyle = isShared ? '#06b6d4' : (sel ? '#ffffff' : 'rgba(255,255,255,0.7)');
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if (isShared) {
+        ctx.moveTo(p[0], p[1] - r - 2);
+        ctx.lineTo(p[0] + r + 2, p[1]);
+        ctx.lineTo(p[0], p[1] + r + 2);
+        ctx.lineTo(p[0] - r - 2, p[1]);
+        ctx.closePath();
+      } else {
+        ctx.rect(p[0] - r, p[1] - r, 2 * r, 2 * r);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      if (sel && idx < 4) {
+        const lbl = cornerLabels[idx];
+        ctx.font = 'bold 11px sans-serif';
+        const tw = ctx.measureText(lbl).width;
+        const ly = idx < 2 ? p[1] + 16 : p[1] - 8;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.fillRect(p[0] - tw / 2 - 3, ly - 10, tw + 6, 14);
+        ctx.fillStyle = isRearEstimated ? '#f59e0b' : (idx === 0 ? '#facc15' : (idx === 1 ? '#4ade80' : (idx === 2 ? '#38bdf8' : '#f472b6')));
+        const finalLbl = isRearEstimated ? lbl + ' [?]' : lbl;
+        ctx.fillText(finalLbl, p[0] - tw / 2, ly);
+      }
+    });
+  }
+}
+
+// ---- Earlier layouts: every save keeps the one it replaced -------------------------------------
+document.getElementById('btnBackups').onclick = async () => {
+  const panel = document.getElementById('backupPanel');
+  if (panel.style.display === 'flex') { panel.style.display = 'none'; return; }
+  panel.textContent = '';
+  panel.style.display = 'flex';
+  const head = document.createElement('div');
+  head.style.fontWeight = '700';
+  head.textContent = '↩ Earlier layouts of ' + CAM;
+  panel.appendChild(head);
+  try {
+    const r = await fetch('/occupancy/bays/backups?camera_id=' + encodeURIComponent(CAM));
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    if (!j.backups.length) {
+      const none = document.createElement('div');
+      none.textContent = 'Nothing yet: a layout is kept here when a save replaces it.';
+      panel.appendChild(none);
+    }
+    for (const b of j.backups) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; gap:10px; align-items:center;';
+      const label = document.createElement('span');
+      label.textContent = (b.saved_at ? b.saved_at.replace('T', ' ') : b.name) + ' · ' + b.bays + ' bays';
+      const btn = document.createElement('button');
+      btn.textContent = 'Restore';
+      btn.style.cssText = 'padding:3px 10px; font-size:12px;';
+      btn.onclick = async () => {
+        if (!confirm("Put this layout back? The current one is kept in this list too.")) return;
+        const rr = await fetch('/occupancy/bays/restore', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ camera_id: CAM, backup: b.name })
+        });
+        const jj = await rr.json();
+        if (!rr.ok) { alert("Not restored: " + (jj.error || rr.status)); return; }
+        panel.style.display = 'none';
+        await // Import JSON / GeoJSON config file handler
+document.getElementById('btnImportConfigFile')?.addEventListener('click', () => {
+  document.getElementById('bayConfigFileInput').click();
+});
+
+document.getElementById('bayConfigFileInput')?.addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const resp = await fetch('/occupancy/import-layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, layout: parsed, view: 'oblique' })
+    });
+    const res = await resp.json();
+    if (!resp.ok) throw new Error(res.error || 'Failed to import layout');
+    alert(`Successfully imported ${res.bays_imported} parking slots from ${file.name}!`);
+    if (res.slots_dict && Object.keys(res.slots_dict).length > 0) {
+      bays = res.slots_dict;
+      savedSnapshot = JSON.stringify(bays);
+    }
+    updateJson();
+    renderBayList();
+    redraw();
+  } catch (err) {
+    alert('Import Error: ' + err.message);
+  } finally {
+    e.target.value = '';
+  }
+});
+
+loadSavedLayout();
+      };
+      row.appendChild(label);
+      row.appendChild(btn);
+      panel.appendChild(row);
+    }
+  } catch (err) {
+    const bad = document.createElement('div');
+    bad.style.color = '#fca5a5';
+    bad.textContent = 'Could not load the list: ' + err.message;
+    panel.appendChild(bad);
+  }
+};
+
 document.getElementById('btnCopyJson').onclick = () => {
   navigator.clipboard.writeText(document.getElementById('jsonOutput').value);
   alert("Copied bays payload to clipboard!");
 };
 
 document.getElementById('btnApplyBays').onclick = async () => {
+  const allIssues = BayGeometry.validateAll(bays, imgSize());
+  const problems = Object.entries(allIssues)
+    .flatMap(([id, v]) => v.errors.map(m => 'Bay ' + id + ': ' + m));
+  if (problems.length) { alert("Fix these before saving:\n\n" + problems.join('\n')); return; }
+  if (savedFrameSize && img && (savedFrameSize[0] !== img.width || savedFrameSize[1] !== img.height) &&
+      !confirm("The saved bays were drawn on a " + savedFrameSize[0] + "×" + savedFrameSize[1] + " picture but this one is " +
+               img.width + "×" + img.height + ". Save anyway?")) return;
+
+  const warnings = Object.entries(allIssues)
+    .flatMap(([id, v]) => v.warnings.map(m => 'Bay ' + id + ': ' + m));
+  const count = Object.keys(bays).length;
+  const bayListStr = Object.keys(bays).join(', ');
+  const warnText = warnings.length ? `\n⚠️ Warnings (${warnings.length}):\n• ` + warnings.slice(0, 3).join('\n• ') : '\n✅ Validation: 0 errors, 0 warnings';
+  
+  const changed = JSON.stringify(bays) !== savedSnapshot;
+  const endsText = changed ? '\n\nThis changes the live layout: every open violation and every "car is here" record of this camera is closed, because the bays no longer mean the same ground.' : '';
+  const ok = confirm(`🚀 Preview Before Publish (${CAM}):\n\n• Total Bays: ${count} (${bayListStr})\n• Frame Size: ${(imgSize() || [1280, 720]).join('x')}${warnText}${endsText}\n\nPublish this layout to the live server?`);
+  if (!ok) return;
+
   try {
-    const payload = { camera_id: "venue-lot", view: "oblique", bays: bays };
+    const payload = { camera_id: CAM, view: "oblique", bays: bays, image_size: imgSize() };
     const r = await fetch('/occupancy/bays', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     const data = await r.json();
-    alert("Bays saved to server for camera: " + data.camera_id + " (" + data.count + " bays)");
+    if (!r.ok) { alert("Not saved: " + (data.error || r.status)); return; }
+    savedSnapshot = JSON.stringify(bays);
+    savedFrameSize = imgSize() || savedFrameSize;
+    updateJson();
+    const warn = (data.warnings || []).length ? "\n\nCheck:\n" + data.warnings.join('\n') : "";
+    alert("Saved " + data.count + " bays for camera " + data.camera_id + "." + warn);
   } catch (err) {
     alert("Failed to apply: " + err.message);
   }
@@ -606,22 +1456,28 @@ document.getElementById('btnRunCheck').onclick = async () => {
   const fpMode = document.getElementById('footprintModeSelect').value;
   const viewType = anglePreset === 'topdown' ? 'topdown' : 'oblique';
 
+  // The check runs on the SAVED layout of the camera, so it first saves this one: say so, and do not do it behind the person's back
+  // (an unsaved edit used to go live here, closing every open violation, with no question asked).
+  if (JSON.stringify(bays) !== savedSnapshot &&
+      !confirm('Running the check saves the bays as they are now to the live server (' + CAM + ').\n\nThat closes every open violation and every "car is here" record of this camera.\n\nContinue?')) return;
+
   // Set camera profile with current dropdown values
   await fetch('/camera/profile', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ camera_id: 'venue-lot', view_angle: anglePreset, footprint_method: fpMode })
+    body: JSON.stringify({ camera_id: CAM, view_angle: anglePreset, footprint_method: fpMode })
   });
 
   await fetch('/occupancy/bays', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ camera_id: "venue-lot", view: viewType, bays: bays })
+    body: JSON.stringify({ camera_id: CAM, view: viewType, bays: bays })
   });
+  savedSnapshot = JSON.stringify(bays);                 // the server has them now: the "unsaved" mark must not stay lit
 
   const fd = new FormData();
   fd.append('image', f);
-  fd.append('camera_id', 'venue-lot');
+  fd.append('camera_id', CAM);
   // A still photo has no "5 seconds later": the persistence debounce is for
   // live streams and video, and here it only ever demoted WRONG to SUSPICIOUS.
   fd.append('track', 'false');
@@ -680,6 +1536,15 @@ function renderCalibration(cal, seg) {
     panel.appendChild(d);
     return d;
   };
+  if (cal.good_bays !== undefined) {                       // from "Check 3D": can parking be judged with these bays?
+    const need = cal.min_good_bays || 2;
+    const ok = cal.ready;
+    const why = cal.good_bays < need
+      ? `only ${cal.good_bays} good bay${cal.good_bays === 1 ? '' : 's'}, at least ${need} needed`
+      : 'one camera could not be fitted to these bays together (see the notes below: usually a bay drawn off its real lines)';
+    line(ok ? `3D ready: ${cal.good_bays} of ${cal.total} bays are good (at least ${need} needed)`
+            : `3D NOT ready: ${why}. Parking will show "not judged" until it is.`, ok ? '#22c55e' : '#ef4444').style.fontWeight = '700';
+  }
   const pct = Math.round((cal.confidence || 0) * 100);
   const qColor = pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
   line(`Overall: ${pct}%  (${cal.method === 'site' ? 'one camera from all bays' : 'per-bay'})`, qColor).style.fontWeight = '700';
@@ -699,7 +1564,61 @@ function renderCalibration(cal, seg) {
   for (const [bid, b] of Object.entries(cal.bays || {})) {
     const size = b.measured_m ? ` · measures ${b.measured_m[0]}×${b.measured_m[1]} m` : '';
     const err = b.reproj_px ? ` · ${b.reproj_px}px` : '';
-    line(`${bid}: ${b.status}${size}${err}`, colors[b.status]);
+    const margin = (b.margin_m !== null && b.margin_m !== undefined) ? ` · ±${b.margin_m} m` : '';
+    line(`${bid}: ${b.status}${size}${err}${margin}`, colors[b.status]);
+  }
+}
+
+// "Check 3D": the grades are drawn on the bays only while the bays are exactly as they were checked.
+let calibCheck = null;      // {snapshot: JSON of the bays that were checked, bays: {id: {status, margin_m, ...}}}
+
+document.getElementById('btnCheck3D').onclick = async () => {
+  if (!img) { alert("Load a frame first (Upload, or Load Live Phone Frame)."); return; }
+  if (!Object.keys(bays).length) { alert("There are no bays to check yet."); return; }
+  const btn = document.getElementById('btnCheck3D');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/occupancy/calibration-preview', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, bays: bays, image_size: imgSize() })
+    });
+    const j = await r.json();
+    if (!r.ok) { alert("Could not check: " + (j.error || r.status)); return; }
+    calibCheck = { snapshot: JSON.stringify(bays), bays: j.bays };
+    renderCalibration(j);
+    redraw();
+  } catch (err) {
+    alert("Could not check: " + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+function drawCalibrationGrades() {
+  if (!calibCheck || JSON.stringify(bays) !== calibCheck.snapshot) return;
+  const colors = { good: '#22c55e', degraded: '#f59e0b', rejected: '#ef4444' };
+  for (const [bid, pts] of Object.entries(bays)) {
+    const g = calibCheck.bays[bid];
+    if (!g || !pts || pts.length < 3) continue;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.strokeStyle = colors[g.status] || '#94a3b8';
+    ctx.lineWidth = 5;
+    ctx.setLineDash(g.status === 'good' ? [] : [10, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    const text = g.status + (g.margin_m !== null && g.margin_m !== undefined ? ` ±${g.margin_m} m` : '');
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width + 10;
+    ctx.fillStyle = 'rgba(15,23,42,0.85)';
+    ctx.fillRect(cx - w / 2, cy + 14, w, 18);
+    ctx.fillStyle = colors[g.status] || '#e2e8f0';
+    ctx.fillText(text, cx, cy + 23);
   }
 }
 
@@ -856,20 +1775,20 @@ document.getElementById('videoInput').onchange = async (e) => {
     await fetch('/camera/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ camera_id: 'venue-lot', view_angle: anglePreset, footprint_method: fpMode })
+      body: JSON.stringify({ camera_id: CAM, view_angle: anglePreset, footprint_method: fpMode })
     });
 
     // 2. Sync bays to server
     await fetch('/occupancy/bays', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ camera_id: "venue-lot", view: viewType, bays: bays })
+      body: JSON.stringify({ camera_id: CAM, view: viewType, bays: bays })
     });
 
     // 3. Upload and process video
     const fd = new FormData();
     fd.append('video', f);
-    fd.append('camera_id', 'venue-lot');
+    fd.append('camera_id', CAM);
     fd.append('sample_fps', '1.0');
     fd.append('track', 'true');
 
@@ -983,6 +1902,8 @@ function redraw() {
 
   // Draw any active drafting points / overlays
   drawDraftingOverlays();
+  drawCalibrationGrades();
+  drawEditOverlays();
 }
 
 /**
@@ -1098,12 +2019,29 @@ function drawCleanBays() {
  * Draws active drafting lines, corner points and numbered badges.
  */
 function drawDraftingOverlays() {
+  // the saved IN/OUT line, with an arrow toward the inside of the lot
+  if (savedLine) {
+    const [a, b, c] = [savedLine.p1, savedLine.p2, savedLine.in_point];
+    ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 4; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    let nx = -dy / len, ny = dx / len;                     // a normal to the line
+    if ((c[0] - mx) * nx + (c[1] - my) * ny < 0) { nx = -nx; ny = -ny; }   // point it inside
+    ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx + nx * 50, my + ny * 50); ctx.stroke();
+    ctx.fillStyle = '#22c55e'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('IN', mx + nx * 66, my + ny * 66);
+  }
+
   const isGrid = (appMode === 'grid');
-  const pts = isGrid ? gridPoints : currentPoints;
+  const isLine = (appMode === 'line');
+  const isCorners = (appMode === 'corners');
+  const pts = isCorners ? cornerPts : (isLine ? linePts : (isGrid ? gridPoints : currentPoints));
   if (pts.length === 0) return;
 
-  const lineCol = isGrid ? '#0284c7' : '#3b82f6';
-  const badgeCol = isGrid ? '#38bdf8' : '#60a5fa';
+  const lineCol = isCorners ? '#14b8a6' : (isLine ? '#d97706' : (isGrid ? '#0284c7' : '#3b82f6'));
+  const badgeCol = isCorners ? '#5eead4' : (isLine ? '#fbbf24' : (isGrid ? '#38bdf8' : '#60a5fa'));
 
   ctx.strokeStyle = lineCol;
   ctx.lineWidth = 2;
@@ -1139,11 +2077,30 @@ function drawDraftingOverlays() {
 
 function updateJson() {
   const payload = {
-    camera_id: "venue-lot",
+    camera_id: CAM,
     view: "oblique",
     bays: bays
   };
   document.getElementById('jsonOutput').value = JSON.stringify(payload, null, 2);
+  setUnsaved(JSON.stringify(bays) !== savedSnapshot);
+  refreshIssues();
+}
+
+// The same checks the server makes before saving, shown while drawing.
+function refreshIssues() {
+  issues = BayGeometry.validateAll(bays, imgSize());
+  const list = document.getElementById('issueList');
+  list.textContent = '';
+  for (const [id, v] of Object.entries(issues)) {
+    for (const [msgs, colour, mark] of [[v.errors, '#fca5a5', '✖'], [v.warnings, '#fcd34d', '⚠']]) {
+      for (const m of msgs) {
+        const row = document.createElement('div');
+        row.style.color = colour;
+        row.textContent = mark + ' Bay ' + id + ': ' + m;
+        list.appendChild(row);
+      }
+    }
+  }
 }
 
 function renderBayList() {
@@ -1191,17 +2148,17 @@ function renderBayList() {
     } else if (st === 'free' || st === 'empty') {
       stBadge = '<span class="status-tag" style="background:#334155;color:#94a3b8;">Free</span>';
     } else {
-      stBadge = `<span class="status-tag" style="background:#334155;color:#94a3b8;">${st}</span>`;
+      stBadge = `<span class="status-tag" style="background:#334155;color:#94a3b8;">${esc(st)}</span>`;
     }
 
-    const plateBadge = (obs && obs.plate) ? `<span class="plate-tag">${obs.plate}</span>` : '';
-    const trackBadge = (obs && (obs.vehicle_track_id || obs.vehicle_id)) ? `<span style="font-size:11px;background:#0369a1;color:#fff;padding:1px 5px;border-radius:3px;">ID #${obs.vehicle_track_id || obs.vehicle_id}</span>` : '';
+    const plateBadge = (obs && obs.plate) ? `<span class="plate-tag">${esc(obs.plate)}</span>` : '';
+    const trackBadge = (obs && (obs.vehicle_track_id || obs.vehicle_id)) ? `<span style="font-size:11px;background:#0369a1;color:#fff;padding:1px 5px;border-radius:3px;">ID #${esc(obs.vehicle_track_id || obs.vehicle_id)}</span>` : '';
     const outInfo = (obs && obs.outside_slot_percent !== undefined && obs.outside_slot_percent > 0) ? `<span style="font-size:11px;color:#fca5a5;">${Math.round(obs.outside_slot_percent)}% outside</span>` : '';
     const occlVal = (obs && obs.occlusion_level !== undefined && obs.occlusion_level >= 0.15) ? Math.round(obs.occlusion_level * 100) : null;
     const occlBadge = occlVal ? `<span style="font-size:10px;background:#581c87;color:#e9d5ff;padding:1px 5px;border-radius:3px;font-weight:600;">${occlVal}% occluded</span>` : '';
     const confVal = (obs && obs.parking_confidence !== undefined && obs.parking_confidence > 0) ? Math.round(obs.parking_confidence * 100) : null;
     const confBadge = confVal ? `<span style="font-size:10px;color:#94a3b8;">${confVal}% conf</span>` : '';
-    const noteText = (obs && (obs.reason || obs.quality_note)) ? `<div style="font-size:11px;color:#cbd5e1;margin-top:4px;">${obs.reason || obs.quality_note}</div>` : '';
+    const noteText = (obs && (obs.reason || obs.quality_note)) ? `<div style="font-size:11px;color:#cbd5e1;margin-top:4px;">${esc(obs.reason || obs.quality_note)}</div>` : '';
 
     const el = document.createElement('div');
     el.className = 'bay-badge ' + (obs ? obs.state : '');
@@ -1212,7 +2169,7 @@ function renderBayList() {
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div style="display:flex;align-items:center;gap:6px;">
-          <strong>${bid}</strong>
+          <strong>${esc(bid)}</strong>
           ${trackBadge}
           ${plateBadge}
           ${occlBadge}
@@ -1311,7 +2268,7 @@ document.getElementById('cameraAnglePreset').addEventListener('change', async (e
     await fetch('/camera/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ camera_id: 'venue-lot', view_angle: val })
+      body: JSON.stringify({ camera_id: CAM, view_angle: val })
     });
   } catch (err) {
     console.error("Failed to update camera angle:", err);
@@ -1333,7 +2290,7 @@ document.getElementById('footprintModeSelect').addEventListener('change', async 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        camera_id: 'venue-lot',
+        camera_id: CAM,
         view_angle: viewAngle,
         footprint_method: mode,
         bottom_fraction: bottomFrac
@@ -1353,13 +2310,14 @@ document.getElementById('btnImportOptimizer').addEventListener('click', async ()
     const resp = await fetch('/occupancy/import-layout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ camera_id: 'venue-lot', layout: parsed, view: 'oblique' })
+      body: JSON.stringify({ camera_id: CAM, layout: parsed, view: 'oblique' })
     });
     const res = await resp.json();
     if (!resp.ok) throw new Error(res.error || "Failed to import layout");
     alert(`Successfully imported ${res.bays_imported} parking slots from Space Optimizer!`);
     if (res.slots_dict && Object.keys(res.slots_dict).length > 0) {
       bays = res.slots_dict;
+      savedSnapshot = JSON.stringify(bays);        // the server saved them already
     }
     updateJson();
     renderBayList();
@@ -1368,6 +2326,8 @@ document.getElementById('btnImportOptimizer').addEventListener('click', async ()
     alert("Import Error: " + err.message);
   }
 });
+
+loadSavedLayout();
 </script>
 
 <!-- Explainability Inspector Modal Dialog -->

@@ -67,6 +67,8 @@ DIGIT_TO_ALPHA = {
     "5": "S", "6": "G", "7": "T", "8": "B", "9": "P"
 }
 
+DL_DISTRICT_LETTERS = "CSPRNYVZ"     # the letter after the digit in a Delhi RTO code (DL 1C, DL 3S, ...)
+
 MP_RTOS = {"09", "13", "04", "07", "20", "43", "11", "12", "14", "15", "19", "08"}
 
 STROKES = str.maketrans({"|": "1", "!": "1", "[": "1", "]": "1"})
@@ -97,9 +99,15 @@ def normalise_plate(text: str) -> tuple[str, bool]:
         if o[i].isdigit():
             o[i] = DIGIT_TO_ALPHA.get(o[i], o[i])
 
-    # 3. RTO district (indices 2, 3): digits
+    # 3. RTO district (indices 2, 3): digits, except Delhi: its codes are a digit and a letter (DL 1C, DL 8C, DL 3S ...), so for a
+    #    10-character DL plate whose third character is a digit the fourth is a letter.  A letter that looks like the C of "8C" (E, G,
+    #    O, Q) is the C; one that is already a district letter stays.
     for i in (2, 3):
         if i < n - 4 and o[i].isalpha():
+            if i == 3 and n == 10 and o[0] + o[1] == "DL" and o[2].isdigit() and o[3] in DL_DISTRICT_LETTERS + "EGOQ":
+                if o[3] in "EGOQ":
+                    o[3] = "C"
+                continue
             o[i] = ALPHA_TO_DIGIT.get(o[i], o[i])
 
     # Disambiguate M vs H in State Code:
@@ -351,6 +359,11 @@ class Detector:
         off, and let ANPR_OCR=easyocr skip Paddle entirely.
         """
         want = os.getenv("ANPR_OCR", "auto").lower()
+
+        # ANPR_OCR=none: do not load any OCR (saves ~0.5 GB, for small servers).  Vehicles,
+        # bays and IN/OUT counting do not need it; plates are simply not read.
+        if want in ("none", "off", "0", "false"):
+            return "none", None
 
         if want in ("auto", "paddle", "paddleocr"):
             os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")

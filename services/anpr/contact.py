@@ -38,6 +38,7 @@ tests/test_contact.py (a synthetic pinhole renderer), not assumed.
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, field
 from typing import Sequence
 
@@ -56,6 +57,34 @@ STALL_LENGTH_M = 5.0
 # all points keeps the correction conservative (tyres are then under-reported).
 CONTACT_HEIGHT_M = 0.30
 
+# Experimental vehicle category contact heights.
+# Actual bumper/sill height cannot be reliably inferred from category alone,
+# so uncertainty handling (bounded_crossing) is always enforced.
+EXPERIMENTAL_CONTACT_HEIGHTS_M = {
+    "hatchback": 0.20,
+    "sedan": 0.22,
+    "suv": 0.28,
+    "van": 0.30,
+    "truck": 0.35,
+}
+
+
+def resolve_contact_height_m(vehicle_category: str | None = None,
+                             custom_height_m: float | None = None) -> float:
+    """
+    Resolve contact height prior in metres.
+    Returns custom_height_m if explicitly specified and > 0.
+    If vehicle_category matches an experimental category, returns its prior.
+    Otherwise falls back to the conservative default CONTACT_HEIGHT_M (0.30m).
+    """
+    if custom_height_m is not None and custom_height_m > 0:
+        return float(custom_height_m)
+    if vehicle_category:
+        cat = str(vehicle_category).strip().lower()
+        if cat in EXPERIMENTAL_CONTACT_HEIGHTS_M:
+            return EXPERIMENTAL_CONTACT_HEIGHTS_M[cat]
+    return CONTACT_HEIGHT_M
+
 # Fallback when the camera cannot be recovered: keep hull edges whose outward
 # normal is within this angle of straight down in the image.
 MAX_CONTACT_NORMAL_DEG = 75.0
@@ -72,6 +101,9 @@ BORDER_PX = 2
 
 VEHICLE_LENGTH_PRIOR_M = 4.4
 VEHICLE_WIDTH_PRIOR_M = 1.8
+# A car may reach past the front (road side) or back line by this much before it counts: a bumper overhangs the
+# chalk, and nobody is blocked by it.  The side lines, which lead into the next bay, get no such allowance.
+END_LINE_TOLERANCE_M = float(os.getenv("ANPR_END_LINE_TOLERANCE_M", "0.40"))
 VEHICLE_HEIGHT_PRIOR_M = 1.5    # display only: the car's 3D box in the overlay
 
 # Bay-relative analysis (display, not verdicts).  A side is "measured" when an
@@ -586,7 +618,12 @@ class ContactReport:
     crossing_side: str | None = None
     crossing_upper_m: float = 0.0
     crossing_upper_side: str | None = None
-    clipped: bool = False                  # silhouette touches the image border
+    # The same bounds per side {left, right, near, far} -> metres, so the front/back lines can be judged more
+    # leniently than the side lines.  None (a report built by hand) falls back to the single worst side above.
+    crossing_per_side: dict | None = None
+    upper_per_side: dict | None = None
+    inferred_per_side: dict | None = None
+    clipped: bool = False                 # silhouette touches the image border
     skew_deg: float | None = None          # unsigned degrees from square; None = unknown
     skew_agreement: float = 0.0
     skew_extent_m: float = 0.0
@@ -663,6 +700,8 @@ def analyse_contact(shape, bay_id: str, frames: dict, image_size: tuple[int, int
     # be called certain then; crossings stay "possible".
     if pose is not None:
         rep.crossing_m, rep.crossing_side = certain.max_m, certain.side
+        rep.crossing_per_side = dict(certain.per_side)
+    rep.upper_per_side = dict(possible.per_side)
     # The far line is only flagged when certain.  The car's front corner is always
     # at bumper height, and it is the point furthest from the camera, so assuming
     # it sits on the ground throws it 0.4-0.7 m past the far line for *every* car.
@@ -687,14 +726,19 @@ def analyse_contact(shape, bay_id: str, frames: dict, image_size: tuple[int, int
         # Show what was actually measured: the silhouette itself.
         rep.footprint_image = _silhouette_polygon(shape)
     if rect is not None and rect.area > 0:
-        stall = Polygon([(0, 0), (frame.width_m, 0),
-                         (frame.width_m, frame.length_m), (0, frame.length_m)])
+        # The front and back lines are extended by the bumper allowance, so a car whose nose reaches past the chalk
+        # is not counted as "outside the bay" (that share feeds the 25 % rule that marks a bay violating).
+        tol = END_LINE_TOLERANCE_M
+        stall = Polygon([(0, -tol), (frame.width_m, -tol),
+                         (frame.width_m, frame.length_m + tol), (0, frame.length_m + tol)])
         rep.outside_ratio = float(rect.difference(stall).area / rect.area)
         xs, ys = zip(*rect.exterior.coords[:-1])
         # Far line excluded for the same reason as the "possible" bound: the far
         # end of the reconstruction is the length prior itself, so it pokes past
         # the far line on correctly parked cars (seen live on a hatchback).
-        rep.inferred_crossing_m = float(max(-min(xs), max(xs) - frame.width_m, -min(ys), 0.0))
+        rep.inferred_per_side = {"left": float(max(-min(xs), 0.0)), "right": float(max(max(xs) - frame.width_m, 0.0)),
+                                 "near": float(max(-min(ys), 0.0))}
+        rep.inferred_crossing_m = float(max(rep.inferred_per_side.values()))
 
     for other_id, other in frames.items():
         if other_id == bay_id or pose is None:      # no camera: nothing is certain
