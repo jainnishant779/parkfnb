@@ -39,6 +39,10 @@ const STATUS_STYLES: Record<string, string> = {
 
   // Booked, paid for, never turned up.
   no_show: 'bg-slate-100 text-slate-600 ring-slate-200',
+
+  // Cameras (/cameras): not linked to an owner yet, or switched off by an admin.
+  unassigned: 'bg-amber-50 text-amber-700 ring-amber-100',
+  disabled: 'bg-red-50 text-red-700 ring-red-100',
 };
 
 /**

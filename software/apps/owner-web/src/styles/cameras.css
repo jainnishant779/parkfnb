@@ -1,0 +1,22 @@
+/* The camera pages' few extras, built from the console's tokens only (same values the console writes inline for these). */
+.cam-plate { letter-spacing: .06em; font-variant-numeric: tabular-nums; white-space: nowrap; margin-right: 6px; }
+.cam-nowrap { white-space: nowrap; }
+.cam-thumb { display: block; object-fit: contain; border-radius: 6px; background: #000; }
+.cam-thumb.car { height: 56px; max-width: 120px; }
+.cam-thumb.plate { height: 40px; max-width: 150px; }
+.cam-thumb.vio { width: 88px; height: 56px; object-fit: cover; border-radius: 8px; }
+.cam-thumb-btn { padding: 0; border: 0; background: none; cursor: zoom-in; display: block; border-radius: 6px; }
+.cam-thumb-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cam-ph { display: inline-grid; place-items: center; background: var(--fill); color: var(--muted); border-radius: 6px; font-size: 12px; font-weight: 600; text-align: center; }
+.cam-ph.car { width: 96px; height: 56px; }
+.cam-ph.plate { width: 120px; height: 40px; }
+.cam-ph.vio { width: 88px; height: 56px; border-radius: 8px; }
+.cam-full { width: 100%; border-radius: var(--r-md); display: block; background: #000; }
+/* min-width 0 + max-width 100%: on a phone the preset pills scroll inside the row instead of pushing the page wider than the screen */
+.cam-range { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-width: 0; max-width: 100%; }
+.cam-range .seg { max-width: 100%; }
+.cam-range input[type=date] { background: var(--surface); min-width: 0; }
+.cam-menu-wrap { position: relative; }
+.cam-note-field { display: grid; gap: 8px; }
+.cam-more { display: flex; justify-content: center; padding: 16px; }
+.cam-click { cursor: pointer; }

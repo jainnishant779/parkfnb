@@ -13,7 +13,7 @@ services:
     runtime: node
     plan: free
     region: singapore          # closest to India of Render's regions
-    rootDir: services/backend
+    rootDir: software/services/backend
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /health
@@ -70,24 +70,38 @@ services:
       - key: MQTT_PASS
         sync: false
 
-      # ---- Test-only switches --------------------------------------
-      # BOTH of these are unsafe in front of real users and are listed here
-      # only so a cloud test behaves like the local one. Set them in the
-      # dashboard for the test window and remove them afterwards.
+      # ---- Owner web dashboard: camera access -----------------------
+      # POST /api/cameras/access-grant signs a 15-minute pass that an owner's
+      # browser presents to the ANPR service (ai/anpr, on EC2). The ANPR
+      # service verifies it with the SAME secret: set the same value here and
+      # as ANPR_GRANT_SECRET in /etc/parkfnb-anpr.env. 32+ random characters,
+      # and not JWT_SECRET. Unset, the grant answers 503.
       #
-      # ALLOW_DEV_OTP returns the login code in the API response, which lets
-      # anyone sign in as any phone number.
+      # The ANPR address has no Elastic IP yet and can change, so it is set
+      # in the dashboard rather than committed here.
+      - key: ANPR_GRANT_SECRET
+        sync: false
+      - key: ANPR_DEFAULT_BASE_URL
+        sync: false            # e.g. https://3-7-139-193.sslip.io
+      - key: ANPR_BASE_URLS
+        sync: false            # more ANPR servers, comma separated (optional)
+
+      # ---- Test-only switches --------------------------------------
+      # Unsafe in front of real users; listed here only so a cloud test
+      # behaves like the local one.
+      #
+      # The login test code (TEST_OTP, default 123456) and ALLOW_DEV_OTP are
+      # no longer in this file: the code now refuses the test code whenever
+      # NODE_ENV=production, and owners can see number plates through the web
+      # dashboard, so a guessable login is a data leak. For a closed cloud
+      # test window ONLY, set ALLOW_TEST_OTP_IN_PRODUCTION=true in the Render
+      # dashboard (never here) and remove it afterwards. Real sign-in needs a
+      # real SMS provider (sms.provider / SMS_PROVIDER), see HANDOFF 4.2.
       #
       # BARRIER_DEMO_MODE skips the booking status, payment and time-window
       # checks and routes every space to one barrier, so any booking opens
-      # it at any time.
-      #
-      # These four are live right now for the cloud test. DELETE THEM
+      # it at any time. Still live for the cloud test; DELETE BOTH of these
       # before this URL goes in front of anybody who is not you.
-      - key: ALLOW_DEV_OTP
-        value: "true"
-      - key: TEST_OTP
-        value: "123456"
       - key: BARRIER_DEMO_MODE
         value: "true"
       - key: BARRIER_DEMO_DEVICE_ID

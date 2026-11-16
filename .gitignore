@@ -33,7 +33,7 @@ replay_pid*.log
 
 # ---- uploads (KYC documents, listing photos) ----------------------------
 # User data, not source. Moving to object storage before deploy.
-services/backend/uploads/
+software/services/backend/uploads/
 
 # ---- Python -------------------------------------------------------------
 __pycache__/
@@ -68,7 +68,8 @@ temp_audio/
 temp_hindi_audio/
 
 # Holds live credentials for the deploy — never commit
-docs/status/RENDER_ENV.md
+research/status/RENDER_ENV.md
+**/RENDER_ENV.md
 
 # Private keys and model weights -- never commit; weights go to a release/LFS
 *.pem

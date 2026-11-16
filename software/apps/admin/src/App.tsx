@@ -10,6 +10,7 @@ import OwnerDetail from "./pages/OwnerDetail";
 import Bookings from "./pages/Bookings";
 import Payments from "./pages/Payments";
 import ParkingSpaces from "./pages/ParkingSpaces";
+import Cameras from "./pages/Cameras";
 import Vehicles from "./pages/Vehicles";
 import OtaManagement from "./pages/OtaManagement";
 import Settings from "./pages/Settings";
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/owners" element={<Owners />} />
           <Route path="/owners/:id" element={<OwnerDetail />} />
           <Route path="/spaces" element={<ParkingSpaces />} />
+          <Route path="/cameras" element={<Cameras />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/payments" element={<Payments />} />
           <Route path="/vehicles" element={<Vehicles />} />

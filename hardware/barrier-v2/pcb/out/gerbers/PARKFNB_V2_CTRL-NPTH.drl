@@ -1,0 +1,16 @@
+M48
+; DRILL file {PARKFNB generate_pcb} date 2026-10-26
+; #@! TF.FileFunction,NonPlated,1,2,NPTH
+FMAT,2
+METRIC
+
+T1C3.200
+%
+G90
+G05
+T1
+X4.000Y4.000
+X96.000Y4.000
+X4.000Y76.000
+X96.000Y76.000
+M30

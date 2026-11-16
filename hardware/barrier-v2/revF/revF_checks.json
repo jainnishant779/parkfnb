@@ -1,0 +1,229 @@
+{
+ "parameters": {
+  "tyre_open": 203.0,
+  "tyre_band": 101.5,
+  "leg": 51.0,
+  "tw": 100.0,
+  "rest_deg": 10.0,
+  "sweep_margin": 8.0,
+  "side_clear": 6.0,
+  "wall": 4.0,
+  "skin": 6.0,
+  "zs": 36.5,
+  "brg_cc": 140.0,
+  "brg_hw": 19.0,
+  "brg_hl": 70.0,
+  "brg_top": 71.0,
+  "brg_foot": 15.0,
+  "spk_od": 70.0,
+  "spk_small_od": 38.0,
+  "hub_half": 15.0,
+  "chain_pitch": 9.525,
+  "c_dist": 98.0,
+  "motor_z": 25.5,
+  "gb_d": 38.0,
+  "gb_len": 33.0,
+  "can_d": 30.0,
+  "can_len": 35.0,
+  "pin": 16.0,
+  "top_hi": 80.0,
+  "top_ear": 52.0,
+  "ear_y": -75.0,
+  "floor_t": 6.0,
+  "car_kg": 2000.0,
+  "axle": 0.55,
+  "dyn": 1.5,
+  "patch_w": 215.0,
+  "patch_l": 150.0,
+  "fy": 235.0,
+  "E": 210000.0
+ },
+ "chain_plane_x": -31.0,
+ "checks": [
+  {
+   "name": "Bearings (+/-70, feet 38 x 140) inside the box walls",
+   "status": "MARGINAL",
+   "detail": "margin 0.3 mm"
+  },
+  {
+   "name": "Motor inside the low-step box",
+   "status": "MARGINAL",
+   "detail": "margin 2.1 mm at chain plane x = -31 (sprocket slid 31 mm from the centre)"
+  },
+  {
+   "name": "Big sprocket hub to left bearing face",
+   "status": "PASS",
+   "detail": "5.0 mm"
+  },
+  {
+   "name": "Chain plane + motor to right bearing face",
+   "status": "PASS",
+   "detail": "76.0 mm"
+  },
+  {
+   "name": "Full 10-170 deg sweep: tyre to box, min over x",
+   "status": "PASS",
+   "detail": "min 7.9 mm (x=0: 8.0, x=30: 8.0, x=60: 8.0, x=90: 7.9)"
+  },
+  {
+   "name": "Lateral gap box wall to tyre inner edge",
+   "status": "PASS",
+   "detail": "6 mm by construction"
+  },
+  {
+   "name": "Electronics: bearing L foot",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 59 mm"
+  },
+  {
+   "name": "Electronics: bearing L body",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 3 mm"
+  },
+  {
+   "name": "Electronics: bearing R foot",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 59 mm"
+  },
+  {
+   "name": "Electronics: bearing R body",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 3 mm"
+  },
+  {
+   "name": "Electronics: shaft",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 25 mm"
+  },
+  {
+   "name": "Electronics: big sprocket",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 2 mm"
+  },
+  {
+   "name": "Electronics: chain run to the motor",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 14 mm"
+  },
+  {
+   "name": "Electronics: chain + motor sprocket + sleeve",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 1 mm"
+  },
+  {
+   "name": "Electronics: motor body",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 2 mm"
+  },
+  {
+   "name": "Electronics: IMU pod on the shaft",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 16 mm"
+  },
+  {
+   "name": "Electronics: Hall collar + 3-sensor bracket",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 16 mm"
+  },
+  {
+   "name": "Electronics: battery holder 4x18650 (V1, 80x76x21)",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 50 mm"
+  },
+  {
+   "name": "Electronics: controller PCB 100x80 + ESP32 (deck L2)",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 25 mm"
+  },
+  {
+   "name": "Electronics: IBT-2 BTS7960 module 50x50 (no heatsink)",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 49 mm"
+  },
+  {
+   "name": "Electronics: BMS 4S 60x25",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 65 mm"
+  },
+  {
+   "name": "Electronics: buck LM2596 module 43x21",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 57 mm"
+  },
+  {
+   "name": "Electronics: fuse holder + 10 A 30x15",
+   "status": "PASS",
+   "detail": "inside the box, ceiling margin 56 mm"
+  },
+  {
+   "name": "Anchors: 4 x M12 floor spots free of parts (washer dia 24)",
+   "status": "PASS",
+   "detail": "4 found: (-63,87), (63,87), (-60,-99), (72,-84)"
+  },
+  {
+   "name": "Wheel load: top skin 6 mm, span 75",
+   "status": "PASS",
+   "detail": "SF 8.0"
+  },
+  {
+   "name": "Wheel load: ear top 5 mm, span 60",
+   "status": "PASS",
+   "detail": "SF 8.7"
+  },
+  {
+   "name": "Wheel load: rib 8x30 + skin, span 190",
+   "status": "PASS",
+   "detail": "SF 1.7"
+  }
+ ],
+ "sensitivity": [
+  {
+   "opening": 150.0,
+   "bearing_margin": -26.959681884317064,
+   "motor_margin": -24.570773305717353,
+   "electronics_fails": 9
+  },
+  {
+   "opening": 160.0,
+   "bearing_margin": -21.801921208237594,
+   "motor_margin": -19.535740146102256,
+   "electronics_fails": 9
+  },
+  {
+   "opening": 170.0,
+   "bearing_margin": -16.654860325143108,
+   "motor_margin": -14.504080898805254,
+   "electronics_fails": 9
+  },
+  {
+   "opening": 180.0,
+   "bearing_margin": -11.521136372707662,
+   "motor_margin": -9.473824261643355,
+   "electronics_fails": 9
+  },
+  {
+   "opening": 190.0,
+   "bearing_margin": -6.396781366644687,
+   "motor_margin": -4.445437016054704,
+   "electronics_fails": 7
+  },
+  {
+   "opening": 203.0,
+   "bearing_margin": 0.2538789017595244,
+   "motor_margin": 2.087396828957201,
+   "electronics_fails": 0
+  },
+  {
+   "opening": 210.0,
+   "bearing_margin": 3.8303221598850064,
+   "motor_margin": 5.604246172241703,
+   "electronics_fails": 0
+  },
+  {
+   "opening": 220.0,
+   "bearing_margin": 8.934345854243778,
+   "motor_margin": 10.62734142068155,
+   "electronics_fails": 0
+  }
+ ]
+}

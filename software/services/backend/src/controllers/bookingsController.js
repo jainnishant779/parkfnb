@@ -5,6 +5,7 @@
 
 const Booking = require('../models/Booking');
 const ParkingSpace = require('../models/ParkingSpace');
+const Owner = require('../models/Owner');
 const UserVehicle = require('../models/UserVehicle');
 const { success, error } = require('../utils/responseHelper');
 const errorCodes = require('../utils/errorCodes');
@@ -314,6 +315,15 @@ exports.getOwnerBookings = async (req, res, next) => {
     const { ownerId } = req.params;
     const { page = 1, limit = 10, status } = req.query;
     const { page: validPage, limit: validLimit } = validatePagination(page, limit);
+
+    // These bookings carry renters' names, phones and vehicle plates, so only
+    // the owner they belong to (or an admin) may list them.
+    if (req.user.user_type !== 'admin') {
+      const owner = await Owner.findById(ownerId).select('user_id');
+      if (!owner || owner.user_id.toString() !== req.user._id.toString()) {
+        return error(res, errorCodes.AUTH_FORBIDDEN, 403, 'Not authorized to view these bookings');
+      }
+    }
 
     // Build filter
     const filter = { owner_id: ownerId };

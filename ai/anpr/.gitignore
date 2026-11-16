@@ -1,0 +1,27 @@
+weights/
+__pycache__/
+*.pyc
+_*.jpg
+*.pt
+*.pem
+*.mp4
+
+# Generated outputs -- inputs (frames, bays json) stay tracked
+test_fixtures/*_result.jpg
+test_fixtures/*_annotated.jpg
+test_fixtures/*_overlay.jpg
+*_annotated.jpg
+*_crop.jpg
+*_plate_large.jpg
+venue_car_full.jpg
+
+# Runtime state (bays, IN/OUT totals) and logs, written by the running service
+data/
+live_logs/
+
+# browser-check output (screenshots, fixtures, server log)
+tools/e2e/out/
+
+# activity logs written into the working folder by dev and test runs
+cam-*.jsonl
+

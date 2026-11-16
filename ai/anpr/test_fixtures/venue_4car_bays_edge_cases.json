@@ -1,0 +1,16 @@
+{
+  "camera_id": "venue-test-edge",
+  "image": "venue_4car.jpg",
+  "view": "medium",
+  "bays": {
+    "Bay-wrong-parked": [[1900, 2195], [2520, 2195], [2520, 2380], [1900, 2380]],
+    "Bay-empty": [[600, 1900], [1100, 1900], [1100, 2200], [600, 2200]],
+    "Bay-diagonal-correct": [[2320, 2000], [2600, 1880], [3030, 2170], [2660, 2290]]
+  },
+  "expected_states": {
+    "Bay-wrong-parked": "wrong",
+    "Bay-empty": "free",
+    "Bay-diagonal-correct": "correct"
+  },
+  "note": "Same source photo as venue_4car_bays.json, different bay placements to exercise WRONG/FREE states without triggering double-slot logic. Bay-wrong-parked is the SUV's real bay (Bay-00 == [1585,2195]-[2205,2380]) shifted 315px right with no other bay overlapping it, so the SUV's footprint sits mostly outside it -- a clean single-bay WRONG case, not a straddle. Bay-empty covers open grass with no vehicle -- expects FREE. Bay-diagonal-correct == Bay-02 from the main fixture (the original diagonal-footprint regression check) -- expects CORRECT."
+}

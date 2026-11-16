@@ -129,6 +129,26 @@ const toSnake = (obj) => {
   ok('starts pending', booking?.status === 'pending', booking?.status);
   ok('charges the quoted amount', booking?.total_amount === 100, String(booking?.total_amount));
 
+  // ------------------------------------------ listing an owner's bookings
+  // These rows carry renters' names, phones and plates: owners see only their own.
+  console.log('\nGET /bookings/owners/:ownerId/bookings');
+  const rival = await signIn('9826040404', 'owner');
+  r = await call('GET', `/api/bookings/owners/${owner.owner.id}/bookings`, null, owner.token);
+  ok('the owner lists their own bookings', r.status === 200 && r.json.success, JSON.stringify(r.json).slice(0, 160));
+  ok('...and the new booking is in the list', Array.isArray(r.json.data) && r.json.data.length >= 1);
+  r = await call('GET', `/api/bookings/owners/${owner.owner.id}/bookings`, null, rival.token);
+  ok('another owner cannot list them', r.status === 403, JSON.stringify(r.json));
+  r = await call('GET', `/api/bookings/owners/${owner.owner.id}/bookings`, null, renter.token);
+  ok('a renter cannot list them', r.status === 403, JSON.stringify(r.json));
+  r = await call('GET', `/api/bookings/owners/${owner.owner.id}/bookings`);
+  ok('signing in is required', r.status === 401, JSON.stringify(r.json));
+  r = await call('GET', `/api/bookings/owners/${rival.owner.id}/bookings`, null, rival.token);
+  ok('the other owner can list their own (empty) list', r.status === 200 && r.json.data?.length === 0, JSON.stringify(r.json));
+  await require('../src/models/User').findByIdAndUpdate(stranger.user.id, { user_type: 'admin' });
+  r = await call('GET', `/api/bookings/owners/${owner.owner.id}/bookings`, null, stranger.token);
+  ok('an admin can list any owner\'s bookings', r.status === 200 && r.json.data?.length >= 1, JSON.stringify(r.json).slice(0, 160));
+  await require('../src/models/User').findByIdAndUpdate(stranger.user.id, { user_type: 'user' });
+
   // ------------------------------------------------------------ approve
   console.log('\nPUT /bookings/:id/approve');
   r = await call('PUT', `/api/bookings/${bookingId}/approve`, {}, stranger.token);

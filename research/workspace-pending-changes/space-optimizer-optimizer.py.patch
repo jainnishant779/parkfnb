@@ -1,0 +1,1060 @@
+diff --git a/services/space-optimizer/optimizer.py b/services/space-optimizer/optimizer.py
+index 3e6c463..60d1b09 100644
+--- a/services/space-optimizer/optimizer.py
++++ b/services/space-optimizer/optimizer.py
+@@ -9,14 +9,17 @@
+ #   - turning / single-swing entry check with warnings
+ # ============================================================
+ import math
++import os
++import threading
++from concurrent.futures import ProcessPoolExecutor
+ 
+ import numpy as np
+ import shapely
+ from pyproj import Transformer
+ from shapely.affinity import rotate, translate
+-from shapely.geometry import Point, Polygon, box
++from shapely.geometry import LineString, Point, Polygon, box
+ from shapely.geometry.polygon import orient
+-from shapely.ops import unary_union
++from shapely.ops import nearest_points, unary_union
+ 
+ # ------------------------------------------------------------
+ # STANDARD RULE PACKS
+@@ -53,6 +56,32 @@ ACCESS_LANE_WIDTHS = {"car": 6.0, "bike": 3.0}
+ TOUCH_TOLERANCE = 0.05
+ AISLE_COVERAGE_MIN = 0.80
+ BENCHMARK_M2 = (32.0, 37.0)  # good surface lot ~350-400 sqft/car
++BIKE_SLOT = (1.0, 2.0)       # m; NBC 2016 Part 3 (>= 1.25 m2 per two-wheeler)
++BIKE_ECS = 0.25              # one two-wheeler = 0.25 equivalent car space
++
++
++_POOL = None
++_POOL_LOCK = threading.Lock()
++
++
++def _pool():
++    """Process pool shared by all requests; candidate layouts are
++    independent CPU-bound searches, so they run on every core."""
++    global _POOL
++    with _POOL_LOCK:
++        if _POOL is None:
++            _POOL = ProcessPoolExecutor(max_workers=max(1, min(4, os.cpu_count() or 1)))
++        return _POOL
++
++
++def _clip(geom, x0, y0, x1, y1):
++    """geom ∩ rectangle. clip_by_rect is several times faster than a
++    general intersection but GEOS rejects some degenerate slivers left by
++    polygon differences, so those take the exact path."""
++    try:
++        return shapely.clip_by_rect(geom, x0, y0, x1, y1)
++    except shapely.errors.GEOSException:
++        return geom.intersection(box(x0, y0, x1, y1))
+ 
+ 
+ def aisle_width_for(angle, cfg):
+@@ -93,35 +122,55 @@ def longest_edge_orientation(polygon):
+     return best_angle
+ 
+ 
+-def build_bay(polygon, base_y, angle, cfg):
++def build_bay(polygon, base_y, angle, cfg, phase_search=False):
+     """polygon must be shapely.prepare()'d for fast vectorized covers."""
+     stall_depth, frontage, aisle_width, module_depth = module_dimensions(angle, cfg)
+     minx, miny, maxx, maxy = polygon.bounds
+ 
+-    aisle = box(minx, base_y + stall_depth, maxx, base_y + stall_depth + aisle_width)
+-    aisle_ratio = aisle.intersection(polygon).area / max(aisle.area, 1e-9)
++    a_y0, a_y1 = base_y + stall_depth, base_y + stall_depth + aisle_width
++    aisle = box(minx, a_y0, maxx, a_y1)
++    aisle_ratio = (_clip(polygon, minx, a_y0, maxx, a_y1).area
++                   / max(aisle.area, 1e-9))
+ 
+-    xs = np.arange(minx + frontage / 2, maxx, frontage)
+     rows = []
+     for row_y in (
+         base_y + stall_depth / 2,
+         base_y + stall_depth + aisle_width + stall_depth / 2,
+     ):
+-        if len(xs):
++        # each row keeps its own phase: bbox-anchored, or flush with either
++        # end of its band (slanted edges / staircase lanes shorten rows)
++        y_lo, y_hi = row_y - stall_depth / 2, row_y + stall_depth / 2
++        starts = [minx + frontage / 2]
++        band = (_clip(polygon, minx - 1, y_lo, maxx + 1, y_hi)
++                if phase_search else None)
++        if band is not None and band.geom_type == "Polygon":
++            span = _strip_span(band, y_lo, y_hi, True)
++            if span is not None:
++                lo, hi = span[0] + 1e-6, span[1] - 1e-6   # float-noise margin
++                starts.append(lo + frontage / 2)
++                starts.append(minx + frontage / 2 + (
++                    (hi - frontage / 2 - minx - frontage / 2) % frontage))
++        best_row = []
++        for x0 in starts:
++            xs = np.arange(x0, maxx, frontage)
++            if not len(xs):
++                continue
+             geoms = slot_row_geoms(xs, row_y, angle, cfg["slot_w"], cfg["slot_l"])
+-            rows.append(list(geoms[shapely.covers(polygon, geoms)]))
+-        else:
+-            rows.append([])
++            fit = list(geoms[shapely.covers(polygon, geoms)])
++            if len(fit) > len(best_row):
++                best_row = fit
++        rows.append(best_row)
+     return rows[0], rows[1], aisle, aisle_ratio, module_depth
+ 
+ 
+-def generate_layout(polygon, angle, y_offset, cfg):
++def generate_layout(polygon, angle, y_offset, cfg, phase_search=False):
+     _, _, _, module_depth = module_dimensions(angle, cfg)
+     _, miny, _, maxy = polygon.bounds
+     all_slots, all_aisles = [], []
+     y = miny + y_offset
+     while y + module_depth <= maxy + 1e-9:
+-        row1, row2, aisle, aisle_ratio, _ = build_bay(polygon, y, angle, cfg)
++        row1, row2, aisle, aisle_ratio, _ = build_bay(polygon, y, angle, cfg,
++                                                      phase_search)
+         if aisle_ratio >= AISLE_COVERAGE_MIN and (row1 or row2):
+             all_slots.extend(row1)
+             all_slots.extend(row2)
+@@ -130,11 +179,12 @@ def generate_layout(polygon, angle, y_offset, cfg):
+     return all_slots, all_aisles
+ 
+ 
+-def optimize_angle(polygon, angle, cfg, n_offsets=15):
++def optimize_angle(polygon, angle, cfg, n_offsets=15, phase_search=False):
+     _, _, aisle_width, module_depth = module_dimensions(angle, cfg)
+     best = {"slots": [], "aisles": [], "offset": 0.0}
+     for offset in np.linspace(0, module_depth, n_offsets):
+-        slots, aisles = generate_layout(polygon, angle, float(offset), cfg)
++        slots, aisles = generate_layout(polygon, angle, float(offset), cfg,
++                                        phase_search)
+         if len(slots) > len(best["slots"]):
+             best = {"slots": slots, "aisles": aisles, "offset": float(offset)}
+     best.update(angle=angle, aisle_width=aisle_width, module_depth=module_depth)
+@@ -144,7 +194,10 @@ def optimize_angle(polygon, angle, cfg, n_offsets=15):
+ def search_best_layout(polygon, cfg, n_offsets_coarse=11):
+     shapely.prepare(polygon)
+     sweep = {}
+-    for angle in np.arange(0, 90.01, 5.0):
++    # coarse 15 deg steps, refined +-4 deg around the winner below; angled
++    # stalls never beat 90 deg on capacity, so a finer coarse sweep only
++    # costs time
++    for angle in np.arange(0, 90.01, 15.0):
+         sweep[round(float(angle), 1)] = optimize_angle(
+             polygon, float(angle), cfg, n_offsets_coarse
+         )
+@@ -162,20 +215,65 @@ def search_best_layout(polygon, cfg, n_offsets_coarse=11):
+     return best, table
+ 
+ 
+-def evaluate_access(polygon, sides, candidate_angles, cfg, gate_local=None):
+-    """Reserve access lane(s) first, then re-optimize the remaining area."""
++def _edge_lane(polygon, side, depth, lane_width, cfg):
++    """Access lane that follows the plot's left/right edge in bands one
++    stall wide, so a slanted edge leaves no wasted triangle (a straight
++    edge gives the plain full-height strip). With depth > 0 the lane sits
++    that far in and a 90 deg stall per band parks between edge and lane.
++    Returns (lane boxes, boxes to clear from the module area, stalls)."""
++    w = cfg["slot_w"]
++    minx, miny, maxx, maxy = polygon.bounds
++    poly_t = polygon.buffer(SNAP_TOL, join_style=2)
++    shapely.prepare(poly_t)
++    lanes, cleared, stalls = [], [], []
++    for y in np.arange(miny, maxy - 1e-9, w):
++        y2 = min(y + w, maxy)
++        band = _clip(polygon, minx - 1, y, maxx + 1, y2)
++        parts = ([band] if band.geom_type == "Polygon" else
++                 [g for g in getattr(band, "geoms", []) if g.geom_type == "Polygon"])
++        if not parts:
++            continue
++        if side == "left":
++            part = min(parts, key=lambda g: g.bounds[0])
++            span = _strip_span(part, y, y2, True)
++            edge = span[0] if span else part.bounds[0]
++            lane = box(edge + depth, y, edge + depth + lane_width, y2)
++            cleared.append(box(minx - 1, y, edge + depth + lane_width, y2))
++            stall = box(edge, y, edge + depth, y2)
++        else:
++            part = max(parts, key=lambda g: g.bounds[2])
++            span = _strip_span(part, y, y2, True)
++            edge = span[1] if span else part.bounds[2]
++            lane = box(edge - depth - lane_width, y, edge - depth, y2)
++            cleared.append(box(edge - depth - lane_width, y, maxx + 1, y2))
++            stall = box(edge - depth, y, edge, y2)
++        lanes.append(lane)
++        if (depth and y2 - y > w - 1e-6
++                and poly_t.covers(stall) and poly_t.covers(lane)):
++            stalls.append(stall)
++    return lanes, cleared, stalls
++
++
++def evaluate_access(polygon, sides, candidate_angles, cfg, gate_local=None,
++                    inset=False):
++    """Reserve access lane(s) first, then re-optimize the remaining area.
++    With `inset`, each lane sits one stall depth in from the plot edge and
++    a row of stalls between edge and lane parks off it."""
+     lane_width = ACCESS_LANE_WIDTHS.get(cfg["vehicle"], 6.0)
+     minx, miny, maxx, maxy = polygon.bounds
++    depth = cfg["slot_l"] if inset else 0.0
+ 
+-    spines = []
++    spines, cleared, lane_rows = [], [], []
+     for side in sides:
+-        if side == "left":
+-            spines.append(box(minx, miny, minx + lane_width, maxy))
+-        else:
+-            spines.append(box(maxx - lane_width, miny, maxx, maxy))
++        lanes, clear, stalls = _edge_lane(polygon, side, depth, lane_width, cfg)
++        spines += lanes
++        cleared += clear
++        lane_rows += stalls
++    if not spines:
++        return None
+     spine_union = unary_union(spines)
+ 
+-    reduced = polygon.difference(spine_union)
++    reduced = polygon.difference(unary_union(cleared))
+     if reduced.geom_type == "MultiPolygon":
+         reduced = max(reduced.geoms, key=lambda g: g.area)
+     if reduced.is_empty or reduced.area < 1.0:
+@@ -184,7 +282,8 @@ def evaluate_access(polygon, sides, candidate_angles, cfg, gate_local=None):
+     shapely.prepare(reduced)
+     best = None
+     for angle in candidate_angles:
+-        cand = optimize_angle(reduced, angle, cfg, n_offsets=31)
++        cand = optimize_angle(reduced, angle, cfg, n_offsets=31,
++                              phase_search=True)
+         if best is None or len(cand["slots"]) > len(best["slots"]):
+             best = cand
+     if not best["slots"]:
+@@ -197,6 +296,7 @@ def evaluate_access(polygon, sides, candidate_angles, cfg, gate_local=None):
+         reachable = [
+             s for s in best["slots"] if s.distance(connected_union) < TOUCH_TOLERANCE
+         ]
++    reachable += lane_rows
+ 
+     if gate_local is not None and len(sides) > 1:
+         entry_side = min(
+@@ -212,6 +312,22 @@ def evaluate_access(polygon, sides, candidate_angles, cfg, gate_local=None):
+         entry_y = min(max(gate_local.y, miny + 1), maxy - 1)
+         gate_gap = Point(entry_x, entry_y).distance(gate_local)
+ 
++    # a gate that isn't on the drive network gets a driveway to it; stalls
++    # in that driveway would block the entry, so they go
++    display_aisles = list(connected_aisles)
++    entry_point = Point(entry_x, entry_y)
++    if gate_local is not None:
++        drive = unary_union([spine_union] + connected_aisles).intersection(polygon)
++        if not drive.is_empty and drive.distance(gate_local) > 0.3:
++            near = nearest_points(drive, gate_local)[0]
++            corridor = LineString([gate_local, near]).buffer(
++                aisle_width_for(0, cfg) / 2)
++            blocked = corridor.buffer(-0.05)
++            reachable = [s for s in reachable if not blocked.intersects(s)]
++            display_aisles.append(corridor.intersection(polygon))
++        entry_point = gate_local
++        gate_gap = 0.0
++
+     exit_point = None
+     if len(sides) > 1:
+         exit_side = "right" if entry_side == "left" else "left"
+@@ -220,17 +336,17 @@ def evaluate_access(polygon, sides, candidate_angles, cfg, gate_local=None):
+     return {
+         "sides": sides,
+         "entry_side": entry_side,
+-        "spines": [s.intersection(polygon) for s in spines],
++        "spines": [spine_union.intersection(polygon)],
+         "slots": reachable,
+-        "aisles": connected_aisles,
++        "aisles": display_aisles,
+         "angle": best["angle"],
+         "aisle_width": best["aisle_width"],
+         "module_depth": best["module_depth"],
+-        "entry_point": Point(entry_x, entry_y),
++        "entry_point": entry_point,
+         "exit_point": exit_point,
+         "gate_gap": gate_gap,
+         "n_reachable": len(reachable),
+-        "n_placed": len(best["slots"]),
++        "n_placed": len(best["slots"]) + len(lane_rows),
+         "n_connected_aisles": len(connected_aisles),
+         "n_total_aisles": len(best["aisles"]),
+     }
+@@ -250,9 +366,8 @@ COURT_INSET = 0.05
+ def _strip_parts(poly, lo, hi, horizontal):
+     """Polygon ∩ axis strip -> polygon parts."""
+     minx, miny, maxx, maxy = poly.bounds
+-    strip = (box(minx - 1, lo, maxx + 1, hi) if horizontal
+-             else box(lo, miny - 1, hi, maxy + 1))
+-    inter = poly.intersection(strip)
++    inter = (_clip(poly, minx - 1, lo, maxx + 1, hi) if horizontal
++             else _clip(poly, lo, miny - 1, hi, maxy + 1))
+     if inter.is_empty:
+         return []
+     if inter.geom_type == "Polygon":
+@@ -260,33 +375,90 @@ def _strip_parts(poly, lo, hi, horizontal):
+     return [g for g in getattr(inter, "geoms", []) if g.geom_type == "Polygon"]
+ 
+ 
++def _strip_span(part, lo, hi, horizontal):
++    """The safe inner span of `part` across a strip: the tightest
++    [near, far] bound that clears the (possibly slanted) polygon edge
++    at BOTH ends of the strip, not just the strip's own bounding box —
++    so a box anchored here never pokes past a diagonal boundary."""
++    minx, miny, maxx, maxy = part.bounds
++    if horizontal:
++        lines = (LineString([(minx - 1, lo), (maxx + 1, lo)]),
++                 LineString([(minx - 1, hi), (maxx + 1, hi)]))
++    else:
++        lines = (LineString([(lo, miny - 1), (lo, maxy + 1)]),
++                 LineString([(hi, miny - 1), (hi, maxy + 1)]))
++    coord_idx = 0 if horizontal else 1
++    nears, fars = [], []
++    for line in lines:
++        inter = part.boundary.intersection(line)
++        geoms = list(inter.geoms) if hasattr(inter, "geoms") else [inter]
++        vals = [
++            c[coord_idx]
++            for g in geoms if not g.is_empty and g.geom_type in ("Point", "LineString")
++            for c in g.coords
++        ]
++        if not vals:
++            return None
++        nears.append(min(vals))
++        fars.append(max(vals))
++    near, far = max(nears), min(fars)
++    return (near, far) if far > near else None
++
++
+ def _pack_pass(poly, cfg, w_along, depth, apron_depth, grid_offset,
+                placed, aprons, runs_map, tag):
+     """One greedy pass: rest stalls against the boundary in all four
+     axis directions (S=face up, N=face down, W=face right, E=face left)."""
+     minx, miny, maxx, maxy = poly.bounds
+ 
+-    def overlaps(g, others):
+-        return any(g.intersection(o).area > 1e-6 for o in others)
++    # Everything placed here is an axis-aligned box, so overlap is a bounds
++    # comparison in numpy (the shapely pairwise check was O(n^2) and took
++    # ~40 s on a 1 ha plot). Non-box shapes (the gate driveway) keep the
++    # exact shapely test.
++    def index(geoms):
++        boxes, other = [], []
++        for g in geoms:
++            b = g.bounds
++            if abs((b[2] - b[0]) * (b[3] - b[1]) - g.area) < 1e-6:
++                boxes.append(b)
++            else:
++                other.append(g)
++        return boxes, other
++
++    placed_idx, aprons_idx = index(placed), index(aprons)
++
++    def overlaps(g, idx):
++        boxes, other = idx
++        if boxes:
++            b = np.asarray(boxes)
++            gx0, gy0, gx1, gy1 = g.bounds
++            ox = np.minimum(b[:, 2], gx1) - np.maximum(b[:, 0], gx0)
++            oy = np.minimum(b[:, 3], gy1) - np.maximum(b[:, 1], gy0)
++            if np.any((ox > 0) & (oy > 0) & (ox * oy > 1e-6)):
++                return True
++        return any(g.intersection(o).area > 1e-6 for o in other)
+ 
+     def try_place(slot, apron, run_key, along):
+         if not poly.covers(slot) or not poly.covers(apron):
+             return
+-        if overlaps(slot, placed) or overlaps(apron, placed):
++        if overlaps(slot, placed_idx) or overlaps(apron, placed_idx):
+             return
+-        if overlaps(slot, aprons):
++        if overlaps(slot, aprons_idx):
+             return
+         placed.append(slot)
+         aprons.append(apron)
++        placed_idx[0].append(slot.bounds)
++        aprons_idx[0].append(apron.bounds)
+         runs_map.setdefault(run_key, []).append((along, slot))
+ 
+     need = COURT_INSET + depth + apron_depth
+     # vertical strips: stalls resting on bottom (S) and top (N) boundary
+     for x in np.arange(minx + grid_offset + w_along / 2, maxx, w_along):
+         for part in _strip_parts(poly, x - w_along / 2, x + w_along / 2, False):
+-            pminx, pminy, pmaxx, pmaxy = part.bounds
+-            if pmaxy - pminy < need:
++            span = _strip_span(part, x - w_along / 2, x + w_along / 2, False)
++            if span is None or span[1] - span[0] < need:
+                 continue
++            pminy, pmaxy = span
+             y0 = pminy + COURT_INSET
+             try_place(
+                 box(x - w_along / 2, y0, x + w_along / 2, y0 + depth),
+@@ -304,9 +476,10 @@ def _pack_pass(poly, cfg, w_along, depth, apron_depth, grid_offset,
+     # horizontal strips: stalls resting on left (W) and right (E) boundary
+     for y in np.arange(miny + grid_offset + w_along / 2, maxy, w_along):
+         for part in _strip_parts(poly, y - w_along / 2, y + w_along / 2, True):
+-            pminx, pminy, pmaxx, pmaxy = part.bounds
+-            if pmaxx - pminx < need:
++            span = _strip_span(part, y - w_along / 2, y + w_along / 2, True)
++            if span is None or span[1] - span[0] < need:
+                 continue
++            pminx, pmaxx = span
+             x0 = pminx + COURT_INSET
+             try_place(
+                 box(x0, y - w_along / 2, x0 + depth, y + w_along / 2),
+@@ -323,22 +496,84 @@ def _pack_pass(poly, cfg, w_along, depth, apron_depth, grid_offset,
+             )
+ 
+ 
++MAX_PACK_RINGS = 12
++
++
++def _free_remainder(poly, placed, aprons):
++    """Polygon minus everything already claimed, as one biggest Polygon
++    (dropping slivers too thin for another stall) so the next ring can
++    pack against its own boundary instead of the original plot edge."""
++    if not placed:
++        return poly
++    remainder = poly.difference(unary_union(placed + aprons))
++    if remainder.is_empty:
++        return None
++    parts = ([remainder] if remainder.geom_type == "Polygon"
++             else [g for g in remainder.geoms if g.geom_type == "Polygon"])
++    parts = [p for p in parts if p.area > 1.0]
++    if not parts:
++        return None
++    return max(parts, key=lambda p: p.area)
++
++
++def _gate_corridor(poly, gate, width, depth):
++    """Driveway rectangle from the gate straight into the plot, square to
++    the boundary edge the gate sits on. poly must be CCW (interior on the
++    left of each edge)."""
++    coords = list(poly.exterior.coords)
++    a, b = min(zip(coords, coords[1:]),
++               key=lambda e: LineString(e).distance(gate))
++    ex, ey = b[0] - a[0], b[1] - a[1]
++    L = math.hypot(ex, ey)
++    if L < 1e-9:
++        return None
++    tx, ty = ex / L, ey / L
++    nx, ny = -ty, tx
++    edge = LineString([a, b])
++    p = edge.interpolate(edge.project(gate))
++    hw = width / 2.0
++    return Polygon([
++        (p.x - tx * hw, p.y - ty * hw),
++        (p.x + tx * hw, p.y + ty * hw),
++        (p.x + tx * hw + nx * depth, p.y + ty * hw + ny * depth),
++        (p.x - tx * hw + nx * depth, p.y - ty * hw + ny * depth),
++    ])
++
++
+ def perimeter_layout(polygon, cfg, gate_local=None):
+     poly = orient(polygon, sign=1.0)
+     shapely.prepare(poly)
+     perp_apron = aisle_width_for(90, cfg)
+     par_apron = aisle_width_for(0, cfg)
+ 
++    # keep the driveway at the gate clear of stalls, deep enough to get
++    # past a perimeter stall row into the shared court
++    corridor = None
++    if gate_local is not None:
++        corridor = _gate_corridor(poly, gate_local, par_apron,
++                                  cfg["slot_l"] + COURT_INSET + 0.5)
++
+     best_pack = None
+     for grid_offset in (0.0, cfg["slot_w"] / 2):
+-        placed, aprons, runs_map = [], [], {}
+-        # pass 1: perpendicular stalls (rear on boundary, nose to court)
+-        _pack_pass(poly, cfg, cfg["slot_w"], cfg["slot_l"], perp_apron,
+-                   grid_offset, placed, aprons, runs_map, "perp")
+-        n_perp = len(placed)
+-        # pass 2: parallel stalls fill what's left (narrow strips etc.)
+-        _pack_pass(poly, cfg, cfg["slot_l"], cfg["slot_w"], par_apron,
+-                   grid_offset, placed, aprons, runs_map, "par")
++        placed, runs_map = [], {}
++        aprons = [corridor] if corridor is not None else []
++        n_perp = 0
++        ring_poly = poly
++        for _ in range(MAX_PACK_RINGS):
++            shapely.prepare(ring_poly)
++            before = len(placed)
++            # pass 1: perpendicular stalls (rear on ring edge, nose to court)
++            _pack_pass(ring_poly, cfg, cfg["slot_w"], cfg["slot_l"], perp_apron,
++                       grid_offset, placed, aprons, runs_map, "perp")
++            n_perp += len(placed) - before
++            # pass 2: parallel stalls fill what's left (narrow strips etc.)
++            _pack_pass(ring_poly, cfg, cfg["slot_l"], cfg["slot_w"], par_apron,
++                       grid_offset, placed, aprons, runs_map, "par")
++            if len(placed) == before:
++                break
++            ring_poly = _free_remainder(poly, placed, aprons)
++            if ring_poly is None:
++                break
+         if best_pack is None or len(placed) > len(best_pack[0]):
+             best_pack = (placed, aprons, runs_map, n_perp)
+ 
+@@ -410,6 +645,287 @@ def perimeter_layout(polygon, cfg, gate_local=None):
+     }
+ 
+ 
++# ------------------------------------------------------------
++# SINGLE-AISLE LAYOUT (small / medium plots)
++# One straight drive aisle across the plot. Each side independently
++# takes 90 deg or parallel stalls, whichever fits its leftover depth
++# best; the aisle is as wide as that side needs (rule-pack table). The
++# dead end can carry stalls across the aisle. A driveway joins the gate
++# to the aisle. Swept over aisle position (plus edge-flush positions);
++# works in the already-rotated local frame.
++# ------------------------------------------------------------
++AISLE_SWEEP_STEP = 0.3
++ROW_OFFSETS = 5
++SNAP_TOL = 0.02   # m; flush placements survive rotation float noise
++# 90 deg + parallel only: angled rows need a deeper module for fewer
++# stalls per metre of aisle, so they never win on capacity
++ROW_KINDS = (90.0, 0.0)                      # 0 = parallel
++SINGLE_AISLE_MAX_DEPTH = 34.0                # deeper plots: bay mode wins
++
++
++def _stall_polys(xs, yc, ux, uy, w, l):
++    """Vectorized w x l rectangles centred at (xs, yc), long axis (ux, uy)."""
++    vx, vy = -uy, ux
++    corners = ((-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1))
++    coords = np.empty((len(xs), 5, 2))
++    for i, (a, b) in enumerate(corners):
++        coords[:, i, 0] = xs + a * ux * l / 2 + b * vx * w / 2
++        coords[:, i, 1] = yc + a * uy * l / 2 + b * vy * w / 2
++    return shapely.polygons(coords)
++
++
++def _row_geometry(kind, cfg):
++    """(depth across the row, pitch along the aisle) for a stall kind."""
++    w, l = cfg["slot_w"], cfg["slot_l"]
++    if kind == 0.0:
++        return w, l
++    th = math.radians(kind)
++    return l * math.sin(th) + w * math.cos(th), w / math.sin(th)
++
++
++def _best_row(poly, poly_t, aisle_t, y_a, width, side, kind, travel, cfg,
++              blocked):
++    """Best-offset row of `kind` stalls on one side (+1 above / -1 below)
++    of the aisle band [y_a, y_a+width]. A stall counts only if it sits
++    inside the plot, clear of `blocked`, and the aisle strip in front of
++    its entry is inside the aisle piece. `poly_t` / `aisle_t` are the
++    same shapes grown by SNAP_TOL so flush placements survive float
++    noise from the rotation."""
++    w, l = cfg["slot_w"], cfg["slot_l"]
++    depth, pitch = _row_geometry(kind, cfg)
++    yc = y_a + width + depth / 2 if side > 0 else y_a - depth / 2
++    th = math.radians(kind)
++    ux, uy = travel * math.cos(th), side * math.sin(th)
++    # parallel stalls open along their long side; angled ones at the
++    # trailing end of the stall
++    entry_shift = 0.0 if kind == 0.0 else -travel * math.cos(th) * l / 2
++    minx, _, maxx, _ = poly.bounds
++    # snap offsets: rows flush with either end of their band, plus a sweep
++    offsets = list(np.linspace(0, pitch, ROW_OFFSETS, endpoint=False))
++    y_lo, y_hi = yc - depth / 2, yc + depth / 2
++    band = _clip(poly, minx - 1, y_lo, maxx + 1, y_hi)
++    for part in ([band] if band.geom_type == "Polygon"
++                 else getattr(band, "geoms", [])):
++        span = (_strip_span(part, y_lo, y_hi, True)
++                if part.geom_type == "Polygon" else None)
++        if span is not None:
++            offsets += [(span[0] + pitch / 2 - minx) % pitch,
++                        (span[1] - pitch / 2 - minx) % pitch]
++    best = []
++    for off in offsets:
++        xs = np.arange(minx + off, maxx + pitch, pitch)
++        stalls = _stall_polys(xs, yc, ux, uy, w, l)
++        xf = xs + entry_shift
++        fronts = shapely.box(xf - pitch / 2, y_a, xf + pitch / 2, y_a + width)
++        ok = shapely.covers(poly_t, stalls) & shapely.covers(aisle_t, fronts)
++        if blocked is not None:
++            ok &= ~shapely.intersects(blocked, stalls)
++        if ok.sum() > len(best):
++            best = list(stalls[ok])
++    return best
++
++
++def _end_stalls(aisle, y_a, width, far, cfg):
++    """Stalls across the dead end of the aisle (nose to the end wall).
++    Returns (stalls, end_zone) or None if they would leave the aisle
++    too short to back out of."""
++    w, l = cfg["slot_w"], cfg["slot_l"]
++    n = int(width // w)
++    span = _strip_span(aisle, y_a, y_a + width, True)
++    if n < 1 or span is None:
++        return None
++    x_lo, x_hi = span
++    if x_hi - x_lo - l < aisle_width_for(90, cfg):
++        return None
++    x0 = x_hi - l if far > 0 else x_lo
++    y0 = y_a + (width - n * w) / 2
++    stalls = [box(x0, y0 + k * w, x0 + l, y0 + (k + 1) * w) for k in range(n)]
++    return stalls, box(x0, y_a, x0 + l, y_a + width)
++
++
++def single_aisle_layout(polygon, cfg, gate_local=None):
++    poly = orient(polygon, sign=1.0)
++    shapely.prepare(poly)
++    poly_t = poly.buffer(SNAP_TOL, join_style=2)
++    shapely.prepare(poly_t)
++    minx, miny, maxx, maxy = poly.bounds
++    if maxy - miny > SINGLE_AISLE_MAX_DEPTH:
++        return None
++    gate_w = aisle_width_for(0, cfg)
++    need = {k: aisle_width_for(k, cfg) for k in ROW_KINDS}
++    depths = [_row_geometry(k, cfg)[0] for k in ROW_KINDS]
++    best = None
++    for width in sorted(set(need.values())):
++        kinds = [k for k in ROW_KINDS if need[k] <= width + 1e-6]
++        # sweep + positions that put the aisle or a row flush on an edge
++        y_cands = set(np.round(
++            np.arange(miny, maxy - width + 1e-9, AISLE_SWEEP_STEP), 6))
++        y_cands |= {miny, maxy - width}
++        y_cands |= {miny + d for d in depths} | {maxy - width - d for d in depths}
++        for y_a in sorted(y for y in y_cands
++                          if miny - 1e-9 <= y <= maxy - width + 1e-9):
++            band = _clip(poly, minx - 1, y_a, maxx + 1, y_a + width)
++            pieces = ([band] if band.geom_type == "Polygon" else
++                      [g for g in getattr(band, "geoms", [])
++                       if g.geom_type == "Polygon"])
++            if not pieces:
++                continue
++            if gate_local is not None:
++                aisle = min(pieces, key=lambda g: g.distance(gate_local))
++            else:
++                aisle = max(pieces, key=lambda g: g.area)
++
++            corridor = None
++            if gate_local is not None and aisle.distance(gate_local) > 0.3:
++                near = aisle.exterior.interpolate(
++                    aisle.exterior.project(gate_local))
++                corridor = LineString([gate_local, near]).buffer(gate_w / 2)
++                if corridor.difference(poly).area > 0.5 * corridor.area:
++                    continue
++            # shrunk so stalls merely touching the driveway still count
++            blocked = corridor.buffer(-0.05) if corridor is not None else None
++            if blocked is not None:
++                shapely.prepare(blocked)
++
++            # travel = direction from the entry toward the dead end
++            if gate_local is not None:
++                travels = (1.0 if gate_local.x <= aisle.centroid.x else -1.0,)
++            else:
++                travels = (1.0, -1.0)
++
++            for travel in travels:
++                options = [([], aisle)]
++                end = _end_stalls(aisle, y_a, width, travel, cfg)
++                if end is not None:
++                    options.append((end[0], aisle.difference(end[1])))
++                for end_list, drive in options:
++                    if drive.is_empty:
++                        continue
++                    drive_t = drive.buffer(SNAP_TOL, join_style=2)
++                    shapely.prepare(drive_t)
++                    sides = {}
++                    for side in (1, -1):
++                        rows = [(_best_row(poly, poly_t, drive_t, y_a, width,
++                                           side, k, travel, cfg, blocked), k)
++                                for k in kinds]
++                        sides[side] = max(rows, key=lambda r: len(r[0]))
++                    (above, k_up), (below, k_dn) = sides[1], sides[-1]
++                    n = len(above) + len(below) + len(end_list)
++                    if not n or (best is not None and n <= best["n_reachable"]):
++                        continue
++                    main = k_up if len(above) >= len(below) else k_dn
++                    best = {
++                        "slots": below + above + end_list,
++                        "runs": [r for r in (below, above, end_list) if r],
++                        "aprons": [drive] + ([corridor] if corridor else []),
++                        "entry_point": gate_local if gate_local is not None
++                        else Point(aisle.bounds[0] if travel > 0
++                                   else aisle.bounds[2], y_a + width / 2),
++                        "angle": main,
++                        "row_angles": (k_dn, k_up),
++                        "aisle_width": width,
++                        "n_reachable": n,
++                        "n_placed": n,
++                    }
++    return best
++
++
++# ------------------------------------------------------------
++# SINGLE ROW: N stalls side by side along one edge, one lane in front
++# ------------------------------------------------------------
++# The other modes chase the highest stall count, which gives two facing rows or
++# clusters.  This one gives what a plot with a row of cars looks like: one
++# straight row of 90-degree stalls and a lane along its open side.
++ROW_X_STEP = 0.25            # phases tried for where the row starts, m
++ROW_Y_STEP = 0.25            # distances from the edge tried for the row, m
++ROW_LANE_COVERAGE_MIN = 0.85  # share of the lane that must lie inside the plot
++
++
++def _fitting_runs(fits):
++    """[(start, length)] of the consecutive True values in a boolean array."""
++    runs, start = [], None
++    for i, ok in enumerate(fits):
++        if ok and start is None:
++            start = i
++        elif not ok and start is not None:
++            runs.append((start, i - start))
++            start = None
++    if start is not None:
++        runs.append((start, len(fits) - start))
++    return runs
++
++
++def row_layout(polygon, cfg, gate_local=None, n_target=None, lane_override=None):
++    """
++    Stalls in one straight row along the bottom of `polygon` (the caller rotates
++    the plot so the edge of interest is horizontal), the lane above them.
++    Returns the same shape of dict as single_aisle_layout, or None if no stall fits.
++    n_target caps the row; without it the row is as long as the plot allows.
++    lane_override: the lane width in front of the row, m.  None = the rule pack's
++    figure for 90-degree stalls; 0 = no lane inside the plot (cars reach the row
++    from open ground outside it).
++    """
++    poly = orient(polygon, sign=1.0)
++    shapely.prepare(poly)
++    w, l = cfg["slot_w"], cfg["slot_l"]
++    lane = aisle_width_for(90, cfg) if lane_override is None else max(0.0, float(lane_override))
++    minx, miny, maxx, maxy = poly.bounds
++    if maxy - miny < l + lane * ROW_LANE_COVERAGE_MIN or maxx - minx < w:
++        return None
++
++    y_cands = set(np.round(np.arange(
++        miny, maxy - l - lane * ROW_LANE_COVERAGE_MIN + 1e-9, ROW_Y_STEP), 6))
++    y_cands.add(round(miny, 6))
++    best = None
++    for y0 in sorted(y_cands):
++        for x_off in np.arange(0.0, w, ROW_X_STEP):
++            xs0 = np.arange(minx + x_off, maxx - w + 1e-9, w)
++            if not len(xs0):
++                continue
++            rects = shapely.box(xs0, y0, xs0 + w, y0 + l)
++            for start, length in _fitting_runs(shapely.covers(poly, rects)):
++                n = min(length, n_target) if n_target else length
++                if n_target and length > n_target:
++                    # a longer run than asked for: take the stretch nearest the gate
++                    if gate_local is not None:
++                        centres = xs0[start:start + length] + w / 2
++                        k = int(np.argmin(np.abs(centres - gate_local.x)))
++                        start += max(0, min(k - n // 2, length - n))
++                x_lo, x_hi = float(xs0[start]), float(xs0[start + n - 1] + w)
++                if lane > 0:
++                    band = box(x_lo, y0 + l, x_hi, y0 + l + lane)
++                    lane_part = _clip(poly, x_lo, y0 + l, x_hi, y0 + l + lane)
++                    coverage = lane_part.area / band.area
++                    if coverage < ROW_LANE_COVERAGE_MIN:
++                        continue
++                else:
++                    lane_part, coverage = None, 1.0
++                key = (n, round(coverage, 3), -y0)       # most stalls, then the lane, then flush to the edge
++                if best is None or key > best["key"]:
++                    if lane_part is not None and lane_part.geom_type != "Polygon":
++                        pieces = [g for g in getattr(lane_part, "geoms", []) if g.geom_type == "Polygon"]
++                        if not pieces:
++                            continue
++                        lane_part = max(pieces, key=lambda g: g.area)
++                    slots = list(rects[start:start + n])
++                    best = {
++                        "key": key,
++                        "slots": slots,
++                        "runs": [slots],
++                        "aprons": [lane_part] if lane_part is not None else [],
++                        "entry_point": gate_local if gate_local is not None
++                        else Point(x_lo, y0 + l + lane / 2),
++                        "angle": 90.0,
++                        "row_angles": (90.0, 90.0),
++                        "aisle_width": lane,
++                        "module_depth": l + lane,
++                        "n_reachable": n,
++                        "n_placed": n,
++                        "lane_coverage": coverage,
++                    }
++    return best
++
++
+ # ------------------------------------------------------------
+ # STALL CLASSIFICATION (striping plan)
+ # ------------------------------------------------------------
+@@ -499,9 +1015,11 @@ def optimize(boundary_latlng, obstacle_latlng_lists, options=None):
+     pack_key = opt.get("rule_pack") or "nbc"
+     pack = RULE_PACKS.get(pack_key, RULE_PACKS["nbc"])
+     vehicle = opt.get("vehicle") or "car"
++    default_w, default_l = (BIKE_SLOT if vehicle == "bike"
++                            else (pack["slot_w"], pack["slot_l"]))
+     cfg = {
+-        "slot_w": float(opt.get("slot_width") or pack["slot_w"]),
+-        "slot_l": float(opt.get("slot_length") or pack["slot_l"]),
++        "slot_w": float(opt.get("slot_width") or default_w),
++        "slot_l": float(opt.get("slot_length") or default_l),
+         "vehicle": vehicle,
+         "circulation": opt.get("circulation") or "two_way",
+         "aisle_table": BIKE_AISLE if vehicle == "bike" else pack["aisle"],
+@@ -516,6 +1034,25 @@ def optimize(boundary_latlng, obstacle_latlng_lists, options=None):
+         raise ValueError("Boundary needs at least 3 corners.")
+     warnings = []
+ 
++    # the aisle table follows the vehicle, the stall size is user input —
++    # a mismatch silently gives a layout that works for neither
++    stall_area = cfg["slot_w"] * cfg["slot_l"]
++    if vehicle == "bike" and stall_area > 2 * BIKE_SLOT[0] * BIKE_SLOT[1]:
++        warnings.append(
++            f"Two-wheeler selected but stall is {cfg['slot_w']} x "
++            f"{cfg['slot_l']} m (car-sized) — two-wheeler bays are about "
++            f"{BIKE_SLOT[0]} x {BIKE_SLOT[1]} m (NBC 2016 Part 3), so "
++            "capacity is heavily under-counted."
++        )
++    elif vehicle == "car" and stall_area < 0.75 * pack["slot_w"] * pack["slot_l"]:
++        warnings.append(
++            f"Car selected but stall is only {cfg['slot_w']} x "
++            f"{cfg['slot_l']} m — smaller than the {pack['name']} car stall "
++            f"({pack['slot_w']} x {pack['slot_l']} m)."
++        )
++    benchmark = (BENCHMARK_M2 if vehicle == "car"
++                 else tuple(b * BIKE_ECS for b in BENCHMARK_M2))
++
+     # ---- coordinate system -------------------------------------------------
+     lats = np.array([p["lat"] for p in boundary_latlng])
+     lons = np.array([p["lng"] for p in boundary_latlng])
+@@ -554,21 +1091,45 @@ def optimize(boundary_latlng, obstacle_latlng_lists, options=None):
+         gx, gy = to_utm.transform(gate["lng"], gate["lat"])
+         gate_utm = Point(gx, gy)
+ 
+-    orientations = []
+-    for rot in (edge_angle, edge_angle + 90.0):
++    def local_frame(rot):
+         loc = rotate(usable, -rot, origin=origin, use_radians=False)
+-        b, table = search_best_layout(loc, cfg)
+-        g_loc = (
+-            rotate(gate_utm, -rot, origin=origin, use_radians=False)
+-            if gate_utm is not None else None
+-        )
++        g_loc = (rotate(gate_utm, -rot, origin=origin, use_radians=False)
++                 if gate_utm is not None else None)
++        return loc, g_loc
++
++    # single-aisle frames: one per plot edge direction (and its normal),
++    # exact angles — rounding would tilt the edge and break flush fits
++    ext = list(usable.exterior.coords)
++    edge_rots = {}
++    for (x1, y1), (x2, y2) in zip(ext, ext[1:]):
++        if math.hypot(x2 - x1, y2 - y1) < 3.0:
++            continue
++        a = math.degrees(math.atan2(y2 - y1, x2 - x1))
++        for r in (a % 180.0, (a + 90.0) % 180.0):
++            edge_rots.setdefault(round(r, 1), r)
++
++    # every candidate below is independent — phase 1 runs them in parallel
++    pool = _pool()
++    bay_frames = [(rot, *local_frame(rot)) for rot in (edge_angle, edge_angle + 90.0)]
++    f_search = [pool.submit(search_best_layout, loc, cfg)
++                for _, loc, _ in bay_frames]
++    f_court = [pool.submit(perimeter_layout, loc, cfg, g)
++               for _, loc, g in bay_frames]
++    f_single = []
++    for rot in edge_rots.values():
++        loc, g = local_frame(rot)
++        f_single.append((rot, pool.submit(single_aisle_layout, loc, cfg, g)))
++
++    orientations = []
++    for (rot, loc, g_loc), fut in zip(bay_frames, f_search):
++        b, table = fut.result()
+         orientations.append({"rot": rot, "local": loc, "best": b,
+                              "table": table, "gate_local": g_loc})
+ 
+     # ---- bay mode: circulation-first access, per orientation ---------------
+     # With a gate, BOTH orientations are tried so a gate on any edge lands
+     # on a left/right spine in one of the frames.
+-    candidates = []
++    jobs = []
+     for o in orientations:
+         if not o["best"]["slots"]:
+             continue
+@@ -583,11 +1144,16 @@ def optimize(boundary_latlng, obstacle_latlng_lists, options=None):
+         else:
+             side_sets = [("left",), ("right",)]
+         for sides in side_sets:
+-            c = evaluate_access(o["local"], sides, cand_angles, cfg,
+-                                o["gate_local"])
+-            if c:
+-                c["orientation"] = o
+-                candidates.append(c)
++            for inset in (False, True):
++                jobs.append((o, pool.submit(evaluate_access, o["local"], sides,
++                                            cand_angles, cfg, o["gate_local"],
++                                            inset)))
++    candidates = []
++    for o, fut in jobs:
++        c = fut.result()
++        if c:
++            c["orientation"] = o
++            candidates.append(c)
+ 
+     def score(c):
+         gap = c["gate_gap"] if c["gate_gap"] is not None else 0.0
+@@ -603,23 +1169,50 @@ def optimize(boundary_latlng, obstacle_latlng_lists, options=None):
+     # Both orientations are tried; both modes compete; best count wins.
+     courtyard = None
+     courtyard_o = None
+-    for o in orientations:
+-        pl = perimeter_layout(o["local"], cfg, o["gate_local"])
++    for o, fut in zip(orientations, f_court):
++        pl = fut.result()
+         if pl and (courtyard is None
+                    or pl["n_reachable"] > courtyard["n_reachable"]):
+             courtyard = pl
+             courtyard_o = o
+ 
++    # ---- single-aisle mode: one aisle aligned to each plot edge ------------
++    single, single_rot = None, None
++    for rot, fut in f_single:
++        sa = fut.result()
++        if sa and (single is None or sa["n_reachable"] > single["n_reachable"]):
++            single, single_rot = sa, rot
++
+     bay_n = bay_final["n_reachable"] if bay_final else 0
+     court_n = courtyard["n_reachable"] if courtyard else 0
+-    if bay_n == 0 and court_n == 0:
++    single_n = single["n_reachable"] if single else 0
++    if bay_n == 0 and court_n == 0 and single_n == 0:
+         raise ValueError(
+             "No layout fits — plot may be too small for even one stall "
+             "plus maneuvering space."
+         )
+-    layout_mode = "bay" if bay_n > court_n else "courtyard"
+-
+-    if layout_mode == "bay":
++    # ties prefer the more organised layout
++    layout_mode = max(
++        (("single_aisle", single_n, 2), ("bay", bay_n, 1),
++         ("courtyard", court_n, 0)),
++        key=lambda m: (m[1], m[2]),
++    )[0]
++
++    if layout_mode == "single_aisle":
++        final = single
++        dominant = single_rot
++        angle_table = orientations[0]["table"]
++        final_runs = final["runs"]
++        display_aisles = final["aprons"]
++        display_spines = []
++        exit_pt = None
++        entry_side = "gate"
++        if gate_utm is None:
++            warnings.append(
++                "No gate set — aisle end assumed as entry. "
++                "Use SET GATE for an accurate entry."
++            )
++    elif layout_mode == "bay":
+         final = bay_final
+         local = final["orientation"]["local"]
+         dominant = final["orientation"]["rot"]
+@@ -665,11 +1258,61 @@ def optimize(boundary_latlng, obstacle_latlng_lists, options=None):
+         if dropped > 0:
+             warnings.append(f"{dropped} stalls dropped (court not reachable).")
+ 
++    # ---- single row: the user asked for one straight row ------------------
++    # Replaces the automatic choice above.  Every plot edge is tried, from both
++    # sides, and the longest row wins.
++    if opt.get("layout") == "row":
++        n_target = int(opt.get("row_stalls") or 0) or None
++        raw_lane = opt.get("row_lane")
++        row_lane = None if raw_lane in (None, "") else float(raw_lane)      # None = the rule pack's lane
++        best_row, best_rot = None, None
++        for rot in sorted({r % 360.0 for base in edge_rots.values()
++                           for r in (base, base + 180.0)}):
++            loc, g_loc = local_frame(rot)
++            cand = row_layout(loc, cfg, g_loc, n_target, row_lane)
++            if cand and (best_row is None or
++                         (cand["n_reachable"], round(cand["lane_coverage"], 3))
++                         > (best_row["n_reachable"], round(best_row["lane_coverage"], 3))):
++                best_row, best_rot = cand, rot
++        if best_row is None:
++            raise ValueError(
++                "No single row fits: the plot is too shallow for one stall "
++                "(%.1f m) plus a lane." % cfg["slot_l"])
++        final, dominant = best_row, best_rot
++        layout_mode = "row"
++        angle_table = []
++        final_runs = best_row["runs"]
++        display_aisles = best_row["aprons"]
++        display_spines = []
++        exit_pt = None
++        entry_side = "gate"
++        # notes written for the automatic modes do not describe this layout
++        warnings = [w for w in warnings if not w.startswith(
++            ("Courtyard mode", "Single-entry aisles", "No gate set", "Some aisle bays", "Aisle "))]
++        pass
++        if n_target and best_row["n_reachable"] < n_target:
++            warnings.append(
++                f"Only {best_row['n_reachable']} of the {n_target} stalls fit in one row "
++                "along any edge of this plot: draw it longer or make the stalls narrower.")
++        if gate_utm is None:
++            warnings.append("No gate set: the left end of the lane is assumed as the entry. "
++                            "Use SET GATE for an accurate entry.")
++
+     # ---- turning / single-swing entry check --------------------------------
+     std_aisle = float(np.interp(final["angle"], AISLE_ANGLE_ANCHORS,
+                                 cfg["aisle_table"][cfg["circulation"]]))
+     turning_ok = final["aisle_width"] >= std_aisle - 1e-6
+-    if not turning_ok:
++    if layout_mode == "row":
++        # the row's lane is the user's call; say plainly what it means
++        if final["aisle_width"] <= 0:
++            turning_ok = True                          # no lane drawn: nothing to check
++            warnings.append("No lane inside the plot: the row is stalls only, and cars are "
++                            "assumed to reach it from open ground outside the boundary.")
++        elif not turning_ok:
++            warnings.append(
++                f"The lane in front of the row is {final['aisle_width']:.1f} m, narrower than the "
++                f"{std_aisle:.1f} m standard for 90 deg stalls: cars will need extra manoeuvres.")
++    elif not turning_ok:
+         warnings.append(
+             f"Aisle {final['aisle_width']:.1f} m is below the "
+             f"{std_aisle:.1f} m standard for {final['angle']:.0f} deg — "
+@@ -749,6 +1392,18 @@ def optimize(boundary_latlng, obstacle_latlng_lists, options=None):
+     ]
+     center_lon, center_lat = to_wgs.transform(origin.x, origin.y)
+     area_per_slot = round(usable.area / n_parking, 1) if n_parking else None
++    # ideal ceiling: the densest module (double-loaded 90 deg or parallel)
++    # tiled over the whole usable area with zero edge loss — no real plot
++    # reaches it, but it makes every result's quality comparable
++    w, l = cfg["slot_w"], cfg["slot_l"]
++    ideal_gross = min(w * (l + aisle_width_for(90, cfg) / 2),
++                      l * (w + aisle_width_for(0, cfg) / 2))
++    ideal_max = int(usable.area // ideal_gross)
++    candidates = sorted(
++        ({"mode": m, "slots": n} for m, n in
++         (("single_aisle", single_n), ("bay", bay_n), ("courtyard", court_n))),
++        key=lambda c: -c["slots"],
++    )
+ 
+     return {
+         "site": utm_poly_to_latlng(site),
+@@ -786,9 +1441,13 @@ def optimize(boundary_latlng, obstacle_latlng_lists, options=None):
+             "vehicle": cfg["vehicle"],
+             "turning_check": "ok" if turning_ok else "tight",
+             "area_per_slot_m2": area_per_slot,
+-            "benchmark_m2": list(BENCHMARK_M2),
++            "benchmark_m2": list(benchmark),
+             "ecs_upper_bound": round(site.area / pack["ecs_area"], 1),
++            "ideal_max_slots": ideal_max,
++            "utilization_pct": (round(100.0 * n_parking / ideal_max, 1)
++                                if ideal_max else None),
+         },
++        "candidates": candidates,
+         "angle_table": angle_table[:10],
+         "warnings": warnings,
+     }

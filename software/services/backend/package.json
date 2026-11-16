@@ -10,6 +10,7 @@
     "test:auth": "node tests/auth-otp.smoke.js",
     "test:owner": "node tests/owner-onboarding.smoke.js",
     "test:bookings": "node tests/booking-actions.smoke.js",
+    "test:cameras": "node tests/cameras.smoke.js",
     "make-admin": "node scripts/make-admin.js",
     "test:pricing": "node tests/pricing.unit.js",
     "test:phone": "node tests/phone.unit.js",

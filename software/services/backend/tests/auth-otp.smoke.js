@@ -117,6 +117,58 @@ const ok = (label, cond, extra = '') => {
   r = await call('POST', '/api/auth/otp/verify', { identifier: '9826088888', code: '111111', role: 'user' });
   ok('burns the code after 5 wrong attempts', r.status === 429, JSON.stringify(r.json));
 
+  // ---------------------------------------------------------- phase 0 hardening
+  console.log('\nPRODUCTION HARDENING');
+
+  // The fixed test code must not sign anybody in once NODE_ENV=production.
+  // (Read at call time, so flipping the env inside the test is enough.)
+  const prevEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  r = await call('POST', '/api/auth/otp/verify', { identifier: '9826055555', code: '123456', role: 'user' });
+  ok('test code 123456 is refused in production', r.status === 400 && !r.json.success, JSON.stringify(r.json));
+  process.env.ALLOW_TEST_OTP_IN_PRODUCTION = 'true';
+  r = await call('POST', '/api/auth/otp/verify', { identifier: '9826055555', code: '123456', role: 'user' });
+  ok('...unless ALLOW_TEST_OTP_IN_PRODUCTION=true is set on purpose', r.status === 200 && r.json.success, JSON.stringify(r.json));
+  delete process.env.ALLOW_TEST_OTP_IN_PRODUCTION;
+  process.env.NODE_ENV = prevEnv;
+  r = await call('POST', '/api/auth/otp/verify', { identifier: '9826044444', code: '123456', role: 'user' });
+  ok('test code still works outside production', r.status === 200 && r.json.success, JSON.stringify(r.json));
+
+  // Clients send snake_case keys; the terms acceptance and owner type must still be recorded.
+  r = await call('POST', '/api/auth/otp/send', { identifier: '9826066666' });
+  r = await call('POST', '/api/auth/otp/verify', { identifier: '9826066666', code: r.json.data.dev_code, role: 'owner', terms_accepted: true, owner_type: 'business' });
+  const Owner = require('../src/models/Owner');
+  const snakeOwner = await Owner.findOne({ user_id: r.json.data?.user?.id });
+  ok('terms_accepted (snake_case) is recorded', !!snakeOwner?.terms_accepted_at, JSON.stringify(snakeOwner));
+  ok('owner_type (snake_case) is used', snakeOwner?.owner_type === 'business', snakeOwner?.owner_type);
+
+  // Public sign-up cannot make an admin.
+  r = await call('POST', '/api/auth/register', {
+    email: 'sneaky@example.com', phone: '9826011111', password: 'Passw0rd1',
+    first_name: 'Sneaky', last_name: 'Person', user_type: 'admin',
+  });
+  ok('register refuses user_type admin', r.status === 400 && !r.json.success, JSON.stringify(r.json));
+  r = await call('POST', '/api/auth/register', {
+    email: 'regular@example.com', phone: '9826022222', password: 'Passw0rd1',
+    first_name: 'Reg', last_name: 'Ular', user_type: 'owner',
+  });
+  ok('register still allows user_type owner', r.status === 201 || r.status === 200, JSON.stringify(r.json));
+
+  // otp/test-send hands the code back, so only an admin may call it.
+  r = await call('POST', '/api/auth/otp/test-send', { phone: '9826033333' }, consumer.token);
+  ok('otp/test-send is refused for a non-admin', r.status === 403, JSON.stringify(r.json));
+  r = await call('POST', '/api/auth/otp/test-send', { phone: '9826033333' });
+  ok('otp/test-send needs sign-in', r.status === 401, JSON.stringify(r.json));
+
+  // An expired token can be renewed for a while, not forever.
+  const jwt = require('jsonwebtoken');
+  const nowSec = Math.floor(Date.now() / 1000);
+  const stale = (days) => jwt.sign({ id: consumer.user.id, exp: nowSec - days * 86400 }, process.env.JWT_SECRET);
+  r = await call('POST', '/api/auth/refresh-token', null, stale(1));
+  ok('a token expired 1 day ago can be refreshed', r.status === 200 && !!r.json.data?.token, JSON.stringify(r.json));
+  r = await call('POST', '/api/auth/refresh-token', null, stale(45));
+  ok('a token expired 45 days ago cannot', r.status === 401 && r.json.error?.code === 'AUTH_TOKEN_EXPIRED', JSON.stringify(r.json));
+
   console.log(`\n${pass} passed, ${fail} failed`);
   await server.close();
   await mongoose.disconnect();

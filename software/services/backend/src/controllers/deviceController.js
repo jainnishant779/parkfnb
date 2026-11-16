@@ -228,7 +228,7 @@ exports.getDeviceTelemetry = async (req, res) => {
     }
 
     // Owner authorization
-    if (device.owner_id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+    if (device.owner_id.toString() !== req.user._id.toString() && req.user.user_type !== 'admin') {
       return error(res, errorCodes.AUTH_INSUFFICIENT_PERMISSIONS, 403, 'Forbidden');
     }
 
@@ -273,7 +273,7 @@ exports.sendCommand = async (req, res) => {
       return error(res, errorCodes.RES_NOT_FOUND, 404, 'Device not found');
     }
 
-    if (device.owner_id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+    if (device.owner_id.toString() !== req.user._id.toString() && req.user.user_type !== 'admin') {
       return error(res, errorCodes.AUTH_INSUFFICIENT_PERMISSIONS, 403, 'Forbidden');
     }
 

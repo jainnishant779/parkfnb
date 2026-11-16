@@ -1,0 +1,2 @@
+# The real Wi-Fi password and camera key. Copy secrets.example.h to secrets.h and fill it in; it must never be committed.
+secrets.h

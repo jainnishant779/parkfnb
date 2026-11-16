@@ -1,0 +1,11 @@
+diff --git a/.gitignore b/.gitignore
+index 028a32b..084dbc9 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -74,3 +74,6 @@ docs/status/RENDER_ENV.md
+ *.pem
+ *.pt
+ *.onnx
++
++# Private firmware settings (Wi-Fi password, camera key)
++firmware/**/secrets.h

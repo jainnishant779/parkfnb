@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#F3F3F3" />
+    <title>ParkFNB Owner</title>
+    <!-- Light unless the person picked dark (the same choice, key and rule as the operator console). Applied before the first paint
+         so nothing flashes; src/lib/theme.ts takes over after that. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("pf.theme");
+          document.documentElement.setAttribute("data-theme", t === "dark" ? "dark" : "light");
+          if (t === "dark") document.querySelector('meta[name="theme-color"]').setAttribute("content", "#0F0F0F");
+        } catch (e) { document.documentElement.setAttribute("data-theme", "light"); }
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+diff --git a/services/backend/src/routes/accessRoutes.js b/services/backend/src/routes/accessRoutes.js
+index c226b8e..bade680 100644
+--- a/services/backend/src/routes/accessRoutes.js
++++ b/services/backend/src/routes/accessRoutes.js
+@@ -15,6 +15,9 @@ const { protect } = require('../middleware/auth');
+ // POST /api/access/anpr-event
+ router.post('/anpr-event', anprAccessController.anprEvent);
+ 
++// POST /api/access/anpr-occupancy-event
++router.post('/anpr-occupancy-event', anprAccessController.anprOccupancyEvent);
++
+ // GET /api/access/anpr-log — service token or an admin session
+ router.get('/anpr-log', (req, res, next) => {
+   if (req.headers['x-anpr-token']) return next();

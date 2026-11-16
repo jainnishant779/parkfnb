@@ -1,0 +1,60 @@
+/* The business pages (bookings, earnings, payouts, barriers, dashboard). Only tokens and classes from parkfnb.css: no colour or radius of its own. */
+
+.btn.sm { min-height: 36px; padding: 0 14px; font-size: 13px; }
+.nowrap { white-space: nowrap; }
+.cell-sub { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.cell-main { font-weight: 600; }
+.plate-text { font-family: var(--mono); letter-spacing: .06em; font-weight: 600; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; padding: 12px 24px 16px; color: var(--muted); font-size: 13px; }
+.pager .grow { flex: 1; }
+.tbl td a.link { color: var(--text); font-weight: 700; text-decoration: none; }
+.tbl td a.link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.tbl tr.click { cursor: pointer; }
+
+/* the dialog body (inside the console's drawer) */
+.dialog-text { color: var(--text-2); line-height: 1.5; }
+.dialog-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 8px; }
+
+/* a short heading above a group of tiles or minis */
+.sub { color: var(--muted); font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+.stack-gap { display: flex; flex-direction: column; gap: 16px; }
+
+/* the daily earnings bars (SVG, in the console's chart classes) */
+.chart .bar-fill { fill: var(--blue); }
+.chart .bar-hit { fill: transparent; }
+.chart .bar-hit:hover + .bar-fill, .chart .bar-fill:hover { opacity: .8; }
+.chart .bar-label { fill: var(--muted); font-size: 11px; font-weight: 600; text-anchor: middle; }
+
+/* the barrier's arm: a small dial of its angle */
+.arm { width: 64px; height: 64px; flex: none; }
+.arm circle { fill: var(--fill); }
+.arm line { stroke: var(--ink); stroke-width: 5; stroke-linecap: round; transition: transform .4s var(--ease); transform-origin: 32px 32px; }
+.arm .hub { fill: var(--ink); }
+.barrier-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.barrier-head .grow { flex: 1; min-width: 160px; }
+.barrier-name { font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+
+/* a one-line list of facts under a title */
+.facts { display: flex; gap: 8px 16px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.facts b { color: var(--text-2); font-weight: 600; }
+
+/* narrow screens: a table becomes a stack of cards, each cell labelled by its column (data-label), so nothing scrolls sideways. (Not called "stack": the console already has a .stack, its stacked bar.) */
+@media (max-width: 700px) {
+  .tbl.as-cards thead { display: none; }
+  .tbl.as-cards, .tbl.as-cards tbody, .tbl.as-cards tr { display: block; width: 100%; }
+  .tbl.as-cards tr { padding: 12px 16px; border-bottom: 1px solid var(--line-2); }
+  .tbl.as-cards tr:last-child { border-bottom: 0; }
+  /* a label column, then the cell's own pieces stacked in the second column */
+  .tbl.as-cards td, .tbl.as-cards td:first-child, .tbl.as-cards td:last-child { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 0 12px;
+    align-items: baseline; padding: 6px 0; border: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+  /* the console's own rule for a card's first cell (padding-left: 24px) is more specific than this one */
+  .tbl.as-cards td:first-child { padding-left: 0 !important; }
+  .tbl.as-cards td > * { justify-self: start; }
+  .tbl.as-cards td::before { content: attr(data-label); color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+  .tbl.as-cards td > * { grid-column: 2; }
+  .tbl.as-cards td > .row-actions { justify-content: flex-start; }
+  .tbl.as-cards tr.click:hover td { background: transparent; }
+  .bar input[type=search] { flex: 1 1 100% !important; }
+  .pager { padding: 12px 16px 16px; }
+}

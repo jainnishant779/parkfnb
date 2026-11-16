@@ -1,0 +1,45 @@
+References,Value,"Footprint (generic THT, verify)",Qty,Note
+BZ1,Buzzer 12mm 5V,BUZZER,1,
+C1,470uF 25V,C470,1,
+C2,220uF 10V,C220,1,
+"C3, C4, C5, C6, C7, C8, C9, C10, C11",100nF,C100N,9,
+D1,P6KE20A TVS,DO15,1,
+D2,1N5819,D41,1,
+D5,1N5817,D41,1,
+D6,LED 3mm green,LED3,1,
+D7,1N4148,D35,1,
+ESP1,ESP32 DevKit V1 30-pin,ESP32,1,
+F1,PTC 1.1A hold,PTC,1,
+J1,BAT IN 7-17V 5.08 2P,SCREW2,1,
+J10,HALL 90deg 3P,HDR3,1,
+J2,IBT-2 CTRL 1x8,HDR8,1,
+J3,BUCK IN,HDR2,1,
+J4,HALL 0deg 3P,HDR3,1,
+J5,HALL 180deg 3P,HDR3,1,
+J6,IMU POD 4P,HDR4,1,
+J7,STATUS LED 3P,HDR3,1,
+J8,TAMPER 2P,HDR2,1,
+J9,BUCK OUT,HDR2,1,
+Q1,BC547,TO92,1,
+R1,100k,R,1,
+R10,1k,R,1,DNP-check: fit only if the module does not already have it
+"R16, R17",4.7k,R,2,DNP-check: fit only if the module does not already have it
+"R18, R19",330R,R,2,
+R2,18k,R,1,
+"R11, R14, R15, R20, R21, R25, R27",1k,R,7,
+"R3, R4, R5, R6, R12, R13, R23, R24, R26",10k,R,9,
+"R7, R8, R9",100R,R,3,
+TP1,VIN,TP,1,
+TP2,+5V,TP,1,
+TP3,+3V3,TP,1,
+TP4,GND,TP,1,
+TP5,ISENSE_F,TP,1,
+TP6,VBAT_F,TP,1,
+U2,74AHCT125N,DIP14,1,
+
+OFF-BOARD,LM2596 buck module set to 5.1 V,wire to J3 / J9,1,set output BEFORE connecting J9
+OFF-BOARD,IBT-2 (BTS7960) module,J2 (8 wires),1,"power B+/B- direct from battery switch, not through this PCB"
+OFF-BOARD,GY-521 (MPU6050) pod,J6,1,
+OFF-BOARD,A3144 / US5881 Hall sensor + magnet,"J4, J10, J5",3,"5 V supply, open-collector output; 0 / 90 / 180 deg"
+OFF-BOARD,Status LED pair (green + red) + 330R on board,J7,1,common cathode on J7.3
+OFF-BOARD,Lid tamper micro-switch,J8,1,normally open to GND

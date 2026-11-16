@@ -1,0 +1,82 @@
+diff --git a/services/space-optimizer/static/index.html b/services/space-optimizer/static/index.html
+index 3418bc7..c82dbec 100644
+--- a/services/space-optimizer/static/index.html
++++ b/services/space-optimizer/static/index.html
+@@ -112,6 +112,15 @@
+         <option value="single" selected>Single entry</option>
+         <option value="loop">Loop (entry + exit)</option>
+       </select></div>
++    <div class="row"><label>Layout</label>
++      <select id="layout" onchange="applyLayout()" title="Auto picks whatever fits the most stalls. One straight row puts the stalls side by side along the plot's longest usable edge with a lane in front.">
++        <option value="auto" selected>Auto (most stalls)</option>
++        <option value="row">One straight row</option>
++      </select></div>
++    <div class="row" id="rowStallsRow" style="display:none"><label>Stalls in the row</label>
++      <input id="rowStalls" type="number" min="1" max="60" step="1" value="10" title="How many stalls you want in the row. Empty = as many as fit."></div>
++    <div class="row" id="rowLaneRow" style="display:none"><label>Lane in front (m)</label>
++      <input id="rowLane" type="number" min="0" max="12" step="0.5" placeholder="standard" title="Width of the driving lane in front of the row, inside the plot. Empty = the standard (6 m for nose-in stalls). 0 = stalls only: cars come from open ground outside the boundary."></div>
+     <div class="row"><label>Accessible ♿ %</label><input id="accPct" type="number" min="0" max="20" step="1" value="4"></div>
+     <div class="row"><label>EV ⚡ %</label><input id="evPct" type="number" min="0" max="50" step="1" value="5"></div>
+     <div class="row"><label>Island / N stalls</label><input id="islandN" type="number" min="0" max="30" step="1" value="0" title="0 = off; codes typically use 10-15"></div>
+@@ -179,7 +188,7 @@ function applyPack() {
+   if ($('vehicle').value === 'car') { $('slotW').value = o.dataset.w; $('slotL').value = o.dataset.l; }
+ }
+ function applyVehicle() {
+-  if ($('vehicle').value === 'bike') { $('slotW').value = 1.2; $('slotL').value = 2.2; }
++  if ($('vehicle').value === 'bike') { $('slotW').value = 1.0; $('slotL').value = 2.0; }
+   else applyPack();
+ }
+ 
+@@ -307,8 +316,17 @@ map.on('click', e => {
+   if (mode === 'boundary') $('bcount').innerText = current.length;
+ });
+ 
++function applyLayout() {
++  const show = $('layout').value === 'row' ? '' : 'none';
++  $('rowStallsRow').style.display = show;
++  $('rowLaneRow').style.display = show;
++}
++
+ function gatherOptions() {
+   return {
++    layout: $('layout').value,
++    row_stalls: $('layout').value === 'row' ? (parseInt($('rowStalls').value) || 0) : 0,
++    row_lane: ($('layout').value === 'row' && $('rowLane').value !== '') ? parseFloat($('rowLane').value) : null,
+     rule_pack: $('rulePack').value,
+     slot_width: parseFloat($('slotW').value) || null,
+     slot_length: parseFloat($('slotL').value) || null,
+@@ -395,17 +413,21 @@ function drawResult(r) {
+     `<span style="font-size:11px;color:#555">${rev.assumptions}</span>`;
+   const bench = st.area_per_slot_m2 == null ? '—'
+     : st.area_per_slot_m2 <= st.benchmark_m2[1] ? 'efficient ✔' : 'below benchmark';
++  const modeName = m => ({courtyard: 'courtyard', single_aisle: 'single aisle', bay: 'bay', row: 'one row'}[m] || m);
++  const tried = (r.candidates || []).map(c => `${modeName(c.mode)} ${c.slots}`).join(' · ');
+   $('statsTable').innerHTML = `
+     <tr><td>Total stalls</td><td>${st.n_slots}</td></tr>
++    <tr><td title="densest standard module tiled over the usable area with zero edge loss — real plots always land below it">Utilization vs ideal</td><td>${st.utilization_pct ?? '—'}% of ${st.ideal_max_slots ?? '—'}</td></tr>
++    <tr><td>Layouts compared</td><td style="font-size:11px">${tried || '—'}</td></tr>
+     <tr><td>&nbsp;&nbsp;standard / ♿ / ⚡</td><td>${st.n_standard} / ${st.n_accessible} / ${st.n_ev}</td></tr>
+     <tr><td>Islands 🌳 / transfer bays</td><td>${st.n_islands} / ${st.n_transfer}</td></tr>
+     <tr><td>Rule pack</td><td>${st.rule_pack}</td></tr>
+-    <tr><td>Layout mode</td><td>${st.layout_mode === 'courtyard' ? 'courtyard (direct)' : 'bay + aisles'}</td></tr>
++    <tr><td>Layout mode</td><td>${{courtyard: 'courtyard (direct)', single_aisle: 'single aisle', bay: 'bay + aisles', row: 'one straight row + lane'}[st.layout_mode] || st.layout_mode}</td></tr>
+     <tr><td>Best angle</td><td>${st.angle.toFixed(1)}&deg;</td></tr>
+     <tr><td>Circulation</td><td>${st.circulation === 'one_way' ? 'one-way' : 'two-way'}, ${st.access_mode}</td></tr>
+     <tr><td>Aisle width / turning</td><td>${st.aisle_width_m} m / ${st.turning_check}</td></tr>
+     <tr><td>Plot / usable area</td><td>${st.plot_area_m2} / ${st.usable_area_m2} m&sup2;</td></tr>
+-    <tr><td>Area per stall</td><td>${st.area_per_slot_m2 ?? '—'} m&sup2; (${bench})</td></tr>
++    <tr><td title="plot area / stalls, incl. aisles and leftover space">Gross area per stall</td><td>${st.area_per_slot_m2 ?? '—'} m&sup2; (${bench})</td></tr>
+     <tr><td>Stall size</td><td>${st.slot_width_m} &times; ${st.slot_length_m} m</td></tr>`;
+   $('warnings').innerHTML = (r.warnings || []).map(w => '&#9888; ' + w).join('<br>');
+   $('stats').style.display = 'block';
+@@ -471,6 +493,10 @@ async function loadProject() {
+   if (o.slot_length) $('slotL').value = o.slot_length;
+   if (o.circulation) $('circulation').value = o.circulation;
+   if (o.access) $('access').value = o.access;
++  if (o.layout) $('layout').value = o.layout;
++  if (o.row_stalls) $('rowStalls').value = o.row_stalls;
++  $('rowLane').value = (o.row_lane == null) ? '' : o.row_lane;
++  applyLayout();
+   if (o.accessible_pct != null) $('accPct').value = o.accessible_pct;
+   if (o.ev_pct != null) $('evPct').value = o.ev_pct;
+   if (o.island_every != null) $('islandN').value = o.island_every;

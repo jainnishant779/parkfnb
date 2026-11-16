@@ -93,11 +93,27 @@ const exposeDevCode = async () => {
 };
 
 /**
+ * Whether the fixed test code (TEST_OTP, default 123456) may sign anybody in.
+ *
+ * It lets whoever knows a phone number sign in as that number, so in production
+ * it is off no matter what PlatformSettings or DISABLE_TEST_OTP say. The only
+ * way back on is ALLOW_TEST_OTP_IN_PRODUCTION=true, for a cloud test window
+ * that no real user can reach. Owners can see number plates through the web
+ * dashboard, so a guessable login is a data leak, not just a demo shortcut.
+ */
+const isTestLoginActive = async () => {
+  const config = await getOtpSmsConfig();
+  if (!config.testEnabled) return false;
+  if (isProd() && process.env.ALLOW_TEST_OTP_IN_PRODUCTION !== "true") return false;
+  return true;
+};
+
+/**
  * Test OTP support for development and pre-production testing.
  */
 const isTestOtp = async (candidate) => {
+  if (!(await isTestLoginActive())) return false;
   const config = await getOtpSmsConfig();
-  if (!config.testEnabled) return false;
   return String(candidate).trim() === config.testCode;
 };
 
@@ -221,7 +237,9 @@ const sendCode = async (identifier, channel, code, overrides = {}) => {
     "Your ParkFNB verification code is {code}. Valid for 5 minutes.";
   const message = template.replace("{code}", code);
 
-  const testInfo = config.testEnabled
+  // Say so only when the test code really can sign someone in (it cannot in
+  // production), so this line never advertises a code that will be refused.
+  const testInfo = (await isTestLoginActive())
     ? ` | Test OTP '${config.testCode}' is active`
     : "";
   console.log(
@@ -470,13 +488,12 @@ exports.resendOtp = async (req, res) => {
  */
 exports.verifyOtp = async (req, res) => {
   try {
-    const {
-      identifier: rawIdentifier,
-      code,
-      role,
-      ownerType,
-      termsAccepted,
-    } = req.body || {};
+    const body = req.body || {};
+    const { identifier: rawIdentifier, code, role } = body;
+    // Both apps and the web dashboard turn camelCase keys into snake_case before sending, so accept either spelling: reading only
+    // the camelCase one silently dropped the owner's terms acceptance and owner type for every real client.
+    const ownerType = body.ownerType ?? body.owner_type;
+    const termsAccepted = body.termsAccepted ?? body.terms_accepted;
 
     const parsed = normalizeIdentifier(rawIdentifier);
     if (!parsed) {
@@ -707,6 +724,8 @@ exports.getOnboardingStatus = async (req, res) => {
 // Reused by authController.getMe so both routes return the same shape.
 exports.publicUser = publicUser;
 exports.publicOwner = publicOwner;
+// Reused by camerasController: no camera grant while the test code can sign in.
+exports.isTestLoginActive = isTestLoginActive;
 
 /**
  * @desc    Test send OTP without creating/updating user session (for admin UI settings verification)

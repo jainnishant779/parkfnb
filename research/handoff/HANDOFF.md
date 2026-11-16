@@ -16,6 +16,31 @@ Companion files:
 
 ---
 
+## Update 2026-11-15: the owner web dashboard and camera linking
+
+Everything below this box is the 2026-09-20 picture and is unchanged except where this box says so. What was added since, with where to read
+about each (branches `feat/owner-web-*`, in this order; the ANPR one deploys to EC2 as soon as it is merged to `main`):
+
+- **Owner web dashboard**, `software/apps/owner-web` (React + Vite, port 5175): phone-OTP sign-in, onboarding and KYC, properties and spaces,
+  bookings, earnings, barriers, and the owner's own cameras (live bays, plates, violations, reports). It keeps the operator console's UI exactly
+  (`README.md` in that folder). Owner-app screens that are phone-only or sample data (promotions, reviews, support, availability calendar,
+  notification preferences) are **not** on the web: they wait for a real backend.
+- **Camera linking**: `Camera` model and `/api/cameras` in the backend (admin assigns in the admin panel's new Cameras page, or an owner pairs with a
+  one-time code), and `POST /api/cameras/access-grant`, a 15-minute signed pass. The ANPR service (`ai/anpr/owner_api.py`) checks the pass with
+  `ANPR_GRANT_SECRET` and never calls the backend. Details and the rules: `ai/anpr/HANDOVER.md` section 7.
+- **P0 fixes made because owners now see plates**: the test OTP `123456` is refused in production (and gone from `render.yaml`); public sign-up could
+  register as `admin` (now only `user|owner`); `GET /api/bookings/owners/:ownerId/bookings` leaked every renter's name, phone and plate to any signed-in
+  user (now the owner or an admin only); `otp/test-send` is admin-only; an expired token can be refreshed for 30 days, not forever; the device
+  admin check read a field that does not exist.
+- **Still blocking a real owner**: (1) a working SMS provider, now that the test code cannot sign anyone in on production (section 4); (2) the privacy
+  notice and lot signage (`ai/anpr/docs/production-readiness.md`, section 5); (3) a real ANPR admin password; (4) `ANPR_GRANT_SECRET` set on Render
+  and in `/etc/parkfnb-anpr.env`, and the owner site's address in `FRONTEND_URL` and `ANPR_OWNER_ORIGINS`. `BARRIER_DEMO_MODE` is still on in
+  `render.yaml`.
+- **Known gaps**: revoking a camera takes up to 15 minutes; `/live/state` and `/live/frame.jpg` are still public for any camera id (no plates in them);
+  the payment, payout and commission questions in section 5 are untouched, so the web Earnings page shows gross only and Payouts says what is not there.
+
+---
+
 ## 1. Status at a glance
 
 | Area | State |

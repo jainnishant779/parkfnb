@@ -8,6 +8,7 @@ const router = express.Router();
 const authController = require("../controllers/authController");
 const otpController = require("../controllers/otpController");
 const { protect } = require("../middleware/auth");
+const { isAdmin } = require("../middleware/roleCheck");
 // const { authLimiter } = require('../middleware/rateLimit');
 const {
   validateRequired,
@@ -60,7 +61,8 @@ router.put(
 router.post("/otp/send", sanitize, otpController.sendOtp);
 router.post("/otp/resend", sanitize, otpController.resendOtp);
 router.post("/otp/verify", sanitize, otpController.verifyOtp);
-router.post("/otp/test-send", protect, otpController.testSendOtp);
+// Returns the generated code in the response, so it is for admins only.
+router.post("/otp/test-send", protect, isAdmin, otpController.testSendOtp);
 router.get("/onboarding-status", protect, otpController.getOnboardingStatus);
 
 router.post("/refresh-token", authController.refreshToken);

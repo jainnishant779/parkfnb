@@ -1,0 +1,45 @@
+# Render blueprint for the ParkFNB owner web dashboard.
+#
+# A static site: Vite builds to dist/ and Render serves it (free, and it does not sleep, unlike the API).
+#
+# The dashboard talks to two servers from the browser, so BOTH must allow this site's address (CORS):
+#   - the API (parkfnb): FRONTEND_URL on that service must include this site's URL (any *.onrender.com origin is already allowed)
+#   - the ANPR service (EC2): ANPR_OWNER_ORIGINS in /etc/parkfnb-anpr.env must include it, then restart parkfnb-anpr
+# and both must share ANPR_GRANT_SECRET (see software/services/backend/.env.example and ai/anpr/deploy/README.md).
+# Before a real owner signs in: the test OTP is off in production, so a real SMS provider must be set up (HANDOFF 4.2), and the lot
+# needs its privacy notice and signage (ai/anpr/docs/production-readiness.md, section 5): owners see number plates here.
+
+services:
+  - type: web
+    name: parkfnb-owner
+    runtime: static
+    rootDir: software/apps/owner-web
+    # --include=dev because the build needs devDependencies (`npm run build` is `tsc --noEmit && vite build`; typescript and the
+    # @types packages live there). A stray NODE_ENV=production would make npm skip them and the build would die with dozens of
+    # "JSX element implicitly has type 'any'" errors that look like broken source but are only missing type definitions.
+    buildCommand: npm ci --include=dev && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://parkfnb.onrender.com
+    routes:
+      # Client-side routing: every path has to return index.html, or a reload on /bookings/:id (or a pasted link) answers 404.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      # No camera or microphone for this site; location only for the onboarding "use my location" button.
+      # (No Content-Security-Policy yet: its connect-src would have to name the ANPR host, which is an sslip.io address that changes until
+      # there is a domain and an Elastic IP. Add one then: connect-src 'self' <api> <anpr>.)
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=(self)

@@ -1,0 +1,298 @@
+{
+  "type": "FeatureCollection",
+  "name": "ParkFNB phone-1 parking bays (New Angle)",
+  "metadata": {
+    "camera_id": "phone-1",
+    "image_width": 1280,
+    "image_height": 720
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "bay_id": "Bay-01",
+        "camera_id": "phone-1",
+        "status": "verified_user_marked_new_angle",
+        "corner_order": [
+          "far_left",
+          "far_right",
+          "near_right",
+          "near_left"
+        ]
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              450,
+              484
+            ],
+            [
+              538,
+              472
+            ],
+            [
+              549,
+              590
+            ],
+            [
+              405,
+              595
+            ],
+            [
+              450,
+              484
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "bay_id": "Bay-02",
+        "camera_id": "phone-1",
+        "status": "verified_user_marked_new_angle",
+        "corner_order": [
+          "far_left",
+          "far_right",
+          "near_right",
+          "near_left"
+        ]
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              538,
+              472
+            ],
+            [
+              642,
+              465
+            ],
+            [
+              686,
+              566
+            ],
+            [
+              549,
+              590
+            ],
+            [
+              538,
+              472
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "bay_id": "Bay-03",
+        "camera_id": "phone-1",
+        "status": "verified_user_marked_new_angle",
+        "corner_order": [
+          "far_left",
+          "far_right",
+          "near_right",
+          "near_left"
+        ]
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              642,
+              465
+            ],
+            [
+              739,
+              454
+            ],
+            [
+              800,
+              548
+            ],
+            [
+              686,
+              566
+            ],
+            [
+              642,
+              465
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "bay_id": "Bay-04",
+        "camera_id": "phone-1",
+        "status": "verified_user_marked_new_angle",
+        "corner_order": [
+          "far_left",
+          "far_right",
+          "near_right",
+          "near_left"
+        ]
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              739,
+              454
+            ],
+            [
+              831,
+              448
+            ],
+            [
+              919,
+              526
+            ],
+            [
+              800,
+              548
+            ],
+            [
+              739,
+              454
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "bay_id": "Bay-05",
+        "camera_id": "phone-1",
+        "status": "verified_user_marked_new_angle",
+        "corner_order": [
+          "far_left",
+          "far_right",
+          "near_right",
+          "near_left"
+        ]
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              831,
+              448
+            ],
+            [
+              919,
+              436
+            ],
+            [
+              1035,
+              506
+            ],
+            [
+              919,
+              526
+            ],
+            [
+              831,
+              448
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "bay_id": "Bay-06",
+        "camera_id": "phone-1",
+        "status": "verified_user_marked_new_angle",
+        "corner_order": [
+          "far_left",
+          "far_right",
+          "near_right",
+          "near_left"
+        ]
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              919,
+              436
+            ],
+            [
+              1006,
+              426
+            ],
+            [
+              1119,
+              492
+            ],
+            [
+              1035,
+              506
+            ],
+            [
+              919,
+              436
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "bay_id": "Bay-07",
+        "camera_id": "phone-1",
+        "status": "verified_user_marked_new_angle",
+        "corner_order": [
+          "far_left",
+          "far_right",
+          "near_right",
+          "near_left"
+        ]
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1006,
+              426
+            ],
+            [
+              1074,
+              416
+            ],
+            [
+              1206,
+              478
+            ],
+            [
+              1119,
+              492
+            ],
+            [
+              1006,
+              426
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

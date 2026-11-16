@@ -1,0 +1,2581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ParkFNB — Bay Occupancy & Positioning Tool</title>
+<meta name="theme-color" content="#F3F3F3">
+<script src="/static/js/theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Urbanist:wght@500;600;700&display=swap">
+<style>
+  /* The look of the ParkFNB website, apps and operator console (static/css/parkfnb.css): Urbanist, a grey canvas, white 24 px
+     cards without borders, black ("ink") pills for what is selected, peach only in the logo.  8 px grid; what sits inside a
+     card is rounder by less (24 outer, 8 inset, 16 inner).  Light unless the person picked dark (static/js/theme.js).
+     Colour meaning is fixed: green = free / ok, red = over a line / bad, amber = near a line / unclear, blue = a car in its bay.
+     The bays drawn on the picture keep their own colours: they are the meaning, not the chrome. */
+  :root {
+    --bg: #F3F3F3; --surface: #FFFFFF; --fill: #EFEFEF; --fill-2: #E6E6E6; --line: #E9E9E9; --line-2: #F1F1F1;
+    --text: #161616; --text-2: #555555; --muted: #8A8A8A; --subtle: #B4B4B4;
+    --ink: #141414; --on-ink: #FFFFFF;
+    --peach: #F6CB91; --peach-deep: #E9A55A; --peach-soft: #FCE9CF;
+    --green: #2FA66A; --green-soft: #E3F4EA;
+    --amber: #B57610; --amber-soft: #FCF0DA;
+    --red: #E0413A; --red-soft: #FDE6E4;
+    --blue: #2F5BB8; --blue-soft: #DCE6FA;
+    --grey: #8A8A8A;
+    /* occluded: this page's own seventh state (purple on the picture too) */
+    --violet: #7A4FC4; --violet-soft: #EEE6FA;
+    --glass: rgba(255, 255, 255, .72); --glass-edge: rgba(255, 255, 255, .7);
+    --shadow-lifted: 0 14px 30px rgba(0, 0, 0, .12);
+    --scrim: rgba(20, 20, 20, .36);
+    --mark: #141414;
+    /* the picture and the plan sit in a dark well in both themes: what is drawn on them is light */
+    --well: #141414;
+    --r-sm: 12px; --r-md: 16px; --r-lg: 24px; --pill: 999px;
+    --font: "Urbanist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    --ease: cubic-bezier(.22, 1, .36, 1);
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F0F0F; --surface: #1A1A1A; --fill: #262626; --fill-2: #303030; --line: #2C2C2C; --line-2: #232323;
+    --text: #F2F2F2; --text-2: #BDBDBD; --muted: #8F8F8F; --subtle: #5E5E5E;
+    --ink: #F3F3F3; --on-ink: #141414;
+    --peach-soft: #3A2E1E;
+    --green: #4CC38A; --green-soft: #16301F; --amber: #F0B13A; --amber-soft: #3A2C10;
+    --red: #FF6B60; --red-soft: #3B1C1A; --blue: #8FB0F2; --blue-soft: #1C2740; --grey: #8F8F8F;
+    --violet: #B99AF0; --violet-soft: #2A2140;
+    --glass: rgba(26, 26, 26, .78); --glass-edge: rgba(255, 255, 255, .08);
+    --shadow-lifted: 0 14px 30px rgba(0, 0, 0, .5); --scrim: rgba(0, 0, 0, .55); --mark: #2E2E2E;
+    --well: #0B0B0B;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 500 15px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  ::selection { background: var(--peach); color: #141414; }
+  a { color: var(--text); text-underline-offset: 3px; }
+
+  /* ---- header: a white pill, as in the console; it stays on top (it carries "Unsaved changes"), with a strip of canvas above it
+     so the page never shows through the gap ---- */
+  .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: sticky; top: 16px; z-index: 5;
+         max-width: 1600px; margin: 16px auto 0; min-height: 64px; padding: 8px 8px 8px 8px;
+         background: var(--surface); border-radius: 32px; }
+  .top::before { content: ""; position: absolute; left: -16px; right: -16px; top: -17px; height: 17px; background: var(--bg); z-index: -1; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--mark); color: var(--peach); flex: none; }
+  .logo svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .brand b { display: block; font-size: 22px; font-weight: 700; letter-spacing: -.04em; line-height: 1.1; }
+  .brand b i { font-style: normal; color: var(--peach-deep); }
+  .brand small { display: block; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .top h1 { margin: 0 0 0 8px; padding-left: 16px; border-left: 1px solid var(--line); font-size: 18px; font-weight: 600; letter-spacing: -.01em;
+            line-height: 1.3; flex: 1; min-width: 0; }
+  .top-right { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; min-width: 0; }
+  .linkish { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: var(--pill);
+             color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 14px; white-space: nowrap; }
+  .linkish:hover { color: var(--text); background: var(--fill); }
+  button.pf-theme, [data-theme-toggle] { width: 44px; min-height: 44px; height: 44px; padding: 0; border-radius: 50%; background: var(--surface); }
+  button.pf-theme:hover, [data-theme-toggle]:hover { background: var(--fill-2); }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 432px; gap: 16px; padding: 16px; max-width: 1632px; margin: 0 auto; align-items: start; }
+  @media (max-width: 1080px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---- cards ---- */
+  .canvas-card, .side-card { background: var(--surface); border-radius: var(--r-lg); min-width: 0; }
+  .canvas-card { padding: 8px; }
+  .sidebar { display: grid; gap: 16px; min-width: 0; }
+  .side-card { padding: 20px 24px 24px; }
+  h2 { margin: 0 0 12px; font-size: 18px; font-weight: 600; letter-spacing: -.01em; line-height: 1.3; }
+  .help { font-size: 13px; color: var(--muted); padding: 8px 16px 8px; }
+  .help strong { color: var(--text-2); font-weight: 600; }
+
+  /* ---- buttons: pills, 44 px tall, no border at rest.  Grey = a tool, ink = the main action or what is switched on ---- */
+  button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 20px;
+           border: 0; border-radius: var(--pill); background: var(--fill); color: var(--text); font-weight: 600; font-size: 14px;
+           cursor: pointer; white-space: nowrap; transition: background-color .15s, color .15s, transform .15s var(--ease); }
+  button:hover { background: var(--fill-2); }
+  button:active { transform: scale(.98); }
+  button.primary { background: var(--ink); color: var(--on-ink); }
+  button.primary:hover { background: var(--ink); opacity: .88; }
+  button.danger { background: var(--red-soft); color: var(--red); }
+  button.danger:hover { background: var(--red-soft); filter: saturate(1.3); }
+  button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  /* a tool that is on (edit mode, the row tool, AI boxes hidden): black, like a selected tab */
+  button.active-tool, button.toggle-active { background: var(--ink); color: var(--on-ink); }
+  button.active-tool:hover, button.toggle-active:hover { background: var(--ink); opacity: .88; }
+  button.sm { min-height: 36px; padding: 0 16px; font-size: 13px; }
+
+  /* ---- the tools, in labelled groups: a grey well (44 tall) holding its pills (36 tall), like the console's segmented controls ---- */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 8px 8px; }
+  .tgroup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px; border-radius: 22px; background: var(--fill);
+            max-width: 100%; }
+  .tgroup > .tlabel { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 0 8px 0 12px; }
+  .tgroup button { min-height: 36px; padding: 0 16px; background: transparent; color: var(--text-2); }
+  .tgroup button:hover { background: var(--surface); color: var(--text); }
+  .tgroup button.active-tool, .tgroup button.toggle-active { background: var(--ink); color: var(--on-ink); }
+  .tgroup button.danger { color: var(--red); }
+  .tgroup button.danger:hover { background: var(--red-soft); }
+  .zoom { display: inline-flex; align-items: center; gap: 0; }
+  .zoom button { min-width: 36px; padding: 0 12px; }
+  #zoomLevelDisplay { font-size: 13px; font-weight: 600; min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; color: var(--text); }
+
+  /* ---- fields ---- */
+  input[type=text], input:not([type]), select, textarea {
+    min-height: 44px; border: 1.5px solid transparent; background: var(--fill); border-radius: var(--r-sm); padding: 0 16px; min-width: 0;
+    font-weight: 500; font-size: 14px; color: var(--text); transition: border-color .15s, background-color .15s; }
+  select { appearance: none; -webkit-appearance: none; padding-right: 40px; cursor: pointer;
+    /* the grey chevron of parkfnb.css, written shorter */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A8A8A' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 16px center; background-size: 16px 16px; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--ink); background-color: var(--surface); }
+  input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--ink); margin: 0; }
+  input[type=range] { accent-color: var(--ink); }
+  textarea { width: 100%; height: 160px; padding: 12px 16px; resize: vertical; font: 500 12px/1.5 var(--mono); color: var(--text-2); }
+  label.f { display: flex; flex-direction: column; gap: 8px; font-weight: 600; font-size: 13px; color: var(--text-2); }
+  label.f select { width: 100%; }
+  label.chk { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; font-size: 14px; font-weight: 600; color: var(--text-2); cursor: pointer; }
+
+  /* ---- the picture: a dark well inside its card (24 outer, 8 inset, 16 inner) ---- */
+  .canvas-wrap { position: relative; overflow: auto; border-radius: var(--r-md); background: var(--well); min-height: 480px;
+                 display: flex; justify-content: center; align-items: center; }
+  canvas { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+
+  /* ---- what the drawing says: unsaved changes (in the header, always in sight), the issues the server would refuse (over the
+     picture, only when there are some), and what was loaded (under the picture) ---- */
+  #layoutBar { padding: 0 16px 8px; font-size: 13px; font-weight: 600; }
+  #layoutBar:has(#issueList:empty) { display: none; }
+  #layoutNote { display: block; padding: 8px 16px 0; font-size: 13px; color: var(--text-2); }
+  #layoutNote:empty { display: none; }
+  #unsavedChip { height: 32px; line-height: 32px; padding: 0 12px; border-radius: var(--pill); background: var(--amber-soft); color: var(--amber);
+                 font-size: 13px; font-weight: 700; white-space: nowrap; }
+
+  /* ---- mode banners: a grey well above the picture, the mode named in a black pill ---- */
+  .banner-info { background: var(--fill); border-radius: var(--r-md); padding: 8px 8px 8px 16px; margin: 0 0 8px; font-size: 14px; color: var(--text);
+                 display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  #optBanner, #editBanner, #backupPanel { flex-direction: column; align-items: stretch; gap: 8px; }
+  .banner-row { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; }
+  .banner-row.split { justify-content: space-between; flex-wrap: nowrap; align-items: flex-start; }
+  .banner-row.split > .banner-row:first-child { flex: 1 1 0; min-width: 0; gap: 4px 12px; }
+  .banner-row.split > .banner-row:last-child { flex: none; gap: 0 16px; }
+  .banner-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 0; }
+  #gridBanner { flex-wrap: nowrap; align-items: flex-start; }
+  #gridBanner > button { flex: none; }
+  /* controls inside a grey banner stand on white, so they do not vanish into it */
+  .banner-info button:not(.primary):not(.danger), .banner-info input:not([type=checkbox]), .banner-info select { background-color: var(--surface); }
+  .banner-info button:not(.primary):not(.danger):hover { background-color: var(--fill-2); }
+  .banner-info input:not([type=checkbox]), .banner-info select { min-height: 36px; padding-left: 12px; }
+  .mode-tag { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: var(--pill); background: var(--ink); color: var(--on-ink);
+              font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .banner-hint { font-size: 13px; color: var(--text-2); }
+  .banner-warn { font-size: 13px; color: var(--amber); }
+  #gridPointCount { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+  #optProject { min-width: 180px; }
+  #optCorners { width: 112px; margin-left: 8px; }
+  .opt-corners { display: inline-flex; align-items: center; font-size: 13px; font-weight: 600; color: var(--text-2); }
+  #optPreview { background: var(--well); border-radius: var(--r-sm); flex: none; max-width: 100%; }
+  #optMsg { font-size: 13px; color: var(--text-2); line-height: 1.5; }
+  #editSelName { font-weight: 700; color: var(--text); }
+  #editRename { width: 128px; }
+  /* its own line, always the same height, empty or not: selecting a bay must not push the picture down under the pointer */
+  #cornerCoordDisplay { flex-basis: 100%; min-height: 36px; white-space: nowrap; overflow-x: auto;
+    font: 500 12px/20px var(--mono); color: var(--text-2); background: var(--surface); padding: 8px 12px; border-radius: var(--r-sm); }
+  #cornerCoordDisplay:empty { visibility: hidden; }   /* keeps its line: no jump when a bay is selected */
+  #backupPanel > div:first-child { font-size: 15px; }
+  #backupPanel > div { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+
+  /* ---- CCTV playback, under the picture ---- */
+  #videoBar { margin-top: 8px; background: var(--fill); border-radius: var(--r-md); padding: 8px 16px 8px 8px; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #btnPlayPause { width: 44px; padding: 0; border-radius: 50%; background: var(--ink); color: var(--on-ink); font-size: 14px; flex: none; }
+  #videoScrubber { flex: 1; min-width: 120px; cursor: pointer; }
+  #videoTimeLabel { font: 500 12px/1.4 var(--mono); color: var(--text-2); min-width: 120px; }
+  .stream-tag { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: var(--pill); background: var(--green-soft);
+                color: var(--green); font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+  /* ---- sidebar ---- */
+  .check-fields { display: grid; gap: 12px; }
+  .check-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .check-actions button { flex: 1 1 auto; }
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .kpi { border-radius: var(--r-md); padding: 12px 12px 12px; background: var(--fill); min-width: 0; }
+  .kpi .k { font-size: 12px; font-weight: 600; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi .v { font-size: 24px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; font-variant-numeric: tabular-nums; margin-top: 4px; }
+  .kpi.green { background: var(--green-soft); } .kpi.green .k, .kpi.green .v { color: var(--green); }
+  .kpi.amber { background: var(--amber-soft); } .kpi.amber .k, .kpi.amber .v { color: var(--amber); }
+  .kpi.red { background: var(--red-soft); } .kpi.red .k, .kpi.red .v { color: var(--red); }
+  .well { background: var(--fill); border-radius: var(--r-md); font-size: 13px; color: var(--text-2); line-height: 1.5; }
+  #calibPanel { padding: 12px 16px; }
+  #calibPanel > div { margin-bottom: 4px; }
+  #planPanel { padding: 8px; }
+  #planPanel > div { padding: 4px 8px; }
+  #planPanel > svg { border-radius: 8px; }
+  .placeholder { color: var(--muted); font-size: 13px; }
+  #bayList { max-height: 320px; overflow-y: auto; display: grid; gap: 8px; align-content: start; }
+
+  /* one bay in the list: a grey well, the verdict as a coloured tag */
+  .bay-badge { padding: 12px 16px; border-radius: var(--r-md); background: var(--fill); font-size: 14px; transition: background-color .15s; }
+  .bay-badge:hover { background: var(--fill-2); }
+  .bay-badge .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .bay-badge .grp { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .bay-badge strong { font-weight: 700; color: var(--text); }
+  .bay-badge .note { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+  .bay-badge .out { font-size: 12px; font-weight: 600; color: var(--red); }
+  .bay-badge .conf { font-size: 12px; color: var(--muted); }
+  .status-tag, .mini-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 12px; border-radius: var(--pill); font-size: 12px; font-weight: 600;
+                           background: var(--surface); color: var(--text-2); white-space: nowrap; }
+  .status-tag.ok { background: var(--green-soft); color: var(--green); }
+  .status-tag.warn { background: var(--amber-soft); color: var(--amber); }
+  .status-tag.bad { background: var(--red-soft); color: var(--red); }
+  .status-tag.occl, .mini-tag.occl { background: var(--violet-soft); color: var(--violet); }
+  .mini-tag.id { font-family: var(--mono); padding: 0 8px; }
+  .plate-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--ink); color: var(--on-ink);
+               font: 700 12px/1 var(--mono); letter-spacing: .06em; white-space: nowrap; }
+  .json-actions { margin-top: 8px; display: flex; gap: 8px; }
+  .json-actions button { flex: 1; }
+
+  /* ---- the slot inspector: a card floating on a scrim ---- */
+  .modal-overlay { position: fixed; inset: 0; background: var(--scrim); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+                   display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+  .modal-content { background: var(--surface); border-radius: var(--r-lg); width: 520px; max-width: 100%; max-height: calc(100vh - 32px); overflow-y: auto;
+                   padding: 24px; box-shadow: var(--shadow-lifted); }
+  .modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  #inspSlotTitle { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.02em; color: var(--text); }
+  #inspSubTitle { font-size: 13px; color: var(--muted); }
+  .modal-close { width: 44px; padding: 0; border-radius: 50%; flex: none; }
+  .diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0; }
+  .diag-cell { background: var(--fill); padding: 12px 16px; border-radius: var(--r-md); min-width: 0; }
+  .diag-label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .diag-value { font-size: 18px; font-weight: 600; color: var(--text); margin-top: 4px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .diag-box { background: var(--fill); padding: 12px 16px; border-radius: var(--r-md); margin-bottom: 8px; }
+  .diag-box .diag-label { margin-bottom: 4px; }
+  #inspRelation { font: 500 13px/1.5 var(--mono); color: var(--text); white-space: pre; overflow-x: auto; }
+  #inspReason { font-size: 14px; color: var(--text); line-height: 1.5; }
+  .modal-foot { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+  @media (max-width: 1080px) {
+    .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  @media (max-width: 640px) {
+    .top { top: 8px; margin: 8px 8px 0; border-radius: 28px; }
+    /* phone: the logo and the light/dark switch on the first line, the page name under them, then the way back and "unsaved" */
+    .top-right { display: contents; }
+    .top [data-theme-toggle] { order: 1; margin-left: auto; }
+    .top h1 { flex-basis: 100%; order: 2; margin: 0; padding: 0 8px; border-left: 0; font-size: 16px; }
+    .top .linkish { order: 3; padding: 0 12px; }
+    .top #unsavedChip { order: 4; }
+    .brand small { display: none; }
+    .layout { padding: 8px; gap: 8px; }
+    .sidebar { gap: 8px; }
+    .side-card { padding: 16px; }
+    .canvas-wrap { min-height: 240px; }
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .diag-grid { grid-template-columns: 1fr; }
+    .banner-row.split { flex-wrap: wrap; }
+    .banner-row.split > .banner-row:first-child { flex-basis: 100%; }
+    .banner-row.split > .banner-row:last-child { flex: 1 1 100%; min-width: 0; flex-wrap: wrap; }
+    .modal-content { padding: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+    <div><b>parkfnb<i>.</i></b><small>ANPR Service</small></div>
+  </div>
+  <h1>Bay Positioning &amp; Calibrator</h1>
+  <div class="top-right">
+    <span id="unsavedChip" style="display:none;">● Unsaved changes</span>
+    <a class="linkish" href="/">&larr; Back to the console</a>
+    <button data-theme-toggle></button>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="canvas-card">
+    <div class="toolbar">
+      <div class="tgroup" role="group" aria-label="Picture">
+        <span class="tlabel" aria-hidden="true">Picture</span>
+        <input type="file" id="fileInput" accept="image/*" style="display:none">
+        <button onclick="document.getElementById('fileInput').click()">Upload Frame / Photo</button>
+        <input type="file" id="videoInput" accept="video/mp4,video/avi,video/mkv,video/webm" style="display:none">
+        <button id="btnUploadVideo" onclick="document.getElementById('videoInput').click()">📹 Upload CCTV Video</button>
+        <button id="btnLiveFrame" title="Use the newest frame the phone sent as the drawing background">📱 Load Live Phone Frame</button>
+        <button id="btnHQ" title="Look at the phone's newest full-resolution photo with your bays drawn on it, to check the chalk lines. Nothing is changed.">🔍 HQ photo check</button>
+      </div>
+      <div class="tgroup" role="group" aria-label="Draw">
+        <span class="tlabel" aria-hidden="true">Draw</span>
+        <button class="ghost" id="btnNewBay">+ Draw Bay</button>
+        <button class="ghost" id="btnEdit" title="Drag a corner to reshape a bay, drag inside to move it">✏️ Edit Bays</button>
+        <button class="grid-tool" id="btnAutoGrid">📐 Auto-Grid Lane</button>
+        <button class="magic" id="btnAutoFit">🪄 Auto-Fit Bays</button>
+        <button id="btnSetLine" title="Click 2 points on the entry line, then 1 point inside the lot">➖ Set IN/OUT Line</button>
+        <button class="ghost danger" id="btnClearBays">Clear All</button>
+      </div>
+      <div class="tgroup" role="group" aria-label="Import">
+        <span class="tlabel" aria-hidden="true">Import</span>
+        <button id="btnOptBridge" title="Place a saved Space Optimizer layout onto this frame from 4 clicked corners">🧩 Bays from Optimizer</button>
+        <button class="magic" id="btnImportOptimizer">📥 Import Space Optimizer</button>
+        <input type="file" id="bayConfigFileInput" accept=".json,.geojson" style="display:none">
+        <button class="ghost" id="btnImportConfigFile" title="Import ParkFNB v1 JSON, GeoJSON, or Space Optimizer file">📂 Import JSON / GeoJSON</button>
+      </div>
+      <div class="tgroup" role="group" aria-label="History">
+        <span class="tlabel" aria-hidden="true">History</span>
+        <button class="ghost" id="btnUndo" title="Undo (Ctrl+Z)">↩ Undo</button>
+        <button class="ghost" id="btnRedo" title="Redo (Ctrl+Y)">↪ Redo</button>
+        <button class="ghost" id="btnBackups" title="Every save keeps the layout it replaced; put one back">↩ Earlier Layouts</button>
+      </div>
+      <div class="tgroup" role="group" aria-label="View">
+        <span class="tlabel" aria-hidden="true">View</span>
+        <span class="zoom">
+          <button class="ghost" id="btnZoomOut" title="Zoom Out">-</button>
+          <span id="zoomLevelDisplay">100%</span>
+          <button class="ghost" id="btnZoomIn" title="Zoom In">+</button>
+          <button class="ghost" id="btnZoomReset" title="Reset Zoom">Fit</button>
+        </span>
+        <button class="ghost" id="btnToggleAiBoxes" title="Toggle AI detection boxes & ground footprint boxes">
+          <span id="aiToggleIcon">👁️</span> <span id="aiToggleText">Hide AI Bounding Boxes</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mode B: Perspective-Aware Auto-Grid Guidance Banner -->
+    <div id="gridBanner" class="banner-info" style="display:none;">
+      <div class="banner-col">
+        <div class="banner-row">
+          <span class="mode-tag">MODE B: Auto-Grid (Candidate Generator Only)</span>
+          <span class="banner-hint">Click 4 corners of the parking lane polygon (<span id="gridPointCount">0/4 corners clicked</span>).</span>
+        </div>
+        <div class="banner-warn">⚠️ <em>Drafting tool only: Generates preliminary candidate stalls.
+          You must manually inspect and adjust dividers in Mode A against physical chalk markings.</em></div>
+      </div>
+      <button class="ghost sm" id="btnCancelGrid">Cancel</button>
+    </div>
+
+    <!-- Space Optimizer bridge: pick a project, see its outline, click the same corners on the frame -->
+    <div id="optBanner" class="banner-info" style="display:none;">
+      <div class="banner-row">
+        <strong>🧩 Bays from Space Optimizer</strong>
+        <select id="optProject" aria-label="Optimizer project"></select>
+        <button class="sm" id="btnOptPreview">1. Show lot outline</button>
+        <input type="file" id="optGeo" accept=".geojson,.json,application/geo+json,application/json" style="display:none">
+        <button class="sm" id="btnOptGeo" title="Use the GeoJSON file exported from the optimizer instead of a saved project">or load a GeoJSON file</button>
+        <label class="opt-corners">Corners
+          <input id="optCorners" value="1,2,3,4" size="9" title="Which four numbered corners of the outline you will click, in order (only needed when the outline has more than 4 corners)">
+        </label>
+        <button class="primary sm" id="btnOptClick" disabled>2. Click the corners on the frame</button>
+        <button class="ghost sm" id="btnOptClose">Close</button>
+      </div>
+      <div class="banner-row">
+        <canvas id="optPreview" width="240" height="180" style="display:none;"></canvas>
+        <div id="optMsg">Needs the Space Optimizer running (cd services/space-optimizer &amp;&amp; python app.py).</div>
+      </div>
+    </div>
+
+    <!-- Mode A: Manual Ground-Truth Bay Editor.  Pick a bay on the picture, then rename / copy / delete it here -->
+    <div id="editBanner" class="banner-info" style="display:none;">
+      <div class="banner-row split">
+        <div class="banner-row">
+          <span class="mode-tag">MODE A: Ground-Truth Editor</span>
+          <span class="banner-hint">Authoritative calibration: drag corners to reshape, drag inside to move.</span>
+        </div>
+        <div class="banner-row">
+          <label class="chk" title="Moving a shared divider corner automatically updates both adjacent bays">
+            <input type="checkbox" id="chkLinkDividers" checked> Link Shared Dividers
+          </label>
+          <label class="chk" title="Flag rear corners as estimated behind parked vehicles">
+            <input type="checkbox" id="chkFlagEstimated"> Flag Rear Corners as Estimated
+          </label>
+        </div>
+      </div>
+      <!-- Controls for selected bay -->
+      <div id="editSel" class="banner-row" style="visibility:hidden;">
+        <span id="editSelName"></span>
+        <input id="editRename" size="10" maxlength="32" aria-label="Bay name">
+        <button class="sm" id="btnRename">Rename</button>
+        <button class="sm" id="btnDuplicate">Duplicate</button>
+        <button class="sm" id="btnInsertBay">Insert Bay</button>
+        <button id="btnDeleteBay" class="danger sm">Delete</button>
+        <div id="cornerCoordDisplay"></div>
+      </div>
+    </div>
+    <div id="backupPanel" class="banner-info" style="display:none;"></div>
+
+    <!-- what is wrong with the bays as drawn (same checks the server makes); whether they are saved is in the header -->
+    <div id="layoutBar">
+      <div id="issueList"></div>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="mainCanvas"></canvas>
+    </div>
+    <!-- CCTV Video Playback Bar -->
+    <div id="videoBar" style="display:none;">
+      <button id="btnPlayPause">▶</button>
+      <input type="range" id="videoScrubber" min="0" max="0" value="0">
+      <span id="videoTimeLabel">00:00 / 00:00</span>
+      <span class="stream-tag">CCTV Stream</span>
+    </div>
+    <span id="layoutNote"></span>
+    <div class="help" id="helpText">
+      <strong>Controls:</strong> Upload a photo &rarr; Use <strong>"📥 Import Space Optimizer"</strong> to bridge layouts, <strong>"📐 Auto-Grid Lane"</strong> for IRC parking lanes, or <strong>"🪄 Auto-Fit Bays"</strong> to snap onto cars.
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <section class="side-card" aria-label="Occupancy check">
+      <h2>Occupancy Check</h2>
+      <div class="check-fields">
+        <label class="f">📷 Angle:
+          <select id="cameraAnglePreset">
+            <option value="medium" selected>Medium Angle (1st Floor ~45°)</option>
+            <option value="high">High Angle (Balcony/Pole ~70°)</option>
+            <option value="low">Low Angle (Ground Pole ~25°)</option>
+            <option value="topdown">Top-Down (Drone / Ceiling 90°)</option>
+          </select>
+        </label>
+        <label class="f">📦 Footprint:
+          <select id="footprintModeSelect">
+            <option value="oriented" selected>Oriented Chassis Footprint</option>
+            <option value="full_box">Full 2D Box (Drawn Car Outline)</option>
+            <option value="bottom_fraction">Bottom Tarmac Slice (Flat)</option>
+          </select>
+        </label>
+      </div>
+      <div class="check-actions">
+        <button class="primary" id="btnRunCheck">&#9654; Run Occupancy Check</button>
+        <button id="btnCheck3D" title="Fit the 3D camera to the bays as drawn: which bays are accurate enough for parking to be judged? Nothing is saved.">🧊 Check 3D</button>
+      </div>
+    </section>
+
+    <section class="side-card">
+      <h2>7-State Fleet Analytics</h2>
+      <div class="kpis">
+        <div class="kpi green"><div class="k">Correct</div><div class="v" id="kpiCorrect">0</div></div>
+        <div class="kpi amber"><div class="k">Suspicious</div><div class="v" id="kpiSuspicious">0</div></div>
+        <div class="kpi red"><div class="k">Wrong</div><div class="v" id="kpiWrong">0</div></div>
+        <div class="kpi"><div class="k">Free</div><div class="v" id="kpiFree">0</div></div>
+      </div>
+    </section>
+
+    <section class="side-card">
+      <h2>Camera Calibration</h2>
+      <div id="calibPanel" class="well">
+        <div class="placeholder">Run an occupancy check to calibrate the camera from the drawn bays.</div>
+      </div>
+    </section>
+
+    <section class="side-card">
+      <h2>Top-down Plan (metres)</h2>
+      <div id="planPanel" class="well">
+        <div class="placeholder">Run an occupancy check to see stalls and cars from above.</div>
+      </div>
+    </section>
+
+    <section class="side-card">
+      <h2>Active Bays &amp; Multi-Metric Intelligence</h2>
+      <div id="bayList">
+        <div class="placeholder">No bays defined yet. Upload a photo and click "Auto-Grid Lane", "Auto-Fit Bays" or "Import Space Optimizer".</div>
+      </div>
+    </section>
+
+    <section class="side-card">
+      <h2>Bays JSON (API Payload)</h2>
+      <textarea id="jsonOutput" readonly aria-label="Bays JSON"></textarea>
+      <div class="json-actions">
+        <button class="ghost" id="btnCopyJson">Copy JSON</button>
+        <button class="primary" id="btnApplyBays">Apply to Server</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="/static/bay-geometry.js"></script>
+<script>
+// Which camera's layout this page edits.  /occupancy?camera=phone-1 for the phone test;
+// no parameter keeps the existing "venue-lot" layout.
+const CAM = (new URLSearchParams(location.search).get('camera') || 'venue-lot')
+  .replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) || 'venue-lot';
+let img = null;
+let linePts = [];       // IN/OUT line being drawn: 2 line points, then a point inside the lot
+let savedLine = null;   // {p1, p2, in_point} once sent to the server
+let currentPoints = [];
+let gridPoints = [];
+let bays = {};
+let observations = {};
+let hideAiBoxes = false;
+let lastAnnotatedImg = null;
+let appMode = 'bay'; // 'bay' | 'grid' | 'line' | 'corners' | 'edit'
+let selectedBay = null;   // edit mode: the bay being worked on
+let drag = null;          // edit mode: {id, vertex (null = whole bay), last: [x, y], moved}
+let unsaved = false;      // bays changed on this page and not yet sent to the server
+let savedSnapshot = '{}'; // the bays as the server has them, to tell what has changed here
+let savedFrameSize = null;
+let issues = {};          // bay id -> {errors, warnings}, from BayGeometry.validateAll
+
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+
+// Text that came from a bay id, a file or the server never goes into markup as it is.
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+function imgSize() { return img ? [img.width, img.height] : null; }
+
+bays = {};
+updateJson();
+renderBayList();
+
+// Start from what the server has, so opening this page never starts from an empty layout that a
+// careless "Apply to Server" would then save over the real one.
+async function loadSavedLayout() {
+  try {
+    const r = await fetch('/occupancy/bays?camera_id=' + encodeURIComponent(CAM));
+    const note = document.getElementById('layoutNote');
+    if (!r.ok) { note.textContent = 'No saved bays for this camera yet.'; return; }
+    const j = await r.json();
+    bays = j.bays || {};
+    savedSnapshot = JSON.stringify(bays);
+    savedLine = j.line && j.line.p1 ? { p1: j.line.p1, p2: j.line.p2, in_point: j.line.in_point } : null;
+    selectedBay = null;
+    updateJson();
+    renderBayList();
+    const when = j.saved_at ? ' (saved ' + j.saved_at.replace('T', ' ') + ')' : '';
+    const size = j.frame_size ? ', drawn on a ' + j.frame_size[0] + '×' + j.frame_size[1] + ' picture' : '';
+    note.textContent = 'Loaded ' + Object.keys(bays).length + ' saved bays' + when + size + '.';
+    savedFrameSize = j.frame_size || null;
+    if (!img) loadLiveFrame(true);
+    else redraw();
+  } catch (err) { /* offline or not signed in: the page simply starts empty */ }
+}
+
+function setUnsaved(v) {
+  unsaved = v;
+  document.getElementById('unsavedChip').style.display = v ? 'inline-block' : 'none';
+}
+window.addEventListener('beforeunload', (e) => {
+  if (unsaved) { e.preventDefault(); e.returnValue = ''; }
+});
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      lastAnnotatedImg = null;
+      redraw();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+});
+
+// Phone test: draw bays and the entry line on the real frame the phone is sending.
+function loadLiveFrame(silent) {
+  const im = new Image();
+  im.onload = () => {
+    img = im;
+    canvas.width = im.width;
+    canvas.height = im.height;
+    lastAnnotatedImg = null;
+    updateJson();                      // the bays are now judged against this picture's size
+    redraw();
+  };
+  im.onerror = () => { if (!silent) alert("No live frame yet. Open the phone camera page and press Start first."); };
+  im.src = '/live/frame.jpg?raw=1&camera_id=' + encodeURIComponent(CAM) + '&t=' + Date.now();
+}
+document.getElementById('btnLiveFrame').onclick = () => loadLiveFrame(false);
+
+// The phone's full-resolution photo with the bays drawn on it.  The editor's own canvas is the size of the live
+// stream (the bays are in those pixels), so the sharp photo is looked at here, in a viewer that zooms the real pixels.
+document.getElementById('btnHQ').onclick = async () => {
+  const mk = (tag, css, text) => { const e = document.createElement(tag); e.style.cssText = css; if (text) e.textContent = text; return e; };
+  const box = mk('div', 'position:fixed;inset:0;z-index:9999;background:rgba(8,10,14,.96);display:flex;flex-direction:column;');
+  const bar = mk('div', 'display:flex;gap:8px;align-items:center;padding:8px 16px;color:#F2F2F2;flex-wrap:wrap;');
+  const info = mk('span', 'flex:1;min-width:200px;font-size:14px;', 'Loading the photo…');
+  const scroller = mk('div', 'flex:1;overflow:auto;');
+  const cv = document.createElement('canvas');
+  cv.style.cssText = 'display:block;';
+  scroller.appendChild(cv);
+  const btn = (label, fn) => { const b = mk('button', '', label); b.onclick = fn; return b; };
+  let bays_on = true, im = null, fit = true, zoom = 1;
+  const apply = () => {
+    if (!im) return;
+    cv.style.width = fit ? '100%' : (im.width * zoom) + 'px';
+  };
+  const paint = () => {
+    cv.width = im.width; cv.height = im.height;
+    const c = cv.getContext('2d');
+    c.drawImage(im, 0, 0);
+    if (!bays_on) return;
+    const s = im.width / canvas.width, lw = Math.max(2, 2 * s);
+    c.font = 'bold ' + Math.round(16 * s) + 'px sans-serif';
+    for (const [bid, pts] of Object.entries(bays)) {
+      if (!pts || pts.length < 3) continue;
+      c.beginPath();
+      pts.forEach((p, i) => (i ? c.lineTo(p[0] * s, p[1] * s) : c.moveTo(p[0] * s, p[1] * s)));
+      c.closePath();
+      c.strokeStyle = '#22d3ee'; c.lineWidth = lw; c.stroke();
+      c.fillStyle = '#22d3ee';
+      c.fillText(String(bid), pts[0][0] * s + 4 * s, pts[0][1] * s + 16 * s);
+    }
+  };
+  bar.append(info,
+    btn('Bays on/off', () => { bays_on = !bays_on; if (im) paint(); }),
+    btn('Fit', () => { fit = true; apply(); }),
+    btn('100%', () => { fit = false; zoom = 1; apply(); }),
+    btn('200%', () => { fit = false; zoom = 2; apply(); }),
+    btn('Close', () => box.remove()));
+  box.append(bar, scroller);
+  document.body.appendChild(box);
+  try {
+    const r = await fetch('/console/api/still.jpg?camera_id=' + encodeURIComponent(CAM) + '&t=' + Date.now());
+    if (!r.ok) throw new Error(r.status === 404 ? 'no full-resolution photo yet. The phone sends one about every 2 minutes while its camera page is running.' : r.status);
+    const age = parseFloat(r.headers.get('X-Still-Age') || '0');
+    im = await createImageBitmap(await r.blob());
+    paint(); apply();
+    info.textContent = im.width + '×' + im.height + ' photo, taken ' + Math.round(age) + ' s ago. Your bays are drawn on it; this view changes nothing.';
+  } catch (e) {
+    info.textContent = 'Could not load the photo: ' + e.message;
+  }
+};
+
+document.getElementById('btnSetLine').onclick = () => {
+  if (!img) { alert("Load a frame first (Upload, or Load Live Phone Frame)."); return; }
+  if (appMode === 'grid') exitGridMode();
+  if (appMode === 'edit') setEditMode(false);
+  currentPoints = [];
+  linePts = [];
+  appMode = 'line';
+  alert("Click 2 points along the entry line, then 1 point INSIDE the lot " +
+        "(the side cars go to when they come in).");
+  redraw();
+};
+
+async function finishLine() {
+  const [p1, p2, inside] = linePts;
+  appMode = 'bay';
+  linePts = [];
+  try {
+    const r = await fetch('/live/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, line: [p1, p2], in_point: inside })
+    });
+    if (!r.ok) throw new Error((await r.json()).error || r.status);
+    savedLine = { p1: p1, p2: p2, in_point: inside };
+  } catch (err) {
+    alert("Could not save the line: " + err.message);
+  }
+  redraw();
+}
+
+// ---- Space Optimizer bridge ------------------------------------------------------------
+// The optimizer's lot outline is shown as a map (north up) with its corners numbered.  The
+// operator clicks the same corners on the camera frame, in that order, going round the lot the
+// same way; the server then carries every stall across (see optimizer_bridge.py).
+let optSite = null;        // {layout_id, site: [[x, y] metres], slots: [ring]} for the chosen layout
+let cornerPts = [];        // corners clicked on the frame so far
+
+function optSay(text, isError) {
+  const el = document.getElementById('optMsg');
+  el.textContent = text;
+  el.style.color = isError ? 'var(--red)' : '';
+}
+
+function closeOptBridge() {
+  if (appMode === 'corners') appMode = 'bay';
+  cornerPts = [];
+  document.getElementById('optBanner').style.display = 'none';
+  redraw();
+}
+
+async function loadOptProjects() {
+  const sel = document.getElementById('optProject');
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  try {
+    const r = await fetch('/optimizer/projects');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    if (!j.projects.length) { optSay('The optimizer has no saved projects. Save one there first.', true); return; }
+    j.projects.forEach((p) => {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = p.name;
+      sel.appendChild(o);
+    });
+    optSay('Pick a project and press 1.');
+  } catch (err) {
+    optSay(err.message + ' You can still use "or load a GeoJSON file".', true);
+  }
+}
+
+// "1,2,3,4" -> [0,1,2,3]; null (with a message) when it is not four different corners of the outline
+function optCornerIdx() {
+  const n = optSite ? optSite.site.length : 4;
+  const idx = document.getElementById('optCorners').value.split(',').map(s => parseInt(s.trim(), 10) - 1);
+  if (idx.length !== 4 || idx.some(i => !(i >= 0 && i < n)) || new Set(idx).size !== 4) {
+    optSay('Corners must be four different numbers from 1 to ' + n + ', like 1,2,3,4.', true);
+    return null;
+  }
+  return idx;
+}
+
+function drawOptPreview(site, slots, chosen) {
+  const c = document.getElementById('optPreview');
+  const g = c.getContext('2d');
+  c.style.display = 'block';
+  g.clearRect(0, 0, c.width, c.height);
+  const xs = site.map(p => p[0]), ys = site.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const pad = 22;
+  const s = Math.min((c.width - 2 * pad) / (maxX - minX || 1), (c.height - 2 * pad) / (maxY - minY || 1));
+  // north is up: canvas y grows downward, so flip
+  const tx = (p) => [pad + (p[0] - minX) * s, c.height - pad - (p[1] - minY) * s];
+  g.fillStyle = 'rgba(96,165,250,0.35)';
+  slots.forEach((ring) => {
+    g.beginPath();
+    ring.forEach((p, i) => { const q = tx(p); i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); });
+    g.closePath(); g.fill();
+  });
+  g.strokeStyle = '#f59e0b'; g.lineWidth = 2;
+  g.beginPath();
+  site.forEach((p, i) => { const q = tx(p); i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); });
+  g.closePath(); g.stroke();
+  g.font = 'bold 12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  site.forEach((p, i) => {
+    const q = tx(p);
+    const picked = chosen.indexOf(i);
+    g.fillStyle = picked >= 0 ? '#fbbf24' : '#64748b';
+    g.beginPath(); g.arc(q[0], q[1], 9, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#0f172a'; g.fillText(String(i + 1), q[0], q[1]);
+    if (picked >= 0) {                       // click order, so it is clear which comes first
+      g.fillStyle = '#fbbf24'; g.font = '10px sans-serif';
+      g.fillText('#' + (picked + 1), q[0], q[1] - 15); g.font = 'bold 12px sans-serif';
+    }
+  });
+}
+
+function showSite(j) {
+  optSite = j;
+  const idx = optCornerIdx() || [0, 1, 2, 3].slice(0, Math.min(4, j.site.length));
+  drawOptPreview(j.site, j.slots, idx);
+  document.getElementById('btnOptClick').disabled = false;
+  optSay('"' + j.name + '": ' + j.parkable_slots + ' stalls. Press 2, then click the yellow corners on the frame in the order #1, #2, #3, #4, going round the lot.' +
+         (j.site.length > 4 ? ' The outline has ' + j.site.length + ' corners: type the four real ones in the Corners box (like 1,3,4,6) and the preview updates.' : ''));
+}
+
+document.getElementById('optCorners').addEventListener('input', () => {
+  if (!optSite) return;
+  const idx = optCornerIdx();
+  if (idx) { drawOptPreview(optSite.site, optSite.slots, idx); optSay('Corners ' + idx.map(i => i + 1).join(', ') + ' selected.'); }
+});
+
+document.getElementById('btnOptGeo').onclick = () => document.getElementById('optGeo').click();
+document.getElementById('optGeo').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  let fc;
+  try { fc = JSON.parse(await f.text()); } catch (err) { optSay('That file is not valid JSON.', true); return; }
+  optSay('Reading ' + f.name + '…');
+  try {
+    const r = await fetch('/optimizer/site', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ geojson: fc, name: f.name })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    showSite(j);
+  } catch (err) {
+    optSay(err.message, true);
+  }
+});
+
+document.getElementById('btnOptBridge').onclick = () => {
+  if (!img) { alert("Load a frame first (Upload, or Load Live Phone Frame)."); return; }
+  if (appMode === 'grid') exitGridMode();
+  if (appMode === 'edit') setEditMode(false);
+  document.getElementById('optBanner').style.display = 'flex';
+  loadOptProjects();
+};
+document.getElementById('btnOptClose').onclick = closeOptBridge;
+
+document.getElementById('btnOptPreview').onclick = async () => {
+  const id = document.getElementById('optProject').value;
+  if (!id) { optSay('Choose a project first.', true); return; }
+  optSay('Running the optimizer…');
+  try {
+    const r = await fetch('/optimizer/site', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: Number(id) })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    showSite(j);
+  } catch (err) {
+    optSay(err.message, true);
+  }
+};
+
+document.getElementById('btnOptClick').onclick = () => {
+  if (!optCornerIdx()) return;
+  if (appMode === 'edit') setEditMode(false);
+  appMode = 'corners';
+  cornerPts = [];
+  optSay('Click corner #1 on the frame.');
+  redraw();
+};
+
+async function finishCorners() {
+  const pts = cornerPts;
+  appMode = 'bay';
+  cornerPts = [];
+  optSay('Placing stalls…');
+  try {
+    const r = await fetch('/occupancy/layout-from-optimizer', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, layout_id: optSite.layout_id, corners_px: pts,
+                             site_corner_idx: optCornerIdx(),
+                             image_size: [canvas.width, canvas.height] })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    bays = j.bays;
+    savedSnapshot = JSON.stringify(bays);        // the server saved them already
+    savedFrameSize = imgSize();
+    lastAnnotatedImg = null;
+    updateJson();
+    renderBayList();
+    optSay(j.count + ' bays placed from "' + j.project + '". ' + (j.warnings || []).join(' ') +
+           ' Check they sit on the real stalls; if not, press 2 and click the corners again.');
+  } catch (err) {
+    optSay(err.message, true);
+  }
+  redraw();
+}
+
+// Toggle Clean View vs AI Bounding Boxes
+document.getElementById('btnToggleAiBoxes').onclick = () => {
+  hideAiBoxes = !hideAiBoxes;
+  const btn = document.getElementById('btnToggleAiBoxes');
+  const txt = document.getElementById('aiToggleText');
+  const icon = document.getElementById('aiToggleIcon');
+  if (hideAiBoxes) {
+    btn.classList.add('toggle-active');
+    txt.textContent = 'Show AI Bounding Boxes';
+    icon.textContent = '👁️‍🗨️';
+  } else {
+    btn.classList.remove('toggle-active');
+    txt.textContent = 'Hide AI Bounding Boxes';
+    icon.textContent = '👁️';
+  }
+  redraw();
+};
+
+// Auto-Grid Lane Mode Activation
+document.getElementById('btnAutoGrid').onclick = () => {
+  if (appMode === 'grid') {
+    exitGridMode();
+  } else {
+    enterGridMode();
+  }
+};
+
+document.getElementById('btnCancelGrid').onclick = () => {
+  exitGridMode();
+};
+
+function enterGridMode() {
+  if (!img) {
+    alert("Please upload a parking frame or photo first!");
+    return;
+  }
+  if (appMode === 'edit') setEditMode(false);
+  appMode = 'grid';
+  gridPoints = [];
+  currentPoints = [];
+  document.getElementById('btnAutoGrid').classList.add('active-tool');
+  document.getElementById('btnAutoGrid').textContent = '📐 Cancel Auto-Grid';
+  document.getElementById('gridBanner').style.display = 'flex';
+  document.getElementById('gridPointCount').textContent = '0/4 corners clicked';
+  redraw();
+}
+
+function exitGridMode() {
+  appMode = 'bay';
+  gridPoints = [];
+  document.getElementById('btnAutoGrid').classList.remove('active-tool');
+  document.getElementById('btnAutoGrid').textContent = '📐 Auto-Grid Lane';
+  document.getElementById('gridBanner').style.display = 'none';
+  redraw();
+}
+
+document.getElementById('btnNewBay').onclick = () => {
+  if (appMode === 'grid') exitGridMode();
+  if (appMode === 'edit') setEditMode(false);
+  currentPoints = [];
+  alert("Click 4 corners on the canvas to manually draw a parking bay polygon.");
+};
+
+document.getElementById('btnAutoFit').onclick = async () => {
+  const f = document.getElementById('fileInput').files[0];
+  if (!f) {
+    alert("Please upload a photo first!");
+    return;
+  }
+  const fd = new FormData();
+  fd.append('image', f);
+  try {
+    const r = await fetch('/occupancy/auto-bays', { method: 'POST', body: fd });
+    const res = await r.json();
+    if (res.bays && Object.keys(res.bays).length > 0) {
+      bays = res.bays;
+      lastAnnotatedImg = null;
+      updateJson();
+      renderBayList();
+      redraw();
+      alert(`Auto-detected ${res.count} parking bays! Click 'Run Occupancy Check' to see state and number plates.`);
+    } else {
+      alert("No vehicles found to auto-fit bays. Use '📐 Auto-Grid Lane' or draw manually.");
+    }
+  } catch (err) {
+    alert("Auto-fit failed: " + err.message);
+  }
+};
+
+canvas.addEventListener('click', (e) => {
+  if (!img) return;
+  if (appMode === 'edit') return;          // edit mode works with the mouse down / move / up below
+  const [x, y] = canvasPoint(e);
+
+  if (appMode === 'line') {
+    linePts.push([x, y]);
+    redraw();
+    if (linePts.length === 3) setTimeout(finishLine, 50);
+    return;
+  }
+
+  if (appMode === 'corners') {
+    cornerPts.push([x, y]);
+    optSay(cornerPts.length < 4 ? 'Click corner #' + (cornerPts.length + 1) + '.' : 'Placing stalls…');
+    redraw();
+    if (cornerPts.length === 4) setTimeout(finishCorners, 50);
+    return;
+  }
+
+  if (appMode === 'grid') {
+    gridPoints.push([x, y]);
+    document.getElementById('gridPointCount').textContent = `${gridPoints.length}/4 corners clicked`;
+    redraw();
+    if (gridPoints.length === 4) {
+      setTimeout(() => {
+        handleGridGeneration();
+      }, 50);
+    }
+  } else {
+    // Standard manual bay drawing
+    currentPoints.push([x, y]);
+    if (currentPoints.length === 4) {
+      const nextIdx = Object.keys(bays).length + 1;
+      const typed = (prompt("Enter Bay ID:", "Bay-0" + nextIdx) || ("Bay-0" + nextIdx)).trim().slice(0, 32);
+      let name = typed || ("Bay-0" + nextIdx);
+      if (name in bays && !confirm("A bay called '" + name + "' already exists. Replace it? (Cancel keeps both: this one becomes '" +
+                                   BayGeometry.uniqueId(bays, name) + "')")) {
+        name = BayGeometry.uniqueId(bays, name);
+      }
+      bays[name] = [...currentPoints];
+      currentPoints = [];
+      lastAnnotatedImg = null;
+      updateJson();
+      renderBayList();
+    }
+    redraw();
+  }
+});
+
+// Auto-Grid Lane Generator Dialog & Partition Execution
+function handleGridGeneration() {
+  const countStr = prompt("📐 Auto-Grid Lane: Enter number of bays to partition in this lane (e.g. 7):", "7");
+  if (!countStr) {
+    exitGridMode();
+    return;
+  }
+  const n = parseInt(countStr, 10);
+  if (isNaN(n) || n <= 0) {
+    alert("Invalid bay count. Please enter a positive integer.");
+    exitGridMode();
+    return;
+  }
+
+  const prefix = prompt("Enter Bay ID prefix for this lane (e.g. Bay-, A-, Lane1-):", "Bay-") || "Bay-";
+  const gapStr = prompt("Optional inter-bay gap as fraction of stall (0 = contiguous chalk markings, 0.05 = 5% gap):", "0");
+  const gap = Math.max(0, Math.min(0.5, parseFloat(gapStr) || 0));
+
+  // Split the row into n stalls of equal real width via projective homography
+  const partitionedBays = partitionLanePolygon(gridPoints, n, gap);
+  if (!partitionedBays.length) {
+    alert("Those 4 corners do not make a row. Click the 4 outer corners of the whole row of stalls.");
+    exitGridMode();
+    return;
+  }
+
+  // Determine starting index to avoid ID collision
+  let startNum = 1;
+  const regex = new RegExp('^' + escapeRegExp(prefix) + '(\\d+)$');
+  for (const bid of Object.keys(bays)) {
+    const m = bid.match(regex);
+    if (m) {
+      startNum = Math.max(startNum, parseInt(m[1], 10) + 1);
+    }
+  }
+
+  for (let i = 0; i < partitionedBays.length; i++) {
+    const bayId = `${prefix}${String(startNum + i).padStart(2, '0')}`;
+    bays[bayId] = partitionedBays[i];
+  }
+
+  const firstId = `${prefix}${String(startNum).padStart(2, '0')}`;
+  const lastId = `${prefix}${String(startNum + n - 1).padStart(2, '0')}`;
+
+  exitGridMode();
+  setEditMode(true);
+  lastAnnotatedImg = null;
+  updateJson();
+  renderBayList();
+  redraw();
+
+  alert(`✅ Generated ${n} perspective-aligned bays (${firstId} to ${lastId})!\nSwitched to Edit Mode: drag any corner or bay to fine-tune alignment.`);
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^$()|{}\[\]\\]/g, '\\$&');
+}
+
+/**
+ * Split the 4 clicked corners of a row into n stalls of equal REAL width.  The corners are mapped to
+ * a flat strip by a homography and each stall is carried back (see static/bay-geometry.js), so stalls
+ * nearer the camera come out wider on the picture and far ones narrower, as painted stalls are.
+ * Returns [] when the corners cannot form a row.
+ */
+function partitionLanePolygon(pts, n, gap = 0) {
+  return BayGeometry.splitRow(pts, n, gap) || [];
+}
+
+/**
+ * Normalizes 4 arbitrarily ordered points into clockwise [TL, TR, BR, BL] vertices.
+ */
+function orderQuadrilateral(pts) {
+  const cx = (pts[0][0] + pts[1][0] + pts[2][0] + pts[3][0]) / 4;
+  const cy = (pts[0][1] + pts[1][1] + pts[2][1] + pts[3][1]) / 4;
+
+  const sorted = [...pts].sort((a, b) => {
+    return Math.atan2(a[1] - cy, a[0] - cx) - Math.atan2(b[1] - cy, b[0] - cx);
+  });
+
+  const v1x = sorted[1][0] - sorted[0][0];
+  const v1y = sorted[1][1] - sorted[0][1];
+  const v2x = sorted[2][0] - sorted[1][0];
+  const v2y = sorted[2][1] - sorted[1][1];
+  const cross = v1x * v2y - v1y * v2x;
+  if (cross < 0) {
+    sorted.reverse();
+  }
+
+  let tlIdx = 0;
+  let minSum = Infinity;
+  for (let i = 0; i < 4; i++) {
+    const sum = sorted[i][0] + sorted[i][1];
+    if (sum < minSum) {
+      minSum = sum;
+      tlIdx = i;
+    }
+  }
+
+  return [
+    sorted[tlIdx],
+    sorted[(tlIdx + 1) % 4],
+    sorted[(tlIdx + 2) % 4],
+    sorted[(tlIdx + 3) % 4]
+  ];
+}
+
+const undoStack = [];
+const redoStack = [];
+
+function pushHistory() {
+  undoStack.push(JSON.stringify(bays));
+  if (undoStack.length > 50) undoStack.shift();
+  redoStack.length = 0;
+}
+
+function doUndo() {
+  if (appMode === 'grid' && gridPoints.length > 0) {
+    gridPoints.pop();
+    document.getElementById('gridPointCount').textContent = `${gridPoints.length}/4 corners clicked`;
+    redraw();
+    return;
+  }
+  if (currentPoints.length > 0) {
+    currentPoints.pop();
+    redraw();
+    return;
+  }
+  if (undoStack.length > 0) {
+    redoStack.push(JSON.stringify(bays));
+    const prev = JSON.parse(undoStack.pop());
+    bays = prev;
+    selectedBay = null;
+    syncEditPanel();
+    lastAnnotatedImg = null;
+    updateJson();
+    renderBayList();
+    redraw();
+  }
+}
+
+function doRedo() {
+  if (redoStack.length > 0) {
+    undoStack.push(JSON.stringify(bays));
+    const next = JSON.parse(redoStack.pop());
+    bays = next;
+    selectedBay = null;
+    syncEditPanel();
+    lastAnnotatedImg = null;
+    updateJson();
+    renderBayList();
+    redraw();
+  }
+}
+
+document.getElementById('btnUndo').onclick = doUndo;
+document.getElementById('btnRedo').onclick = doRedo;
+
+let currentZoom = 1.0;
+function applyZoom(z) {
+  currentZoom = Math.max(0.5, Math.min(3.0, Math.round(z * 100) / 100));
+  const disp = document.getElementById('zoomLevelDisplay');
+  if (disp) disp.textContent = Math.round(currentZoom * 100) + '%';
+  if (canvas && img) {
+    if (Math.abs(currentZoom - 1.0) < 0.01) {
+      canvas.style.width = '';
+    } else {
+      canvas.style.width = (canvas.width * currentZoom) + 'px';
+    }
+  }
+}
+
+document.getElementById('btnZoomIn').onclick = () => applyZoom(currentZoom + 0.25);
+document.getElementById('btnZoomOut').onclick = () => applyZoom(currentZoom - 0.25);
+document.getElementById('btnZoomReset').onclick = () => applyZoom(1.0);
+
+canvas.addEventListener('wheel', (e) => {
+  if (e.ctrlKey || appMode === 'edit') {
+    e.preventDefault();
+    applyZoom(currentZoom + (e.deltaY < 0 ? 0.20 : -0.20));
+  }
+}, { passive: false });
+
+document.getElementById('btnClearBays').onclick = () => {
+  if (confirm("Clear all defined bays?")) {
+    bays = {};
+    observations = {};
+    currentPoints = [];
+    gridPoints = [];
+    lastAnnotatedImg = null;
+    if (appMode === 'grid') exitGridMode();
+    updateJson();
+    renderBayList();
+    redraw();
+  }
+};
+
+// ---- Edit mode: reshape, move, rename, copy and delete bays -----------------------------------
+function canvasPoint(e) {
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return [0, 0];
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = Math.min(canvas.width, Math.max(0, Math.round((e.clientX - rect.left) * scaleX)));
+  const y = Math.min(canvas.height, Math.max(0, Math.round((e.clientY - rect.top) * scaleY)));
+  return [x, y];
+}
+function hitRadius() {                      // about 12 screen pixels, whatever the picture is scaled to
+  const rect = canvas.getBoundingClientRect();
+  return 12 * canvas.width / (rect.width || canvas.width);
+}
+
+function setEditMode(on) {
+  if (on && !img) { alert("Load a frame first (Upload, or Load Live Phone Frame)."); return; }
+  if (on) {
+    if (appMode === 'grid') exitGridMode();
+    currentPoints = [];
+    appMode = 'edit';
+  } else if (appMode === 'edit') {
+    appMode = 'bay';
+  }
+  selectedBay = null;
+  drag = null;
+  const btn = document.getElementById('btnEdit');
+  btn.classList.toggle('active-tool', on);
+  btn.textContent = on ? '✏️ Done Editing' : '✏️ Edit Bays';
+  document.getElementById('editBanner').style.display = on ? 'flex' : 'none';
+  canvas.style.cursor = on ? 'default' : '';
+  syncEditPanel();
+  redraw();
+}
+document.getElementById('btnEdit').onclick = () => setEditMode(appMode !== 'edit');
+
+const estimatedBays = new Set(['Bay-04', 'Bay-05', 'Bay-06', 'Bay-07']);
+
+function syncEditPanel() {
+  const row = document.getElementById('editSel');
+  const on = appMode === 'edit' && selectedBay !== null && selectedBay in bays;
+  row.style.visibility = on ? 'visible' : 'hidden';
+  if (on) {
+    document.getElementById('editSelName').textContent = selectedBay;
+    document.getElementById('editRename').value = selectedBay;
+    const pts = bays[selectedBay];
+    if (pts && pts.length === 4) {
+      document.getElementById('cornerCoordDisplay').textContent =
+        `NL:[${pts[0][0]},${pts[0][1]}] NR:[${pts[1][0]},${pts[1][1]}] FR:[${pts[2][0]},${pts[2][1]}] FL:[${pts[3][0]},${pts[3][1]}]`;
+    }
+    const chk = document.getElementById('chkFlagEstimated');
+    if (chk) chk.checked = estimatedBays.has(selectedBay);
+  }
+}
+
+document.getElementById('chkFlagEstimated')?.addEventListener('change', (e) => {
+  if (!selectedBay) return;
+  if (e.target.checked) estimatedBays.add(selectedBay);
+  else estimatedBays.delete(selectedBay);
+  redraw();
+});
+
+function bayEdited(rebuildList) {
+  lastAnnotatedImg = null;
+  updateJson();
+  if (rebuildList) renderBayList();
+  redraw();
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (appMode !== 'edit' || !img) return;
+  const [x, y] = canvasPoint(e);
+  const hit = BayGeometry.hitTest(bays, x, y, hitRadius());
+  selectedBay = hit ? hit.id : null;
+  if (hit) {
+    pushHistory();
+    const linked = [];
+    if (hit.vertex !== null) {
+      const orig = bays[hit.id][hit.vertex];
+      for (const [bid, pts] of Object.entries(bays)) {
+        pts.forEach((p, vi) => {
+          if (Math.hypot(p[0] - orig[0], p[1] - orig[1]) <= 6) {
+            linked.push({ id: bid, vertex: vi });
+          }
+        });
+      }
+    }
+    drag = { id: hit.id, vertex: hit.vertex, linked: linked, last: [x, y], moved: false };
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* not every browser */ }
+  } else {
+    drag = null;
+  }
+  syncEditPanel();
+  redraw();
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (appMode !== 'edit' || !img) return;
+  const [x, y] = canvasPoint(e);
+  if (!drag) {
+    const h = BayGeometry.hitTest(bays, x, y, hitRadius());
+    canvas.style.cursor = !h ? 'default' : (h.vertex === null ? 'move' : 'crosshair');
+    return;
+  }
+  const clampX = Math.min(canvas.width, Math.max(0, x));
+  const clampY = Math.min(canvas.height, Math.max(0, y));
+
+  if (drag.vertex !== null) {
+    const linkChk = document.getElementById('chkLinkDividers');
+    if (linkChk && linkChk.checked && drag.linked && drag.linked.length > 1) {
+      drag.linked.forEach(target => {
+        if (bays[target.id]) {
+          bays[target.id][target.vertex] = [clampX, clampY];
+        }
+      });
+    } else {
+      bays[drag.id][drag.vertex] = [clampX, clampY];
+    }
+  } else {
+    bays[drag.id] = BayGeometry.translate(bays[drag.id], x - drag.last[0], y - drag.last[1]);
+  }
+  drag.last = [x, y];
+  drag.moved = true;
+  bayEdited(false);
+});
+
+function endDrag() {
+  if (drag && drag.moved) renderBayList();
+  drag = null;
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+function deleteSelected() {
+  if (selectedBay === null || !(selectedBay in bays)) return;
+  pushHistory();
+  delete bays[selectedBay];
+  delete observations[selectedBay];
+  selectedBay = null;
+  syncEditPanel();
+  bayEdited(true);
+}
+
+document.getElementById('btnDeleteBay').onclick = deleteSelected;
+
+document.getElementById('btnDuplicate').onclick = () => {
+  if (selectedBay === null || !(selectedBay in bays)) return;
+  pushHistory();
+  const id = BayGeometry.nextId(bays, selectedBay);
+  bays[id] = BayGeometry.duplicateBay(bays, selectedBay);
+  selectedBay = id;
+  syncEditPanel();
+  bayEdited(true);
+};
+
+document.getElementById('btnInsertBay').onclick = () => {
+  if (selectedBay === null || !(selectedBay in bays)) return;
+  pushHistory();
+  const newPoly = BayGeometry.insertBay(bays, selectedBay);
+  if (!newPoly) return;
+  const newId = BayGeometry.nextId(bays, selectedBay);
+  bays[newId] = newPoly;
+  selectedBay = newId;
+  syncEditPanel();
+  bayEdited(true);
+};
+
+document.getElementById('btnRename').onclick = () => {
+  if (selectedBay === null || !(selectedBay in bays)) return;
+  const name = document.getElementById('editRename').value.trim();
+  if (!name || name.length > 32) { alert("A bay name is 1 to 32 characters."); return; }
+  if (name === selectedBay) return;
+  if (name in bays) { alert("There is already a bay called '" + name + "'."); return; }
+  pushHistory();
+  const renamed = {};                      // keep the order the bays were in
+  for (const [id, pts] of Object.entries(bays)) renamed[id === selectedBay ? name : id] = pts;
+  if (selectedBay in observations) { observations[name] = observations[selectedBay]; delete observations[selectedBay]; }
+  bays = renamed;
+  selectedBay = name;
+  syncEditPanel();
+  bayEdited(true);
+};
+
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault();
+    if (e.shiftKey) doRedo();
+    else doUndo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+    e.preventDefault();
+    doRedo();
+    return;
+  }
+
+  if (appMode !== 'edit' || selectedBay === null || !(selectedBay in bays)) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
+  const s = e.shiftKey ? 10 : 1;
+  const d = { ArrowLeft: [-s, 0], ArrowRight: [s, 0], ArrowUp: [0, -s], ArrowDown: [0, s] }[e.key];
+  if (d) {
+    e.preventDefault();
+    pushHistory();
+    bays[selectedBay] = BayGeometry.translate(bays[selectedBay], d[0], d[1]);
+    bayEdited(false);
+  }
+});
+
+// On top of the picture: bays that cannot be saved in red, and handles on the selected bay.
+function drawEditOverlays() {
+  for (const [id, v] of Object.entries(issues)) {
+    const pts = bays[id];
+    if (!pts || pts.length < 3) continue;
+    if (!v.errors.length && !(v.warnings.length && appMode === 'edit')) continue;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.strokeStyle = v.errors.length ? '#ef4444' : '#f59e0b';
+    ctx.lineWidth = 4;
+    ctx.setLineDash(v.errors.length ? [] : [8, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (appMode !== 'edit') return;
+
+  // Detect shared vertices across bays to highlight divider points
+  const vertexCount = new Map();
+  for (const pts of Object.values(bays)) {
+    for (const p of pts) {
+      const key = `${Math.round(p[0])},${Math.round(p[1])}`;
+      vertexCount.set(key, (vertexCount.get(key) || 0) + 1);
+    }
+  }
+
+  for (const [id, pts] of Object.entries(bays)) {
+    const sel = id === selectedBay;
+    if (sel) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.closePath();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    const isEstimated = estimatedBays.has(id);
+    if (isEstimated && pts.length === 4) {
+      ctx.beginPath();
+      ctx.moveTo(pts[2][0], pts[2][1]);
+      ctx.lineTo(pts[3][0], pts[3][1]);
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    const cornerLabels = ['NL', 'NR', 'FR', 'FL'];
+    pts.forEach((p, idx) => {
+      const isRearEstimated = isEstimated && (idx === 2 || idx === 3);
+      const key = `${Math.round(p[0])},${Math.round(p[1])}`;
+      const isShared = (vertexCount.get(key) || 0) > 1;
+      const r = sel ? 6 : 4;
+
+      ctx.fillStyle = isShared ? '#06b6d4' : (sel ? '#ffffff' : 'rgba(255,255,255,0.7)');
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if (isShared) {
+        ctx.moveTo(p[0], p[1] - r - 2);
+        ctx.lineTo(p[0] + r + 2, p[1]);
+        ctx.lineTo(p[0], p[1] + r + 2);
+        ctx.lineTo(p[0] - r - 2, p[1]);
+        ctx.closePath();
+      } else {
+        ctx.rect(p[0] - r, p[1] - r, 2 * r, 2 * r);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      if (sel && idx < 4) {
+        const lbl = cornerLabels[idx];
+        ctx.font = 'bold 11px sans-serif';
+        const tw = ctx.measureText(lbl).width;
+        const ly = idx < 2 ? p[1] + 16 : p[1] - 8;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.fillRect(p[0] - tw / 2 - 3, ly - 10, tw + 6, 14);
+        ctx.fillStyle = isRearEstimated ? '#f59e0b' : (idx === 0 ? '#facc15' : (idx === 1 ? '#4ade80' : (idx === 2 ? '#38bdf8' : '#f472b6')));
+        const finalLbl = isRearEstimated ? lbl + ' [?]' : lbl;
+        ctx.fillText(finalLbl, p[0] - tw / 2, ly);
+      }
+    });
+  }
+}
+
+// ---- Earlier layouts: every save keeps the one it replaced -------------------------------------
+document.getElementById('btnBackups').onclick = async () => {
+  const panel = document.getElementById('backupPanel');
+  if (panel.style.display === 'flex') { panel.style.display = 'none'; return; }
+  panel.textContent = '';
+  panel.style.display = 'flex';
+  const head = document.createElement('div');
+  head.style.fontWeight = '700';
+  head.textContent = '↩ Earlier layouts of ' + CAM;
+  panel.appendChild(head);
+  try {
+    const r = await fetch('/occupancy/bays/backups?camera_id=' + encodeURIComponent(CAM));
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    if (!j.backups.length) {
+      const none = document.createElement('div');
+      none.textContent = 'Nothing yet: a layout is kept here when a save replaces it.';
+      panel.appendChild(none);
+    }
+    for (const b of j.backups) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; gap:12px; align-items:center;';
+      const label = document.createElement('span');
+      label.textContent = (b.saved_at ? b.saved_at.replace('T', ' ') : b.name) + ' · ' + b.bays + ' bays';
+      const btn = document.createElement('button');
+      btn.textContent = 'Restore';
+      btn.className = 'sm';
+      btn.onclick = async () => {
+        if (!confirm("Put this layout back? The current one is kept in this list too.")) return;
+        const rr = await fetch('/occupancy/bays/restore', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ camera_id: CAM, backup: b.name })
+        });
+        const jj = await rr.json();
+        if (!rr.ok) { alert("Not restored: " + (jj.error || rr.status)); return; }
+        panel.style.display = 'none';
+        await // Import JSON / GeoJSON config file handler
+document.getElementById('btnImportConfigFile')?.addEventListener('click', () => {
+  document.getElementById('bayConfigFileInput').click();
+});
+
+document.getElementById('bayConfigFileInput')?.addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const resp = await fetch('/occupancy/import-layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, layout: parsed, view: 'oblique' })
+    });
+    const res = await resp.json();
+    if (!resp.ok) throw new Error(res.error || 'Failed to import layout');
+    alert(`Successfully imported ${res.bays_imported} parking slots from ${file.name}!`);
+    if (res.slots_dict && Object.keys(res.slots_dict).length > 0) {
+      bays = res.slots_dict;
+      savedSnapshot = JSON.stringify(bays);
+    }
+    updateJson();
+    renderBayList();
+    redraw();
+  } catch (err) {
+    alert('Import Error: ' + err.message);
+  } finally {
+    e.target.value = '';
+  }
+});
+
+loadSavedLayout();
+      };
+      row.appendChild(label);
+      row.appendChild(btn);
+      panel.appendChild(row);
+    }
+  } catch (err) {
+    const bad = document.createElement('div');
+    bad.style.color = 'var(--red)';
+    bad.textContent = 'Could not load the list: ' + err.message;
+    panel.appendChild(bad);
+  }
+};
+
+document.getElementById('btnCopyJson').onclick = () => {
+  navigator.clipboard.writeText(document.getElementById('jsonOutput').value);
+  alert("Copied bays payload to clipboard!");
+};
+
+document.getElementById('btnApplyBays').onclick = async () => {
+  const allIssues = BayGeometry.validateAll(bays, imgSize());
+  const problems = Object.entries(allIssues)
+    .flatMap(([id, v]) => v.errors.map(m => 'Bay ' + id + ': ' + m));
+  if (problems.length) { alert("Fix these before saving:\n\n" + problems.join('\n')); return; }
+  if (savedFrameSize && img && (savedFrameSize[0] !== img.width || savedFrameSize[1] !== img.height) &&
+      !confirm("The saved bays were drawn on a " + savedFrameSize[0] + "×" + savedFrameSize[1] + " picture but this one is " +
+               img.width + "×" + img.height + ". Save anyway?")) return;
+
+  const warnings = Object.entries(allIssues)
+    .flatMap(([id, v]) => v.warnings.map(m => 'Bay ' + id + ': ' + m));
+  const count = Object.keys(bays).length;
+  const bayListStr = Object.keys(bays).join(', ');
+  const warnText = warnings.length ? `\n⚠️ Warnings (${warnings.length}):\n• ` + warnings.slice(0, 3).join('\n• ') : '\n✅ Validation: 0 errors, 0 warnings';
+  
+  const changed = JSON.stringify(bays) !== savedSnapshot;
+  const endsText = changed ? '\n\nThis changes the live layout: every open violation and every "car is here" record of this camera is closed, because the bays no longer mean the same ground.' : '';
+  const ok = confirm(`🚀 Preview Before Publish (${CAM}):\n\n• Total Bays: ${count} (${bayListStr})\n• Frame Size: ${(imgSize() || [1280, 720]).join('x')}${warnText}${endsText}\n\nPublish this layout to the live server?`);
+  if (!ok) return;
+
+  try {
+    const payload = { camera_id: CAM, view: "oblique", bays: bays, image_size: imgSize() };
+    const r = await fetch('/occupancy/bays', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+    if (!r.ok) { alert("Not saved: " + (data.error || r.status)); return; }
+    savedSnapshot = JSON.stringify(bays);
+    savedFrameSize = imgSize() || savedFrameSize;
+    updateJson();
+    const warn = (data.warnings || []).length ? "\n\nCheck:\n" + data.warnings.join('\n') : "";
+    alert("Saved " + data.count + " bays for camera " + data.camera_id + "." + warn);
+  } catch (err) {
+    alert("Failed to apply: " + err.message);
+  }
+};
+
+document.getElementById('btnRunCheck').onclick = async () => {
+  const f = document.getElementById('fileInput').files[0];
+  if (!f) {
+    alert("Please upload a photo first!");
+    return;
+  }
+  const anglePreset = document.getElementById('cameraAnglePreset').value;
+  const fpMode = document.getElementById('footprintModeSelect').value;
+  const viewType = anglePreset === 'topdown' ? 'topdown' : 'oblique';
+
+  // The check runs on the SAVED layout of the camera, so it first saves this one: say so, and do not do it behind the person's back
+  // (an unsaved edit used to go live here, closing every open violation, with no question asked).
+  if (JSON.stringify(bays) !== savedSnapshot &&
+      !confirm('Running the check saves the bays as they are now to the live server (' + CAM + ').\n\nThat closes every open violation and every "car is here" record of this camera.\n\nContinue?')) return;
+
+  // Set camera profile with current dropdown values
+  await fetch('/camera/profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ camera_id: CAM, view_angle: anglePreset, footprint_method: fpMode })
+  });
+
+  await fetch('/occupancy/bays', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ camera_id: CAM, view: viewType, bays: bays })
+  });
+  savedSnapshot = JSON.stringify(bays);                 // the server has them now: the "unsaved" mark must not stay lit
+
+  const fd = new FormData();
+  fd.append('image', f);
+  fd.append('camera_id', CAM);
+  // A still photo has no "5 seconds later": the persistence debounce is for
+  // live streams and video, and here it only ever demoted WRONG to SUSPICIOUS.
+  fd.append('track', 'false');
+
+  const r = await fetch('/occupancy/check', { method: 'POST', body: fd });
+  const res = await r.json();
+  if (res.annotated) {
+    const annImg = new Image();
+    annImg.onload = () => {
+      lastAnnotatedImg = annImg;
+      redraw();
+    };
+    annImg.src = res.annotated;
+  }
+  if (res.observations) {
+    observations = {};
+    for (const o of res.observations) {
+      observations[o.bay_id] = o;
+    }
+  }
+  if (res.bays) {
+    for (const [bid, binfo] of Object.entries(res.bays)) {
+      if (!observations[bid]) {
+        observations[bid] = binfo;
+      } else {
+        Object.assign(observations[bid], binfo);
+      }
+    }
+  }
+  renderBayList();
+  renderCalibration(res.calibration, res.segmentation);
+  renderPlan(res.plan);
+  if (res.summary) {
+    const corr = (res.summary.correctly_parked !== undefined && res.summary.correctly_parked > 0)
+      ? res.summary.correctly_parked
+      : (res.summary.occupied || 0);
+    document.getElementById('kpiCorrect').textContent = corr;
+    document.getElementById('kpiSuspicious').textContent = res.summary.suspicious || 0;
+    document.getElementById('kpiWrong').textContent = (res.summary.wrong_parking || res.summary.badly_parked) || 0;
+    document.getElementById('kpiFree').textContent = res.summary.free !== undefined ? res.summary.free : (res.summary.empty || 0);
+  }
+  redraw();
+};
+
+// --- Camera calibration panel -------------------------------------------------
+// Built with textContent throughout: bay ids come from user drawings.
+function renderCalibration(cal, seg) {
+  const panel = document.getElementById('calibPanel');
+  if (!panel || !cal) return;
+  panel.replaceChildren();
+  const line = (text, color) => {
+    const d = document.createElement('div');
+    d.textContent = text;
+    if (color) d.style.color = color;
+    d.style.marginBottom = '4px';
+    panel.appendChild(d);
+    return d;
+  };
+  if (cal.good_bays !== undefined) {                       // from "Check 3D": can parking be judged with these bays?
+    const need = cal.min_good_bays || 2;
+    const ok = cal.ready;
+    const why = cal.good_bays < need
+      ? `only ${cal.good_bays} good bay${cal.good_bays === 1 ? '' : 's'}, at least ${need} needed`
+      : 'one camera could not be fitted to these bays together (see the notes below: usually a bay drawn off its real lines)';
+    line(ok ? `3D ready: ${cal.good_bays} of ${cal.total} bays are good (at least ${need} needed)`
+            : `3D NOT ready: ${why}. Parking will show "not judged" until it is.`, ok ? 'var(--green)' : 'var(--red)').style.fontWeight = '700';
+  }
+  const pct = Math.round((cal.confidence || 0) * 100);
+  const qColor = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
+  line(`Overall: ${pct}%  (${cal.method === 'site' ? 'one camera from all bays' : 'per-bay'})`, qColor).style.fontWeight = '700';
+  if (cal.camera) {
+    const c = cal.camera;
+    line(`Camera: height ${c.height_m} m · pitch ${c.pitch_deg}° · focal ${c.focal_px} px`);
+  } else {
+    line('Camera: could not be recovered — decisions use the box estimate', 'var(--amber)');
+  }
+  if (cal.rms_px !== null && cal.rms_px !== undefined) line(`Corner fit error: ${cal.rms_px} px`);
+  if (seg) {
+    line(seg.available ? `Segmentation: on (${seg.vehicles_with_silhouette} silhouettes)`
+                       : 'Segmentation: off — decisions use the box estimate', seg.available ? null : 'var(--amber)');
+  }
+  for (const f of (cal.flags || [])) line(`⚠ ${f}`, 'var(--amber)');
+  const colors = { good: 'var(--green)', degraded: 'var(--amber)', rejected: 'var(--red)' };
+  for (const [bid, b] of Object.entries(cal.bays || {})) {
+    const size = b.measured_m ? ` · measures ${b.measured_m[0]}×${b.measured_m[1]} m` : '';
+    const err = b.reproj_px ? ` · ${b.reproj_px}px` : '';
+    const margin = (b.margin_m !== null && b.margin_m !== undefined) ? ` · ±${b.margin_m} m` : '';
+    line(`${bid}: ${b.status}${size}${err}${margin}`, colors[b.status]);
+  }
+}
+
+// "Check 3D": the grades are drawn on the bays only while the bays are exactly as they were checked.
+let calibCheck = null;      // {snapshot: JSON of the bays that were checked, bays: {id: {status, margin_m, ...}}}
+
+document.getElementById('btnCheck3D').onclick = async () => {
+  if (!img) { alert("Load a frame first (Upload, or Load Live Phone Frame)."); return; }
+  if (!Object.keys(bays).length) { alert("There are no bays to check yet."); return; }
+  const btn = document.getElementById('btnCheck3D');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/occupancy/calibration-preview', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, bays: bays, image_size: imgSize() })
+    });
+    const j = await r.json();
+    if (!r.ok) { alert("Could not check: " + (j.error || r.status)); return; }
+    calibCheck = { snapshot: JSON.stringify(bays), bays: j.bays };
+    renderCalibration(j);
+    redraw();
+  } catch (err) {
+    alert("Could not check: " + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+function drawCalibrationGrades() {
+  if (!calibCheck || JSON.stringify(bays) !== calibCheck.snapshot) return;
+  const colors = { good: '#22c55e', degraded: '#f59e0b', rejected: '#ef4444' };
+  for (const [bid, pts] of Object.entries(bays)) {
+    const g = calibCheck.bays[bid];
+    if (!g || !pts || pts.length < 3) continue;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.strokeStyle = colors[g.status] || '#94a3b8';
+    ctx.lineWidth = 5;
+    ctx.setLineDash(g.status === 'good' ? [] : [10, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    const text = g.status + (g.margin_m !== null && g.margin_m !== undefined ? ` ±${g.margin_m} m` : '');
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width + 10;
+    ctx.fillStyle = 'rgba(15,23,42,0.85)';
+    ctx.fillRect(cx - w / 2, cy + 14, w, 18);
+    ctx.fillStyle = colors[g.status] || '#e2e8f0';
+    ctx.fillText(text, cx, cy + 23);
+  }
+}
+
+// --- Top-down plan -------------------------------------------------------------
+// Every stall and measured car in one ground frame (metres, camera at the origin
+// looking along +Y), drawn so the far end is at the top, as in the camera view.
+// SVG built with createElementNS/textContent: bay ids come from user drawings.
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const PLAN_COLOURS = { free: '#6ea03c', correct: '#22c55e', suspicious: '#f59e0b', wrong: '#ef4444',
+                       occluded: '#a855f7', occupied: '#ef4444', unknown: '#94a3b8' };
+let planSelected = null;
+
+function clearanceColour(m) {
+  return m < 0 ? '#ef4444' : m < 0.25 ? '#f59e0b' : '#22c55e';
+}
+
+function renderPlan(plan) {
+  const panel = document.getElementById('planPanel');
+  if (!panel || !plan) return;
+  panel.replaceChildren();
+  if (!plan.available) {
+    const d = document.createElement('div');
+    d.style.cssText = 'color:var(--amber);font-size:13px;';
+    d.textContent = `Plan view unavailable: ${plan.reason || 'no site calibration'}`;
+    panel.appendChild(d);
+    return;
+  }
+  const pts = plan.bays.flatMap(b => b.corners.concat(b.car || []));
+  if (!pts.length) return;
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const pad = 0.6;
+  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
+  const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${maxX - minX} ${maxY - minY}`);
+  svg.style.cssText = 'width:100%;height:auto;display:block;background:var(--well);border-radius:8px;';
+  // World (x, y) -> SVG: flip y so the far end is up.
+  const P = p => [p[0] - minX, maxY - p[1]];
+  const poly = (corners, attrs) => {
+    const el = document.createElementNS(SVG_NS, 'polygon');
+    el.setAttribute('points', corners.map(c => P(c).join(',')).join(' '));
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    svg.appendChild(el);
+    return el;
+  };
+  const line = (a, b, attrs) => {
+    const el = document.createElementNS(SVG_NS, 'line');
+    const [x1, y1] = P(a), [x2, y2] = P(b);
+    el.setAttribute('x1', x1); el.setAttribute('y1', y1); el.setAttribute('x2', x2); el.setAttribute('y2', y2);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    svg.appendChild(el);
+  };
+  const text = (p, str, attrs) => {
+    const el = document.createElementNS(SVG_NS, 'text');
+    const [x, y] = P(p);
+    el.setAttribute('x', x); el.setAttribute('y', y);
+    el.setAttribute('font-size', '0.32'); el.setAttribute('text-anchor', 'middle');
+    el.setAttribute('font-family', 'monospace');
+    for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+    el.textContent = str;
+    svg.appendChild(el);
+  };
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const centre = cs => [cs.reduce((s, c) => s + c[0], 0) / cs.length, cs.reduce((s, c) => s + c[1], 0) / cs.length];
+
+  for (const b of plan.bays) {
+    const col = PLAN_COLOURS[b.state] || '#94a3b8';
+    const selected = planSelected === b.bay_id;
+    const el = poly(b.corners, {
+      fill: col, 'fill-opacity': selected ? 0.28 : 0.12, stroke: col,
+      'stroke-width': selected ? 0.08 : 0.04,
+      'stroke-dasharray': b.calibration === 'good' ? '' : '0.15 0.1',
+    });
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      planSelected = b.bay_id;
+      renderPlan(plan);
+      showInspectorModal(b.bay_id, observations[b.bay_id]);
+    });
+    // Bay id just beyond the far line, clear of the car and its labels.
+    text(mid(b.corners[2], b.corners[3]), b.bay_id, { fill: '#e2e8f0', dy: '-0.12', 'font-size': '0.28' });
+
+    if (!b.car) continue;
+    const rel = b.relation, c = rel.clearance;
+    // Car sides: near, right, far, left -- solid when measured, dashed when estimated.
+    poly(b.car, { fill: '#38bdf8', 'fill-opacity': 0.18, stroke: 'none' });
+    ['near', 'right', 'far', 'left'].forEach((s, i) => {
+      line(b.car[i], b.car[(i + 1) % 4], {
+        stroke: '#e0f2fe', 'stroke-width': 0.06,
+        'stroke-dasharray': c[s].source === 'measured' ? '' : '0.18 0.12',
+      });
+    });
+    // Clearance arrows: car edge midpoint to the matching stall edge midpoint.
+    const pairs = { left: [mid(b.car[3], b.car[0]), mid(b.corners[3], b.corners[0]), 'L'],
+                    right: [mid(b.car[1], b.car[2]), mid(b.corners[1], b.corners[2]), 'R'],
+                    near: [mid(b.car[0], b.car[1]), mid(b.corners[0], b.corners[1]), 'N'] };
+    // Labels sit inside the car -- left one toward the far end, right one toward
+    // the near end -- so neighbouring bays' labels never share the gap between cars.
+    const lerp = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    const across = [b.car[1][0] - b.car[0][0], b.car[1][1] - b.car[0][1]];
+    const n = Math.hypot(...across) || 1;
+    const inward = (p, k) => [p[0] + across[0] / n * k, p[1] + across[1] / n * k];
+    const labelAt = { left: [inward(lerp(b.car[0], b.car[3], 0.78), 0.1), 'start'],
+                      right: [inward(lerp(b.car[1], b.car[2], 0.22), -0.1), 'end'] };
+    for (const [s, [a, e, tag]] of Object.entries(pairs)) {
+      const v = c[s];
+      const colr = clearanceColour(v.seen_m);
+      line(a, e, { stroke: colr, 'stroke-width': 0.05 });
+      const f = m => `${m >= 0 ? '+' : ''}${m.toFixed(2)}`;
+      const lbl = `${tag} ${f(v.seen_m)}${v.source === 'measured' ? '' : ` (~${f(v.m)})`}`;
+      if (s === 'near') {
+        text(mid(a, e), lbl, { fill: colr, dy: '0.35', 'font-size': '0.24' });
+      } else {
+        const [p, anchor] = labelAt[s];
+        text(p, lbl, { fill: colr, 'font-size': '0.22', 'text-anchor': anchor });
+      }
+    }
+    const cc = centre(b.car);
+    text(cc, rel.label, { fill: '#f8fafc', 'font-weight': 'bold', 'font-size': '0.28' });
+    const hd = rel.heading_deg === null ? 'angle ?' : `${rel.heading_deg.toFixed(0)}°`;
+    text([cc[0], cc[1] - 0.45], `off ${rel.offset_m >= 0 ? '+' : ''}${rel.offset_m.toFixed(2)} · ${hd}`,
+         { fill: '#cbd5e1', 'font-size': '0.24' });
+  }
+  panel.appendChild(svg);
+
+  const legend = document.createElement('div');
+  legend.style.cssText = 'font-size:12px;color:var(--muted);padding:8px 8px 4px;line-height:1.5;';
+  legend.textContent = 'Solid edge = seen by camera, dashed = estimated from car size. ' +
+    'L/R/N = gap to left/right/near (camera-side) line as seen by the camera, (~whole-car estimate) when the ' +
+    'outermost corner is hidden; negative = over the line. Click a bay for details.';
+  panel.appendChild(legend);
+}
+
+// --- CCTV Video Processing & Timeline Playback ------------------------------
+let videoTimeline = [];
+let videoPlaybackTimer = null;
+let currentVideoFrameIdx = 0;
+
+document.getElementById('videoInput').onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+
+  const btn = document.getElementById('btnUploadVideo');
+  const origText = btn.textContent;
+  btn.textContent = "⏳ Analyzing CCTV Video...";
+  btn.disabled = true;
+
+  try {
+    const anglePreset = document.getElementById('cameraAnglePreset').value;
+    const fpMode = document.getElementById('footprintModeSelect').value;
+    const viewType = anglePreset === 'topdown' ? 'topdown' : 'oblique';
+
+    // 1. Update camera profile
+    await fetch('/camera/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, view_angle: anglePreset, footprint_method: fpMode })
+    });
+
+    // 2. Sync bays to server
+    await fetch('/occupancy/bays', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, view: viewType, bays: bays })
+    });
+
+    // 3. Upload and process video
+    const fd = new FormData();
+    fd.append('video', f);
+    fd.append('camera_id', CAM);
+    fd.append('sample_fps', '1.0');
+    fd.append('track', 'true');
+
+    const r = await fetch('/occupancy/check-video', { method: 'POST', body: fd });
+    const res = await r.json();
+    if (res.error) {
+      alert("Video Error: " + res.error);
+      return;
+    }
+
+    if (res.timeline && res.timeline.length > 0) {
+      videoTimeline = res.timeline;
+      currentVideoFrameIdx = 0;
+
+      const vbar = document.getElementById('videoBar');
+      vbar.style.display = 'flex';
+      const scrubber = document.getElementById('videoScrubber');
+      scrubber.min = 0;
+      scrubber.max = videoTimeline.length - 1;
+      scrubber.value = 0;
+
+      showVideoFrame(0);
+      alert(`📹 CCTV Video Processed! Sampled ${res.sampled_frames} frames across ${res.video_duration_sec}s with MOT tracking & temporal debouncing. Use the playback controls below the video!`);
+    }
+  } catch (err) {
+    alert("Video processing failed: " + err.message);
+  } finally {
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+};
+
+function showVideoFrame(idx) {
+  if (!videoTimeline || !videoTimeline[idx]) return;
+  currentVideoFrameIdx = idx;
+  const frame = videoTimeline[idx];
+
+  const scrubber = document.getElementById('videoScrubber');
+  scrubber.value = idx;
+  const totalDuration = videoTimeline[videoTimeline.length - 1].timestamp_sec;
+  document.getElementById('videoTimeLabel').textContent =
+    `${frame.timestamp_sec.toFixed(1)}s / ${totalDuration.toFixed(1)}s (#${idx + 1})`;
+
+  if (frame.annotated) {
+    const annImg = new Image();
+    annImg.onload = () => {
+      lastAnnotatedImg = annImg;
+      if (!img) {
+        img = annImg;
+        canvas.width = annImg.width;
+        canvas.height = annImg.height;
+      }
+      redraw();
+    };
+    annImg.src = frame.annotated;
+  }
+
+  if (frame.plan) renderPlan(frame.plan);
+
+  if (frame.bays) {
+    observations = {};
+    for (const [bid, binfo] of Object.entries(frame.bays)) {
+      observations[bid] = binfo;
+    }
+    renderBayList();
+  }
+
+  if (frame.summary) {
+    document.getElementById('kpiCorrect').textContent = frame.summary.correctly_parked || 0;
+    document.getElementById('kpiSuspicious').textContent = frame.summary.suspicious || 0;
+    document.getElementById('kpiWrong').textContent = frame.summary.wrong_parking || 0;
+    document.getElementById('kpiFree').textContent = frame.summary.free || 0;
+  }
+}
+
+document.getElementById('videoScrubber').oninput = (e) => {
+  showVideoFrame(parseInt(e.target.value, 10));
+};
+
+document.getElementById('btnPlayPause').onclick = () => {
+  const btn = document.getElementById('btnPlayPause');
+  if (videoPlaybackTimer) {
+    clearInterval(videoPlaybackTimer);
+    videoPlaybackTimer = null;
+    btn.textContent = "▶";
+  } else {
+    btn.textContent = "⏸";
+    videoPlaybackTimer = setInterval(() => {
+      let nextIdx = currentVideoFrameIdx + 1;
+      if (nextIdx >= videoTimeline.length) {
+        nextIdx = 0;
+      }
+      showVideoFrame(nextIdx);
+    }, 500);
+  }
+};
+
+function redraw() {
+  if (!img) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // If Clean UI View is active OR we don't have a server-annotated image yet,
+  // render the pristine base frame + clean bay polygons & plate labels.
+  if (hideAiBoxes || !lastAnnotatedImg) {
+    ctx.drawImage(img, 0, 0);
+    drawCleanBays();
+  } else {
+    // Show AI Bounding Boxes: draw server-annotated frame containing white vehicle boxes and cyan footprint boxes
+    ctx.drawImage(lastAnnotatedImg, 0, 0);
+  }
+
+  // Draw any active drafting points / overlays
+  drawDraftingOverlays();
+  drawCalibrationGrades();
+  drawEditOverlays();
+}
+
+/**
+ * Renders crisp colored bay polygons and plate labels without AI bounding boxes.
+ */
+/**
+ * Renders crisp colored bay polygons and plate labels without AI bounding boxes.
+ */
+function drawCleanBays() {
+  for (const [bid, pts] of Object.entries(bays)) {
+    if (!pts || pts.length < 3) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+
+    const obs = observations[bid];
+    let fillColor = 'rgba(59, 130, 246, 0.20)'; // Default calibrated blue
+    let strokeColor = '#3b82f6';
+
+    if (obs) {
+      if (obs.state === 'correct') {
+        fillColor = 'rgba(34, 197, 94, 0.28)';
+        strokeColor = '#22c55e';
+      } else if (obs.state === 'suspicious') {
+        fillColor = 'rgba(245, 158, 11, 0.32)';
+        strokeColor = '#f59e0b';
+      } else if (obs.state === 'wrong' || obs.state === 'badly_parked') {
+        fillColor = 'rgba(239, 68, 68, 0.38)';
+        strokeColor = '#ef4444';
+      } else if (obs.state === 'occluded') {
+        fillColor = 'rgba(168, 85, 247, 0.32)';
+        strokeColor = '#a855f7';
+      } else if (obs.state === 'empty' || obs.state === 'free') {
+        fillColor = 'rgba(16, 185, 129, 0.15)';
+        strokeColor = '#10b981';
+      } else {
+        fillColor = 'rgba(229, 72, 77, 0.25)';
+        strokeColor = '#e5484d';
+      }
+    }
+
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Polygon centroid for label placement
+    let cx = 0, cy = 0;
+    for (const p of pts) {
+      cx += p[0];
+      cy += p[1];
+    }
+    cx = Math.round(cx / pts.length);
+    cy = Math.round(cy / pts.length);
+
+    // Format text
+    let mainLabel = bid;
+    if (obs && obs.state !== 'empty' && obs.state !== 'free') {
+      const outPct = (obs.outside_slot_percent !== undefined) ? `${Math.round(obs.outside_slot_percent)}% out` : '';
+      const tid = (obs.vehicle_track_id !== undefined && obs.vehicle_track_id !== null) ? `ID:${obs.vehicle_track_id}` : '';
+      const extras = [tid, outPct].filter(Boolean).join(' ');
+      if (extras) mainLabel += ` (${extras})`;
+    } else {
+      mainLabel += ` (Free)`;
+    }
+
+    const plateText = (obs && obs.plate) ? obs.plate : '';
+
+    // Measure text dimensions for backdrop pill
+    ctx.font = 'bold 12px sans-serif';
+    const mainWidth = ctx.measureText(mainLabel).width;
+    ctx.font = '800 13px Consolas, monospace';
+    const plateWidth = plateText ? ctx.measureText(`[${plateText}]`).width : 0;
+
+    const pillW = Math.max(mainWidth, plateWidth) + 16;
+    const pillH = plateText ? 42 : 22;
+    const pillX = cx - pillW / 2;
+    const pillY = cy - pillH / 2;
+
+    // Dark high-contrast label pill
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(pillX, pillY, pillW, pillH, 5);
+    } else {
+      ctx.rect(pillX, pillY, pillW, pillH);
+    }
+    ctx.fill();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Draw Bay ID + Coverage
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = plateText ? 'top' : 'middle';
+    ctx.fillText(mainLabel, cx, plateText ? pillY + 5 : cy);
+
+    // Draw Number Plate
+    if (plateText) {
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '800 12px Consolas, monospace';
+      ctx.fillText(`[${plateText}]`, cx, pillY + 22);
+    }
+  }
+}
+
+/**
+ * Draws active drafting lines, corner points and numbered badges.
+ */
+function drawDraftingOverlays() {
+  // the saved IN/OUT line, with an arrow toward the inside of the lot
+  if (savedLine) {
+    const [a, b, c] = [savedLine.p1, savedLine.p2, savedLine.in_point];
+    ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 4; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    let nx = -dy / len, ny = dx / len;                     // a normal to the line
+    if ((c[0] - mx) * nx + (c[1] - my) * ny < 0) { nx = -nx; ny = -ny; }   // point it inside
+    ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx + nx * 50, my + ny * 50); ctx.stroke();
+    ctx.fillStyle = '#22c55e'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('IN', mx + nx * 66, my + ny * 66);
+  }
+
+  const isGrid = (appMode === 'grid');
+  const isLine = (appMode === 'line');
+  const isCorners = (appMode === 'corners');
+  const pts = isCorners ? cornerPts : (isLine ? linePts : (isGrid ? gridPoints : currentPoints));
+  if (pts.length === 0) return;
+
+  const lineCol = isCorners ? '#14b8a6' : (isLine ? '#d97706' : (isGrid ? '#0284c7' : '#3b82f6'));
+  const badgeCol = isCorners ? '#5eead4' : (isLine ? '#fbbf24' : (isGrid ? '#38bdf8' : '#60a5fa'));
+
+  ctx.strokeStyle = lineCol;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) {
+    ctx.lineTo(pts[i][0], pts[i][1]);
+  }
+  if (isGrid && pts.length === 4) {
+    ctx.closePath();
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    ctx.fillStyle = badgeCol;
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(i + 1), p[0], p[1]);
+  }
+}
+
+function updateJson() {
+  const payload = {
+    camera_id: CAM,
+    view: "oblique",
+    bays: bays
+  };
+  document.getElementById('jsonOutput').value = JSON.stringify(payload, null, 2);
+  setUnsaved(JSON.stringify(bays) !== savedSnapshot);
+  refreshIssues();
+}
+
+// The same checks the server makes before saving, shown while drawing.
+function refreshIssues() {
+  issues = BayGeometry.validateAll(bays, imgSize());
+  const list = document.getElementById('issueList');
+  list.textContent = '';
+  for (const [id, v] of Object.entries(issues)) {
+    for (const [msgs, colour, mark] of [[v.errors, 'var(--red)', '✖'], [v.warnings, 'var(--amber)', '⚠']]) {
+      for (const m of msgs) {
+        const row = document.createElement('div');
+        row.style.color = colour;
+        row.textContent = mark + ' Bay ' + id + ': ' + m;
+        list.appendChild(row);
+      }
+    }
+  }
+}
+
+function renderBayList() {
+  const c = document.getElementById('bayList');
+  c.replaceChildren();
+  const entries = Object.keys(bays);
+  // Built with createElement/textContent throughout: bay ids, plates and reasons come from drawings, files and the server.
+  const span = (cls, text) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = text; return s; };
+  if (entries.length === 0) {
+    const none = document.createElement('div');
+    none.className = 'placeholder';
+    none.textContent = 'No bays registered yet.';
+    c.appendChild(none);
+    document.getElementById('kpiCorrect').textContent = '0';
+    document.getElementById('kpiSuspicious').textContent = '0';
+    document.getElementById('kpiWrong').textContent = '0';
+    document.getElementById('kpiFree').textContent = '0';
+    return;
+  }
+
+  let correctCount = 0, suspiciousCount = 0, wrongCount = 0, freeCount = 0;
+  for (const bid of entries) {
+    const obs = observations[bid];
+    const st = obs ? obs.state : 'calibrated';
+    if (st === 'correct' || st === 'occupied') correctCount++;
+    else if (st === 'suspicious') suspiciousCount++;
+    else if (st === 'wrong' || st === 'badly_parked') wrongCount++;
+    else if (st === 'free' || st === 'empty' || st === 'calibrated') freeCount++;
+  }
+  document.getElementById('kpiCorrect').textContent = correctCount;
+  document.getElementById('kpiSuspicious').textContent = suspiciousCount;
+  document.getElementById('kpiWrong').textContent = wrongCount;
+  document.getElementById('kpiFree').textContent = freeCount;
+
+  for (const bid of entries) {
+    const obs = observations[bid];
+    const st = obs ? obs.state : 'calibrated';
+
+    // the verdict: green = parked right, amber = suspicious, red = wrong, purple = occluded, grey = free or anything else
+    let stBadge;
+    if (st === 'correct') stBadge = span('status-tag ok', 'Correct');
+    else if (st === 'occupied') stBadge = span('status-tag ok', 'Occupied');
+    else if (st === 'suspicious') stBadge = span('status-tag warn', 'Suspicious');
+    else if (st === 'wrong' || st === 'badly_parked') stBadge = span('status-tag bad', 'Wrong Park');
+    else if (st === 'occluded') stBadge = span('status-tag occl', 'Occluded');
+    else if (st === 'free' || st === 'empty') stBadge = span('status-tag', 'Free');
+    else stBadge = span('status-tag', String(st));
+
+    const left = document.createElement('div');
+    left.className = 'grp';
+    const name = document.createElement('strong');
+    name.textContent = bid;
+    left.appendChild(name);
+    if (obs && (obs.vehicle_track_id || obs.vehicle_id)) left.appendChild(span('mini-tag id', 'ID #' + (obs.vehicle_track_id || obs.vehicle_id)));
+    if (obs && obs.plate) left.appendChild(span('plate-tag', String(obs.plate)));
+    const occlVal = (obs && obs.occlusion_level !== undefined && obs.occlusion_level >= 0.15) ? Math.round(obs.occlusion_level * 100) : null;
+    if (occlVal) left.appendChild(span('mini-tag occl', occlVal + '% occluded'));
+    const confVal = (obs && obs.parking_confidence !== undefined && obs.parking_confidence > 0) ? Math.round(obs.parking_confidence * 100) : null;
+    if (confVal) left.appendChild(span('conf', confVal + '% conf'));
+
+    const right = document.createElement('div');
+    right.className = 'grp';
+    if (obs && obs.outside_slot_percent !== undefined && obs.outside_slot_percent > 0) {
+      right.appendChild(span('out', Math.round(obs.outside_slot_percent) + '% outside'));
+    }
+    right.appendChild(stBadge);
+
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.append(left, right);
+
+    const el = document.createElement('div');
+    el.className = 'bay-badge ' + (obs ? obs.state : '');
+    el.style.display = 'block';
+    el.style.cursor = 'pointer';
+    el.title = 'Click to inspect explainable diagnostics';
+    el.onclick = () => showInspectorModal(bid, obs);
+    el.appendChild(row);
+    if (obs && (obs.reason || obs.quality_note)) {
+      const note = document.createElement('div');
+      note.className = 'note';
+      note.textContent = obs.reason || obs.quality_note;
+      el.appendChild(note);
+    }
+    c.appendChild(el);
+  }
+}
+
+function showInspectorModal(bid, obs) {
+  const modal = document.getElementById('inspectorModal');
+  document.getElementById('inspSlotTitle').textContent = `Slot ${bid} Inspection`;
+  
+  const tid = (obs && (obs.vehicle_track_id || obs.vehicle_id)) ? `#${obs.vehicle_track_id || obs.vehicle_id}` : 'None';
+  const plt = (obs && obs.plate) ? ` [${obs.plate}]` : '';
+  document.getElementById('inspVehicle').textContent = `${tid}${plt}`;
+  
+  const st = obs ? (obs.state || 'FREE').toUpperCase() : 'FREE';
+  document.getElementById('inspState').textContent = st;
+  
+  const outPct = (obs && obs.outside_slot_percent !== undefined) ? `${Math.round(obs.outside_slot_percent)}%` : '0%';
+  document.getElementById('inspOutside').textContent = outPct;
+  
+  const ang = (obs && obs.angle_error_deg !== null && obs.angle_error_deg !== undefined) ? `${Math.round(obs.angle_error_deg)}°` : '0°';
+  document.getElementById('inspAngle').textContent = ang;
+  
+  const adj = (obs && obs.adjacent_slot_overlap !== undefined) ? `${Math.round(obs.adjacent_slot_overlap * 100)}%` : '0%';
+  document.getElementById('inspAdjacent').textContent = adj;
+  
+  const occ = (obs && obs.occlusion_level !== undefined) ? `${Math.round(obs.occlusion_level * 100)}%` : '0%';
+  document.getElementById('inspOcclusion').textContent = occ;
+  
+  const vgc = (obs && obs.visible_geometry_confidence !== undefined) ? `${Math.round(obs.visible_geometry_confidence * 100)}%` : '100%';
+  document.getElementById('inspGeomConf').textContent = vgc;
+  
+  const pcf = (obs && obs.parking_confidence !== undefined) ? `${Math.round(obs.parking_confidence * 100)}%` : '100%';
+  document.getElementById('inspParkingConf').textContent = pcf;
+  
+  const rsn = (obs && (obs.reason || obs.quality_note)) ? (obs.reason || obs.quality_note) : 'Normal slot state within boundary lines.';
+  document.getElementById('inspReason').textContent = rsn;
+
+  const relBox = document.getElementById('inspRelationBox');
+  const relEl = document.getElementById('inspRelation');
+  const rel = obs && obs.bay_relation;
+  relEl.replaceChildren();
+  relBox.style.display = rel ? 'block' : 'none';
+  if (rel) {
+    const row = (label, value, colour) => {
+      const d = document.createElement('div');
+      const l = document.createElement('span');
+      l.style.color = 'var(--muted)';
+      l.textContent = label.padEnd(14, ' ');
+      const v = document.createElement('span');
+      v.textContent = value;
+      // the plan's colours are for its dark well; on the light card the same meaning uses the page's tokens
+      const onCard = { '#22c55e': 'var(--green)', '#f59e0b': 'var(--amber)', '#ef4444': 'var(--red)' };
+      if (colour) v.style.color = onCard[colour] || colour;
+      d.append(l, v);
+      relEl.appendChild(d);
+    };
+    const sgn = m => `${m >= 0 ? '+' : ''}${m.toFixed(2)} m`;
+    row('Label', rel.label, rel.label === 'CORRECT' ? '#22c55e' : '#f59e0b');
+    const names = { left: 'Left gap', right: 'Right gap', near: 'Near gap', far: 'Far gap' };
+    for (const s of ['left', 'right', 'near', 'far']) {
+      const c = rel.clearance[s];
+      const est = c.source === 'measured' ? '' : `, whole car ~${sgn(c.m)}`;
+      row(names[s], `${sgn(c.seen_m)} seen${est}  [${c.lo.toFixed(2)}…${c.hi.toFixed(2)}]`, clearanceColour(c.seen_m));
+    }
+    row('Off-centre', `${sgn(rel.offset_m)}  (+ right, − left)`);
+    row('Heading', rel.heading_deg === null ? 'unknown' : `${rel.heading_deg.toFixed(1)}°`);
+    row('In own bay', `${Math.round(rel.own_share * 100)}%`);
+    for (const [b, v] of Object.entries(rel.neighbour_share || {})) row(`In ${b}`, `${Math.round(v * 100)}%`);
+    for (const [b, v] of Object.entries(rel.neighbour_gap_m || {})) {
+      row(`Gap to ${b}`, `${v.toFixed(2)} m${v < 0.6 ? ' (door tight)' : ''}`, v < 0.6 ? '#f59e0b' : null);
+    }
+    if (rel.calibration && rel.calibration !== 'good') row('Calibration', rel.calibration, '#f59e0b');
+  }
+  
+  modal.style.display = 'flex';
+}
+
+function closeInspectorModal(e) {
+  if (e && e.target && e.target.id !== 'inspectorModal' && !e.target.matches('button')) return;
+  document.getElementById('inspectorModal').style.display = 'none';
+}
+
+// Camera Angle Preset Listener
+document.getElementById('cameraAnglePreset').addEventListener('change', async (e) => {
+  const val = e.target.value;
+  try {
+    await fetch('/camera/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, view_angle: val })
+    });
+  } catch (err) {
+    console.error("Failed to update camera angle:", err);
+  }
+});
+
+// Footprint Mode Selector Listener
+document.getElementById('footprintModeSelect').addEventListener('change', async (e) => {
+  const mode = e.target.value;
+  const angle = document.getElementById('cameraAnglePreset').value;
+  let viewAngle = angle;
+  let bottomFrac = null;
+  if (mode === 'full_box') {
+    viewAngle = 'topdown';
+    bottomFrac = 1.0;
+  }
+  try {
+    await fetch('/camera/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        camera_id: CAM,
+        view_angle: viewAngle,
+        footprint_method: mode,
+        bottom_fraction: bottomFrac
+      })
+    });
+  } catch (err) {
+    console.error("Failed to update footprint mode:", err);
+  }
+});
+
+// Space Optimizer Import Listener
+document.getElementById('btnImportOptimizer').addEventListener('click', async () => {
+  const jsonStr = prompt("Paste Space Optimizer 'parking_layout.json' content or slot array:");
+  if (!jsonStr) return;
+  try {
+    const parsed = JSON.parse(jsonStr);
+    const resp = await fetch('/occupancy/import-layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, layout: parsed, view: 'oblique' })
+    });
+    const res = await resp.json();
+    if (!resp.ok) throw new Error(res.error || "Failed to import layout");
+    alert(`Successfully imported ${res.bays_imported} parking slots from Space Optimizer!`);
+    if (res.slots_dict && Object.keys(res.slots_dict).length > 0) {
+      bays = res.slots_dict;
+      savedSnapshot = JSON.stringify(bays);        // the server saved them already
+    }
+    updateJson();
+    renderBayList();
+    redraw();
+  } catch (err) {
+    alert("Import Error: " + err.message);
+  }
+});
+
+loadSavedLayout();
+</script>
+
+<!-- Explainability Inspector Modal Dialog -->
+<div id="inspectorModal" class="modal-overlay" onclick="closeInspectorModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <h3 id="inspSlotTitle">Slot Inspector</h3>
+        <div id="inspSubTitle">Explainable Parking Intelligence Diagnostics</div>
+      </div>
+      <button class="ghost modal-close" onclick="closeInspectorModal()" aria-label="Close">✕</button>
+    </div>
+
+    <div class="diag-grid">
+      <div class="diag-cell">
+        <div class="diag-label">State / Verdict</div>
+        <div class="diag-value" id="inspState">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Vehicle ID</div>
+        <div class="diag-value" id="inspVehicle">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Outside Ratio</div>
+        <div class="diag-value" id="inspOutside">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Angle Error</div>
+        <div class="diag-value" id="inspAngle">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Adjacent Overlap</div>
+        <div class="diag-value" id="inspAdjacent">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Occlusion Level</div>
+        <div class="diag-value" id="inspOcclusion">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Visible Geom Conf</div>
+        <div class="diag-value" id="inspGeomConf">-</div>
+      </div>
+      <div class="diag-cell">
+        <div class="diag-label">Parking Confidence</div>
+        <div class="diag-value" id="inspParkingConf">-</div>
+      </div>
+    </div>
+
+    <div id="inspRelationBox" class="diag-box" style="display:none;">
+      <div class="diag-label">Car inside the bay (metres)</div>
+      <div id="inspRelation"></div>
+    </div>
+
+    <div class="diag-box">
+      <div class="diag-label">Diagnostic Evidence Reason</div>
+      <div id="inspReason">-</div>
+    </div>
+
+    <div class="modal-foot">
+      <button class="primary" onclick="closeInspectorModal()">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

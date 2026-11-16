@@ -19,6 +19,7 @@ import {
   Menu,
   X,
   Radio,
+  Camera,
 } from "lucide-react";
 import { getStoredUser, signOut } from "../lib/auth";
 
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/users", label: "Users", icon: Users },
   { to: "/owners", label: "Parking Owners", icon: Building2 },
   { to: "/spaces", label: "Parking Spaces", icon: ParkingSquare },
+  { to: "/cameras", label: "Cameras", icon: Camera },
   { to: "/bookings", label: "Bookings", icon: CalendarCheck },
   { to: "/payments", label: "Payments", icon: CreditCard },
   { to: "/vehicles", label: "Vehicles", icon: Car },

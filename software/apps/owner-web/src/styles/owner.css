@@ -1,0 +1,52 @@
+/* What the owner dashboard needs on top of the operator console's stylesheet (parkfnb.css, copied unchanged).
+   Built only from its tokens (--surface, --fill, --ink, --r-md ...): no colour or radius of its own. */
+
+/* the light/dark switch: the same default look the console's theme.js gives it (kept weaker than any page rule) */
+:where(.pf-theme) { width: 44px; height: 44px; flex: none; display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: 50%;
+  background: var(--fill, rgba(127, 127, 127, .14)); color: inherit; cursor: pointer; }
+:where(.pf-theme):hover { background: var(--fill-2, rgba(127, 127, 127, .24)); }
+:where(.pf-theme) svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+/* "cannot reach the server" bar */
+.netbar { position: fixed; left: 0; right: 0; top: 0; z-index: 9999; padding: 8px 16px; text-align: center; font-weight: 600; background: var(--red); color: #fff; }
+
+/* sign-in and a full-page message: the console's sign-in card */
+.auth { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); }
+.auth-box { width: 100%; max-width: 400px; background: var(--surface); border-radius: 28px; padding: 32px 24px 24px; }
+.auth-top { display: flex; gap: 12px; align-items: center; margin-bottom: 32px; }
+.auth-top > div:nth-child(2) { flex: 1; }
+.auth-top .logo { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--mark); color: var(--peach); flex: none; }
+.auth-top .logo svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.auth-top b { display: block; font-size: 24px; font-weight: 700; letter-spacing: -.04em; line-height: 1.1; }
+.auth-top b i { font-style: normal; color: var(--peach-deep); }
+.auth-top small { display: block; color: var(--muted); font-size: 13px; font-weight: 600; }
+.auth-box form { display: grid; gap: 16px; }
+.auth-box h1 { margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -.025em; line-height: 1.15; }
+.auth-box p.lead { color: var(--text-2); margin: 0; }
+.auth-box label.f { font-size: 13px; }
+.auth-box input[type=text], .auth-box input[type=tel], .auth-box input[type=password] { font-size: 16px; height: 54px; padding: 0 18px; border-radius: 16px; width: 100%; }
+.auth-box input.code { letter-spacing: .4em; text-align: center; font-size: 22px; font-weight: 600; }
+.auth-box .go { height: 56px; width: 100%; font-size: 16px; margin-top: 8px; }
+.auth-box .msg { padding: 12px 16px; border-radius: 16px; font-size: 14px; background: var(--red-soft); color: var(--red); font-weight: 600; }
+.auth-box .msg.lock { background: var(--amber-soft); color: var(--amber); }
+.auth-box .msg.info { background: var(--blue-soft); color: var(--text); font-weight: 500; }
+.auth-box .back { text-align: center; font-size: 14px; padding-top: 24px; }
+.auth-box .back a, .auth-box .back button { color: var(--text-2); font-weight: 600; text-decoration: none; background: none; border: 0; cursor: pointer; font-size: 14px; }
+.auth-box .back a:hover, .auth-box .back button:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.auth-box .phone { display: flex; align-items: center; gap: 0; background: var(--fill); border-radius: 16px; border: 1.5px solid transparent; }
+.auth-box .phone:focus-within { border-color: var(--ink); background: var(--surface); }
+.auth-box .phone span { padding-left: 18px; font-size: 16px; font-weight: 600; color: var(--text-2); }
+.auth-box .phone input { background: transparent !important; border-color: transparent !important; padding-left: 8px; }
+.check { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; color: var(--text-2); font-weight: 500; }
+.check input { margin-top: 2px; flex: none; }
+
+/* forms inside cards */
+.form { display: grid; gap: 16px; }
+.form .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 640px) { .form .row { grid-template-columns: 1fr; } }
+.form input[type=text], .form input[type=tel], .form input[type=email], .form input[type=number], .form input[type=date], .form input[type=time], .form select.fld { width: 100%; }
+input[type=email], input[type=tel], input[type=time], input[type=password] { min-height: 44px; border: 1.5px solid transparent; background: var(--fill); border-radius: var(--r-sm); padding: 0 16px; min-width: 0; font-weight: 500; transition: border-color .15s, background-color .15s; }
+input[type=email]:focus, input[type=tel]:focus, input[type=time]:focus, input[type=password]:focus { outline: none; border-color: var(--ink); background-color: var(--surface); }
+.form .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.help { color: var(--muted); font-size: 13px; }
+.mono { font-family: var(--mono); letter-spacing: .04em; }

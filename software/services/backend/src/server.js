@@ -101,9 +101,14 @@ app.use((req, res, next) => {
 // Rate limits. These endpoints were entirely unthrottled: the limiter module
 // existed but every call site was commented out and the package was not even
 // installed.
+// Restoring a session (the owner dashboard and both apps do it on every launch or reload) is two GETs that need a valid token already,
+// so they are no target for guessing. Counting them against the sign-in budget locked a real owner out after a few page reloads.
+// `path` is relative to /api/auth.
+const restoresSession = (method, path) => method === 'GET' && (path === '/me' || path === '/onboarding-status');
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
+  skip: (req) => restoresSession(req.method, req.path),
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', http: 429,
@@ -122,7 +127,8 @@ const apiLimiter = rateLimit({
 // the strict one's and the tighter auth budget never took effect.
 app.use('/api/auth', authLimiter);
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth')) return next();
+  // the rest of /api/auth is the strict limiter's alone; the session-restoring GETs fall to the general one
+  if (req.path.startsWith('/auth') && !restoresSession(req.method, req.path.slice('/auth'.length))) return next();
   return apiLimiter(req, res, next);
 });
 
@@ -186,6 +192,7 @@ app.use('/api/v1/ota', require('./routes/otaRoutes'));
 app.use('/api/ota', require('./routes/otaRoutes'));
 app.use('/api/v1/devices', require('./routes/deviceRoutes'));
 app.use('/api/devices', require('./routes/deviceRoutes'));
+app.use('/api/cameras', require('./routes/cameraRoutes'));
 app.use('/api/access', require('./routes/accessRoutes'));
 
 // Initialize IoT MQTT Service

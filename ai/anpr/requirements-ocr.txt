@@ -1,0 +1,2 @@
+# Plate reading.  Optional: vehicles, bays and IN/OUT counting work without it (set ANPR_OCR=none).
+easyocr==1.7.2

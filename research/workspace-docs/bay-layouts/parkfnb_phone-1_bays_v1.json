@@ -1,0 +1,261 @@
+{
+  "schema": "parkfnb.camera_bays.v1",
+  "camera_id": "phone-1",
+  "view": "oblique",
+  "image": {
+    "width": 1280,
+    "height": 720
+  },
+  "coordinate_system": {
+    "type": "image_pixel",
+    "origin": "top_left",
+    "x_axis": "right",
+    "y_axis": "down"
+  },
+  "shared_dividers": [
+    {
+      "id": "D0",
+      "near": [
+        405,
+        595
+      ],
+      "far": [
+        450,
+        484
+      ]
+    },
+    {
+      "id": "D1",
+      "near": [
+        549,
+        590
+      ],
+      "far": [
+        538,
+        472
+      ]
+    },
+    {
+      "id": "D2",
+      "near": [
+        686,
+        566
+      ],
+      "far": [
+        642,
+        465
+      ]
+    },
+    {
+      "id": "D3",
+      "near": [
+        800,
+        548
+      ],
+      "far": [
+        739,
+        454
+      ]
+    },
+    {
+      "id": "D4",
+      "near": [
+        919,
+        526
+      ],
+      "far": [
+        831,
+        448
+      ]
+    },
+    {
+      "id": "D5",
+      "near": [
+        1035,
+        506
+      ],
+      "far": [
+        919,
+        436
+      ]
+    },
+    {
+      "id": "D6",
+      "near": [
+        1119,
+        492
+      ],
+      "far": [
+        1006,
+        426
+      ]
+    },
+    {
+      "id": "D7",
+      "near": [
+        1206,
+        478
+      ],
+      "far": [
+        1074,
+        416
+      ]
+    }
+  ],
+  "bays": {
+    "Bay-01": {
+      "points": [
+        [
+          450,
+          484
+        ],
+        [
+          538,
+          472
+        ],
+        [
+          549,
+          590
+        ],
+        [
+          405,
+          595
+        ]
+      ],
+      "status": "verified_user_marked_new_angle",
+      "geometry_source": "user_marked_new_angle_frame"
+    },
+    "Bay-02": {
+      "points": [
+        [
+          538,
+          472
+        ],
+        [
+          642,
+          465
+        ],
+        [
+          686,
+          566
+        ],
+        [
+          549,
+          590
+        ]
+      ],
+      "status": "verified_user_marked_new_angle",
+      "geometry_source": "user_marked_new_angle_frame"
+    },
+    "Bay-03": {
+      "points": [
+        [
+          642,
+          465
+        ],
+        [
+          739,
+          454
+        ],
+        [
+          800,
+          548
+        ],
+        [
+          686,
+          566
+        ]
+      ],
+      "status": "verified_user_marked_new_angle",
+      "geometry_source": "user_marked_new_angle_frame"
+    },
+    "Bay-04": {
+      "points": [
+        [
+          739,
+          454
+        ],
+        [
+          831,
+          448
+        ],
+        [
+          919,
+          526
+        ],
+        [
+          800,
+          548
+        ]
+      ],
+      "status": "verified_user_marked_new_angle",
+      "geometry_source": "user_marked_new_angle_frame"
+    },
+    "Bay-05": {
+      "points": [
+        [
+          831,
+          448
+        ],
+        [
+          919,
+          436
+        ],
+        [
+          1035,
+          506
+        ],
+        [
+          919,
+          526
+        ]
+      ],
+      "status": "verified_user_marked_new_angle",
+      "geometry_source": "user_marked_new_angle_frame"
+    },
+    "Bay-06": {
+      "points": [
+        [
+          919,
+          436
+        ],
+        [
+          1006,
+          426
+        ],
+        [
+          1119,
+          492
+        ],
+        [
+          1035,
+          506
+        ]
+      ],
+      "status": "verified_user_marked_new_angle",
+      "geometry_source": "user_marked_new_angle_frame"
+    },
+    "Bay-07": {
+      "points": [
+        [
+          1006,
+          426
+        ],
+        [
+          1074,
+          416
+        ],
+        [
+          1206,
+          478
+        ],
+        [
+          1119,
+          492
+        ]
+      ],
+      "status": "verified_user_marked_new_angle",
+      "geometry_source": "user_marked_new_angle_frame"
+    }
+  }
+}

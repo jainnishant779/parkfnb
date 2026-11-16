@@ -10,6 +10,9 @@ const generateToken = require('../utils/generateToken');
 const { success, error } = require('../utils/responseHelper');
 const errorCodes = require('../utils/errorCodes');
 
+// How long after its expiry a token may still be swapped for a new one.
+const REFRESH_GRACE_DAYS = Number(process.env.JWT_REFRESH_GRACE_DAYS) || 30;
+
 /**
  * @desc    Register new user
  * @route   POST /api/auth/register
@@ -18,6 +21,14 @@ const errorCodes = require('../utils/errorCodes');
 exports.register = async (req, res, next) => {
   try {
     const { email, phone, password, first_name, last_name, user_type } = req.body;
+
+    // Public sign-up may only ever make a renter or an owner. 'admin' comes
+    // from scripts/make-admin.js, never from a request body.
+    if (user_type !== undefined && !['user', 'owner'].includes(user_type)) {
+      return error(res, errorCodes.REQ_INVALID_FORMAT, 400, "user_type must be 'user' or 'owner'", {
+        field: 'user_type'
+      });
+    }
 
     // Check if user already exists with email
     const existingUserByEmail = await User.findOne({ email: email.toLowerCase() });
@@ -414,9 +425,15 @@ exports.refreshToken = async (req, res, next) => {
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
-      // If token is expired, we can still decode it
+      // An expired token may still be swapped for a fresh one, but only for a
+      // limited time: a token stolen months ago must not stay renewable forever.
       if (err.name === 'TokenExpiredError') {
         decoded = jwt.decode(token);
+        const maxAgeMs = REFRESH_GRACE_DAYS * 24 * 60 * 60 * 1000;
+        const expiredFor = Date.now() - ((decoded && decoded.exp) || 0) * 1000;
+        if (!decoded || !decoded.id || expiredFor > maxAgeMs) {
+          return error(res, errorCodes.AUTH_TOKEN_EXPIRED, 401, 'Session expired, please sign in again');
+        }
       } else {
         return error(res, errorCodes.AUTH_INVALID_TOKEN, 401, 'Invalid token');
       }
